@@ -1,10 +1,18 @@
 import { PM2Repository } from '$lib/pm2/pm2-repository.impl';
 import { PM2Service } from '$lib/pm2/pm2.service';
-import { error } from '@sveltejs/kit';
-import type { PageServerLoad } from './$types';
+import { EnvVarService } from '$lib/env-vars/env-var.service';
+import { error, fail } from '@sveltejs/kit';
+import { z } from 'zod';
+import type { PageServerLoad, Actions } from './$types';
 
 const pm2Repo = new PM2Repository();
 const pm2Service = new PM2Service(pm2Repo);
+const envVarService = new EnvVarService();
+
+// Schema for environment variables save action
+const envVarSchema = z.object({
+	envVars: z.string().min(1, 'Environment variables are required')
+});
 
 export const load: PageServerLoad = async ({ params }) => {
 	const { id } = params;
@@ -18,8 +26,45 @@ export const load: PageServerLoad = async ({ params }) => {
 	// Get logs (limited to 50 lines for the detail page)
 	const logs = await pm2Service.getProcessLogs(id, 50);
 
+	// Get environment variables
+	const envVars = await envVarService.getEnvVars(id);
+
 	return {
 		process,
-		logs
+		logs,
+		envVars
 	};
+};
+
+export const actions: Actions = {
+	saveEnv: async ({ request, params }) => {
+		const { id } = params;
+		const formData = await request.formData();
+		const data = Object.fromEntries(formData);
+
+		const result = envVarSchema.safeParse(data);
+		if (!result.success) {
+			return fail(400, {
+				error: 'Invalid environment variables format'
+			});
+		}
+
+		try {
+			// Parse the JSON string of env vars
+			const envVars = JSON.parse(result.data.envVars) as Record<string, string>;
+
+			// Save and restart
+			const response = await envVarService.saveAndRestart(id, envVars);
+
+			if (!response.success) {
+				return fail(500, { error: response.message });
+			}
+
+			return { success: true, message: response.message };
+		} catch (error) {
+			return fail(400, {
+				error: error instanceof Error ? error.message : 'Failed to parse environment variables'
+			});
+		}
+	}
 };

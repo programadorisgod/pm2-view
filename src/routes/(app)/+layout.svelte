@@ -1,16 +1,17 @@
 <script lang="ts">
 	import { Header, Sidebar } from '$lib/ui/components';
+	import { page } from '$app/state';
 	import type { LayoutData } from './$types';
 
 	let { children, data }: { children?: import('svelte').Snippet; data: LayoutData } = $props();
 
 	let mobileMenuOpen = $state(false);
 
-	let navItems = [
-		{ label: 'Dashboard', href: '/', active: false },
-		{ label: 'Projects', href: '/projects', active: false },
-		{ label: 'Metrics', href: '/metrics', active: false }
-	];
+	let navItems = $derived([
+		{ label: 'Dashboard', href: '/', active: page.url.pathname === '/' },
+		{ label: 'Projects', href: '/projects', active: page.url.pathname.startsWith('/projects') },
+		{ label: 'Metrics', href: '/metrics', active: page.url.pathname === '/metrics' }
+	]);
 
 	let user = $derived(data.user);
 </script>

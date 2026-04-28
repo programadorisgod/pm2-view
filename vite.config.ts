@@ -12,9 +12,4 @@ export default defineConfig({
     server: {
         port: 5179,
     },
-    test: {
-        alias: {
-            '$env/dynamic/private': resolve(__dirname, 'src/lib/db/env.mock.ts'),
-        },
-    },
 });

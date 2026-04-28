@@ -10,9 +10,3 @@ Estas funcionalidades están identificadas pero **NO** se implementarán en esta
 - [ ] **Notificaciones/alertas** — Sin sistema de alertas por CPU/RAM alta o procesos caídos
 
 ---
-
-## 📋 Pendiente de definir
-
-- [ ] Definir estructura de screaming architecture
-- [ ] Definir interfaces y contratos
-- [ ] Identificar patrones necesarios y vitales

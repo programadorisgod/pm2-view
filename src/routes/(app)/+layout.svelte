@@ -8,6 +8,7 @@
 	let { children, data }: { children?: import('svelte').Snippet; data: LayoutData } = $props();
 
 	let mobileMenuOpen = $state(false);
+	let userMenuOpen = $state(false);
 
 	let navItems = $derived([
 		{ label: 'Dashboard', href: base, active: page.url.pathname === base || page.url.pathname === base + '/' },
@@ -16,6 +17,7 @@
 	]);
 
 	let user = $derived(data.user);
+	let initials = $derived(user ? (user.name || user.email).substring(0, 2).toUpperCase() : '');
 </script>
 
 <div class="flex h-screen overflow-hidden" style="background: var(--bg-base);">
@@ -75,9 +77,64 @@
 					</button>
 
 					{#if user}
-						<span class="text-caption hidden sm:inline" style="color: var(--text-secondary);">
-							{user.name || user.email}
-						</span>
+						<!-- User menu -->
+						<div class="relative">
+							<button
+								class="flex items-center gap-2 px-2 py-1.5 rounded-md transition-colors hover:bg-[var(--bg-card)]"
+								onclick={() => (userMenuOpen = !userMenuOpen)}
+								aria-label="User menu"
+							>
+								<!-- Avatar -->
+								<div
+									class="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold"
+									style="background: linear-gradient(135deg, #38CDFF, #009DCD); color: white;"
+								>
+									{initials}
+								</div>
+								<span class="text-body-sm font-medium hidden sm:inline" style="color: var(--text-primary);">
+									{user.name || user.email}
+								</span>
+								<svg class="w-3 h-3 transition-transform" style="color: var(--text-secondary);" style:transform={userMenuOpen ? 'rotate(180deg)' : 'rotate(0deg)'} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+									<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+								</svg>
+							</button>
+
+							<!-- Dropdown -->
+							{#if userMenuOpen}
+								<div
+									class="absolute right-0 top-full mt-1 w-48 rounded-lg shadow-lg overflow-hidden z-50"
+									style="background: var(--bg-surface); border: 1px solid var(--border-color);"
+								>
+									<!-- User info -->
+									<div class="px-3 py-2.5 border-b" style="border-color: var(--border-color);">
+										<p class="text-body-sm font-medium" style="color: var(--text-primary);">{user.name || user.email}</p>
+										{#if user.email}
+											<p class="text-caption" style="color: var(--text-muted);">{user.email}</p>
+										{/if}
+									</div>
+
+									<!-- Logout -->
+									<form action="{base}/logout" method="POST">
+										<button
+											type="submit"
+											class="w-full flex items-center gap-2 px-3 py-2 text-body-sm transition-colors hover:bg-[var(--bg-card)]"
+											style="color: #ff6b6b;"
+											onclick={() => (userMenuOpen = false)}
+										>
+											<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+												<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/>
+											</svg>
+											Cerrar sesión
+										</button>
+									</form>
+								</div>
+							{/if}
+						</div>
+
+						<!-- Click outside to close -->
+						{#if userMenuOpen}
+							<div class="fixed inset-0 z-40" onclick={() => (userMenuOpen = false)}></div>
+						{/if}
 					{/if}
 
 					<!-- Mobile menu button -->

@@ -54,7 +54,7 @@
 	}
 
 	async function handleAction(action: 'restart' | 'stop' | 'delete') {
-		const res = await fetch(`${base}/projects?/${action}`, {
+		const res = await fetch(`${base}/projects/api?action=${action}`, {
 			method: 'POST',
 			headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
 			body: `pm_id=${encodeURIComponent(process.pm_id.toString())}`

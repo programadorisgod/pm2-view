@@ -19,10 +19,9 @@ function getZodErrorMessage(result: any): string {
 
 export const POST: RequestHandler = async ({ request, url }) => {
 	const action = url.searchParams.get('action');
-	const body = await request.formData();
-	const data = Object.fromEntries(body);
+	const body = await request.json();
 
-	const result = actionSchema.safeParse(data);
+	const result = actionSchema.safeParse(body);
 	if (!result.success) {
 		return json({ error: getZodErrorMessage(result) }, { status: 400 });
 	}

@@ -4,9 +4,10 @@
 	import type { PageData } from './$types';
 	import { invalidateAll } from '$app/navigation';
 
-	let { data, form }: { data: PageData; form: { success?: boolean; message?: string; error?: string } | null } = $props();
+	let { data }: { data: PageData } = $props();
 
 	let processes = $derived(data.processes ?? []);
+	let feedback = $state<{ type: 'success' | 'error'; text: string } | null>(null);
 
 	function getStatusVariant(status: string) {
 		switch (status) {
@@ -18,13 +19,22 @@
 	}
 
 	async function handleAction(pm_id: string, action: 'restart' | 'stop' | 'delete') {
-		const res = await fetch(`${base}/projects/api?action=${action}`, {
-			method: 'POST',
-			headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-			body: `pm_id=${encodeURIComponent(pm_id)}`
-		});
-		if (res.ok) {
-			await invalidateAll();
+		feedback = null;
+		try {
+			const res = await fetch(`${base}/projects/api?action=${action}`, {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ pm_id })
+			});
+			const result = await res.json();
+			if (res.ok) {
+				feedback = { type: 'success', text: result.message || `${action} successful` };
+				await invalidateAll();
+			} else {
+				feedback = { type: 'error', text: result.error || `${action} failed` };
+			}
+		} catch {
+			feedback = { type: 'error', text: `Failed to ${action}` };
 		}
 	}
 </script>
@@ -36,15 +46,9 @@
 		<p class="text-body-sm" style="color: var(--text-secondary);">Manage and monitor all your PM2 processes</p>
 	</div>
 
-	{#if form?.error}
-		<div class="rounded-md p-sm mb-lg text-body-sm" style="background: rgba(255, 82, 82, 0.1); color: #FF5252; border: 1px solid rgba(255, 82, 82, 0.2);">
-			{form.error}
-		</div>
-	{/if}
-
-	{#if form?.success}
-		<div class="rounded-md p-sm mb-lg text-body-sm" style="background: rgba(0, 230, 118, 0.1); color: #00E676; border: 1px solid rgba(0, 230, 118, 0.2);">
-			{form.message}
+	{#if feedback}
+		<div class="rounded-md p-sm mb-lg text-body-sm" style="background: {feedback.type === 'success' ? 'rgba(0, 230, 118, 0.1)' : 'rgba(255, 82, 82, 0.1)'}; color: {feedback.type === 'success' ? '#00E676' : '#FF5252'}; border: 1px solid {feedback.type === 'success' ? 'rgba(0, 230, 118, 0.2)' : 'rgba(255, 82, 82, 0.2)'};">
+			{feedback.text}
 		</div>
 	{/if}
 

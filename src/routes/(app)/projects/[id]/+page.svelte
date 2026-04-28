@@ -9,6 +9,7 @@
 	let { process, logs: initialLogs, envVars: initialEnvVars } = $derived(data);
 
 	let activeTab = $state('overview');
+	let feedback = $state<{ type: 'success' | 'error'; text: string } | null>(null);
 
 	let logs = $state<Array<{ type: 'out' | 'err'; data: string; timestamp: Date }>>([]);
 
@@ -54,16 +55,25 @@
 	}
 
 	async function handleAction(action: 'restart' | 'stop' | 'delete') {
-		const res = await fetch(`${base}/projects/api?action=${action}`, {
-			method: 'POST',
-			headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-			body: `pm_id=${encodeURIComponent(process.pm_id.toString())}`
-		});
-		if (res.ok) {
-			await invalidateAll();
-			if (action === 'delete') {
-				goto(`${base}/projects`);
+		feedback = null;
+		try {
+			const res = await fetch(`${base}/projects/api?action=${action}`, {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ pm_id: process.pm_id.toString() })
+			});
+			const result = await res.json();
+			if (res.ok) {
+				feedback = { type: 'success', text: result.message || `${action} successful` };
+				await invalidateAll();
+				if (action === 'delete') {
+					goto(`${base}/projects`);
+				}
+			} else {
+				feedback = { type: 'error', text: result.error || `${action} failed` };
 			}
+		} catch {
+			feedback = { type: 'error', text: `Failed to ${action}` };
 		}
 	}
 
@@ -167,6 +177,12 @@
 			Back
 		</a>
 	</div>
+
+	{#if feedback}
+		<div class="rounded-md p-sm mb-lg text-body-sm" style="background: {feedback.type === 'success' ? 'rgba(0, 230, 118, 0.1)' : 'rgba(255, 82, 82, 0.1)'}; color: {feedback.type === 'success' ? '#00E676' : '#FF5252'}; border: 1px solid {feedback.type === 'success' ? 'rgba(0, 230, 118, 0.2)' : 'rgba(255, 82, 82, 0.2)'};">
+			{feedback.text}
+		</div>
+	{/if}
 
 	<!-- Project Header -->
 	<div class="flex items-start justify-between mb-xl">

@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { Card, Button, Badge, StatusIndicator } from '$lib/ui/components';
+	import { Card, Badge, Button, StatusIndicator } from '$lib/ui/components';
 	import type { PageData } from './$types';
 
 	let { data }: { data: PageData } = $props();
@@ -8,10 +8,8 @@
 
 	let activeTab = $state('overview');
 
-	// Logs state - initialize from data, but allow updates
 	let logs = $state<Array<{ type: 'out' | 'err'; data: string; timestamp: Date }>>([]);
 
-	// Initialize logs when data changes
 	$effect(() => {
 		if (initialLogs && initialLogs.length > 0) {
 			logs = initialLogs;
@@ -20,10 +18,8 @@
 	let logsContainer: HTMLDivElement | undefined = $state();
 	let autoScroll = $state(true);
 
-	// Environment variables state - initialize from data, but allow updates
 	let envVars = $state<Array<{ key: string; value: string; isNew?: boolean }>>([]);
 
-	// Initialize env vars when data changes
 	$effect(() => {
 		if (initialEnvVars && Object.keys(initialEnvVars).length > 0) {
 			envVars = Object.entries(initialEnvVars).map(([key, value]) => ({
@@ -37,7 +33,6 @@
 	let showSecrets = $state<Record<string, boolean>>({});
 	let saving = $state(false);
 	let saveMessage = $state<{ type: 'success' | 'error'; text: string } | null>(null);
-	let formElement: HTMLFormElement | undefined = $state();
 
 	function getStatusVariant(status: string) {
 		switch (status) {
@@ -61,13 +56,11 @@
 			const form = document.createElement('form');
 			form.method = 'POST';
 			form.action = '/projects?/' + action;
-
 			const input = document.createElement('input');
 			input.type = 'hidden';
 			input.name = 'pm_id';
 			input.value = process.pm_id.toString();
 			form.appendChild(input);
-
 			document.body.appendChild(form);
 			form.submit();
 		};
@@ -83,12 +76,9 @@
 				const data = await res.json();
 				if (data.success && data.logs) {
 					logs = data.logs;
-					// Auto-scroll to bottom if enabled
 					if (autoScroll && logsContainer) {
 						setTimeout(() => {
-							if (logsContainer) {
-								logsContainer.scrollTop = logsContainer.scrollHeight;
-							}
+							if (logsContainer) logsContainer.scrollTop = logsContainer.scrollHeight;
 						}, 0);
 					}
 				}
@@ -100,15 +90,13 @@
 		return () => clearInterval(interval);
 	});
 
-	// Scroll handler to detect if user scrolled up
 	function handleLogsScroll(e: Event) {
 		const target = e.target as HTMLDivElement;
-		const threshold = 50; // pixels from bottom
+		const threshold = 50;
 		const isNearBottom = target.scrollHeight - target.scrollTop - target.clientHeight < threshold;
 		autoScroll = isNearBottom;
 	}
 
-	// Environment variables functions
 	function isSensitiveKey(key: string): boolean {
 		const sensitivePatterns = ['PASSWORD', 'SECRET', 'TOKEN', 'KEY', 'API', 'AUTH'];
 		return sensitivePatterns.some(pattern => key.toUpperCase().includes(pattern));
@@ -170,262 +158,180 @@
 	}
 </script>
 
-<div class="max-w-6xl mx-auto">
+<div class="max-w-5xl mx-auto">
 	<!-- Back Button -->
 	<div class="mb-lg">
-		<a href="/projects">
-			<Button variant="ghost" size="sm">← Back to Projects</Button>
+		<a href="/projects" class="btn-secondary px-3 py-1.5 text-caption inline-flex items-center gap-1.5">
+			<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
+			Back
 		</a>
 	</div>
 
 	<!-- Project Header -->
-	<div class="mb-xxl">
-		<div class="flex items-center gap-md mb-md">
-			<h1 class="text-hero-display tracking-negative-hero font-semibold text-ink">
-				{process.name}
-			</h1>
-			<Badge variant={getStatusVariant(process.status)}>
-				{process.status}
-			</Badge>
-		</div>
-		<div class="flex items-center gap-lg text-caption text-ink-muted-80">
-			<div class="flex items-center gap-2">
-				<StatusIndicator status={getStatusVariant(process.status)} />
-				<span class="capitalize">{process.status}</span>
+	<div class="flex items-start justify-between mb-xl">
+		<div>
+			<div class="flex items-center gap-md mb-sm">
+				<h1 class="text-hero font-bold process-name" style="view-transition-name: page-title; color: var(--text-primary);">{process.name}</h1>
+				<Badge variant={getStatusVariant(process.status)}>{process.status}</Badge>
 			</div>
-			<span>|</span>
-			<span>PM2 ID: {process.pm_id}</span>
-			<span>|</span>
-			<span>Uptime: {process.uptimeFormatted}</span>
+			<div class="flex items-center gap-md text-caption" style="color: var(--text-muted);">
+				<span>PM2 ID: {process.pm_id}</span>
+				<span>·</span>
+				<span>Uptime: {process.uptimeFormatted}</span>
+			</div>
+		</div>
+
+		<div class="flex gap-xs">
+			{#if process.status === 'online'}
+				<button class="btn-secondary px-3 py-1.5 text-caption" onclick={handleAction('restart')}>Restart</button>
+				<button class="btn-secondary px-3 py-1.5 text-caption" onclick={handleAction('stop')}>Stop</button>
+			{:else if process.status === 'stopped'}
+				<button class="btn-secondary px-3 py-1.5 text-caption" onclick={handleAction('restart')}>Start</button>
+			{/if}
+			<button class="btn-danger px-3 py-1.5 text-caption" onclick={handleAction('delete')}>Delete</button>
 		</div>
 	</div>
 
 	<!-- Tabs -->
-	<div class="border-b border-hairline mb-lg">
-		<div class="flex gap-xl">
+	<div class="flex gap-xs mb-lg" style="border-bottom: 1px solid var(--border-color);">
+		{#each ['overview', 'logs', 'env'] as tab}
 			<button
-				class="py-md px-sm border-b-2 transition-colors {activeTab === 'overview' ? 'border-action-blue text-ink' : 'border-transparent text-ink-muted-80 hover:text-ink'}"
-				onclick={() => (activeTab = 'overview')}
+				class="px-md py-sm text-caption font-medium transition-colors border-b-2"
+				style="border-color: {activeTab === tab ? '#38CDFF' : 'transparent'}; color: {activeTab === tab ? '#38CDFF' : 'var(--text-muted)'};"
+				onclick={() => (activeTab = tab)}
 			>
-				Overview
+				{tab === 'env' ? 'Environment' : tab.charAt(0).toUpperCase() + tab.slice(1)}
 			</button>
-			<button
-				class="py-md px-sm border-b-2 transition-colors {activeTab === 'logs' ? 'border-action-blue text-ink' : 'border-transparent text-ink-muted-80 hover:text-ink'}"
-				onclick={() => (activeTab = 'logs')}
-			>
-				Logs
-			</button>
-			<button
-				class="py-md px-sm border-b-2 transition-colors {activeTab === 'env' ? 'border-action-blue text-ink' : 'border-transparent text-ink-muted-80 hover:text-ink'}"
-				onclick={() => (activeTab = 'env')}
-			>
-				Environment
-			</button>
-		</div>
+		{/each}
 	</div>
 
 	<!-- Tab Content -->
-	{#if activeTab === 'overview'}
-		<div class="grid grid-cols-1 lg:grid-cols-3 gap-lg mb-xxl">
-			<!-- Stats Cards -->
-			<Card variant="light" padding={true} rounded="lg">
-				<h3 class="text-caption-strong text-ink-muted-80 uppercase tracking-wider mb-sm">CPU Usage</h3>
-				<p class="text-display-lg font-semibold text-ink">{process.cpu}%</p>
-			</Card>
-
-			<Card variant="light" padding={true} rounded="lg">
-				<h3 class="text-caption-strong text-ink-muted-80 uppercase tracking-wider mb-sm">Memory</h3>
-				<p class="text-display-lg font-semibold text-ink">{process.memoryMB} MB</p>
-			</Card>
-
-			<Card variant="light" padding={true} rounded="lg">
-				<h3 class="text-caption-strong text-ink-muted-80 uppercase tracking-wider mb-sm">Restarts</h3>
-				<p class="text-display-lg font-semibold text-ink">{process.pm2_env.restart_time}</p>
-			</Card>
+	{#key activeTab}
+		<div class="tab-content">
+			{#if activeTab === 'overview'}
+		<!-- Stats -->
+		<div class="grid grid-cols-1 lg:grid-cols-3 gap-md mb-xl">
+			<div class="stagger-item" style="--stagger-index: 0;"><Card>
+				<p class="text-caption font-medium mb-1" style="color: var(--text-muted);">CPU Usage</p>
+				<p class="text-h1 font-bold" style="color: var(--text-primary);">{process.cpu}%</p>
+			</Card></div>
+			<div class="stagger-item" style="--stagger-index: 1;"><Card>
+				<p class="text-caption font-medium mb-1" style="color: var(--text-muted);">Memory</p>
+				<p class="text-h1 font-bold" style="color: var(--text-primary);">{process.memoryMB} MB</p>
+			</Card></div>
+			<div class="stagger-item" style="--stagger-index: 2;"><Card>
+				<p class="text-caption font-medium mb-1" style="color: var(--text-muted);">Restarts</p>
+				<p class="text-h1 font-bold" style="color: var(--text-primary);">{process.pm2_env.restart_time}</p>
+			</Card></div>
 		</div>
 
-		<!-- Detailed Info -->
-		<Card variant="light" padding={true} rounded="lg" class="mb-xxl">
-			<h2 class="text-display-md font-semibold text-ink mb-lg">Process Details</h2>
-			<div class="space-y-md">
-				<div class="flex justify-between py-sm border-b border-hairline">
-					<span class="text-body text-ink-muted-80">Process Name</span>
-					<span class="text-body-strong text-ink">{process.name}</span>
-				</div>
-				<div class="flex justify-between py-sm border-b border-hairline">
-					<span class="text-body text-ink-muted-80">PM2 ID</span>
-					<span class="text-body-strong text-ink">{process.pm_id}</span>
-				</div>
-				<div class="flex justify-between py-sm border-b border-hairline">
-					<span class="text-body text-ink-muted-80">Status</span>
-					<span class="text-body-strong text-ink capitalize">{process.status}</span>
-				</div>
-				<div class="flex justify-between py-sm border-b border-hairline">
-					<span class="text-body text-ink-muted-80">CPU</span>
-					<span class="text-body-strong text-ink">{process.cpu}%</span>
-				</div>
-				<div class="flex justify-between py-sm border-b border-hairline">
-					<span class="text-body text-ink-muted-80">Memory</span>
-					<span class="text-body-strong text-ink">{formatBytes(process.monit.memory)}</span>
-				</div>
-				<div class="flex justify-between py-sm border-b border-hairline">
-					<span class="text-body text-ink-muted-80">Uptime</span>
-					<span class="text-body-strong text-ink">{process.uptimeFormatted}</span>
-				</div>
-				<div class="flex justify-between py-sm border-b border-hairline">
-					<span class="text-body text-ink-muted-80">Restart Count</span>
-					<span class="text-body-strong text-ink">{process.pm2_env.restart_time}</span>
-				</div>
-			</div>
-		</Card>
-
-		<!-- Actions -->
-		<Card variant="parchment" padding={true} rounded="lg">
-			<h2 class="text-display-md font-semibold text-ink mb-lg">Actions</h2>
-			<div class="flex gap-md flex-wrap">
-				{#if process.status === 'online'}
-					<Button variant="secondary" onclick={handleAction('restart')}>
-						Restart Process
-					</Button>
-					<Button variant="secondary" onclick={handleAction('stop')}>
-						Stop Process
-					</Button>
-				{:else if process.status === 'stopped'}
-					<Button variant="secondary" onclick={handleAction('restart')}>
-						Start Process
-					</Button>
-				{/if}
-				<Button variant="danger" onclick={handleAction('delete')}>
-					Delete Process
-				</Button>
+		<!-- Details -->
+		<Card>
+			<h2 class="text-h3 font-semibold mb-md" style="color: var(--text-primary);">Process Details</h2>
+			<div class="space-y-xs">
+				{#each [
+					['Process Name', process.name],
+					['PM2 ID', process.pm_id.toString()],
+					['Status', process.status],
+					['CPU', process.cpu + '%'],
+					['Memory', formatBytes(process.monit.memory)],
+					['Uptime', process.uptimeFormatted],
+					['Restart Count', process.pm2_env.restart_time.toString()]
+				] as [label, value]}
+					<div class="flex justify-between py-sm px-md rounded-md" style="border-bottom: 1px solid var(--border-color);">
+						<span class="text-body-sm" style="color: var(--text-muted);">{label}</span>
+						<span class="text-body-sm font-medium" style="color: var(--text-primary);">{value}</span>
+					</div>
+				{/each}
 			</div>
 		</Card>
 
 	{:else if activeTab === 'logs'}
-		<Card variant="light" padding={true} rounded="lg">
-			<div class="flex items-center justify-between mb-lg">
-				<h2 class="text-display-md font-semibold text-ink">Real-time Logs</h2>
-				<div class="flex items-center gap-sm">
-					<label class="flex items-center gap-xs text-caption text-ink-muted-80 cursor-pointer">
-						<input
-							type="checkbox"
-							checked={autoScroll}
-							onchange={(e) => (autoScroll = (e.target as HTMLInputElement).checked)}
-							class="rounded border-hairline"
-						/>
-						Auto-scroll
-					</label>
-				</div>
+		<Card>
+			<div class="flex items-center justify-between mb-md">
+				<h2 class="text-h3 font-semibold" style="color: var(--text-primary);">Real-time Logs</h2>
+				<label class="flex items-center gap-xs text-caption cursor-pointer" style="color: var(--text-muted);">
+					<input type="checkbox" checked={autoScroll} onchange={(e) => (autoScroll = (e.target as HTMLInputElement).checked)} class="rounded" />
+					Auto-scroll
+				</label>
 			</div>
 			{#if !logs || logs.length === 0}
-				<p class="text-body text-ink-muted-80 py-lg text-center">
-					No logs available.
-				</p>
+				<p class="text-center py-xl" style="color: var(--text-muted);">No logs available</p>
 			{:else}
 				<div
 					bind:this={logsContainer}
 					onscroll={handleLogsScroll}
-					class="bg-surface-black rounded-lg p-md font-mono text-caption text-on-dark overflow-x-auto max-h-96 overflow-y-auto"
+					class="rounded-lg p-md font-mono text-code overflow-x-auto max-h-[400px] overflow-y-auto scrollbar-thin"
+					style="background: var(--bg-base); border: 1px solid var(--border-color);"
 				>
 					{#each logs as log}
-						<div class="py-xs {log.type === 'err' ? 'text-red-400' : 'text-green-400'}">
-							<span class="opacity-48">[{log.type}]</span> {log.data}
+						<div class="py-2xs" style="color: {log.type === 'err' ? '#FF5252' : '#00E676'};">
+							<span style="opacity: 0.4;">[{log.type}]</span> {log.data}
 						</div>
 					{/each}
 				</div>
 			{/if}
-			<p class="text-caption text-ink-muted-80 mt-md">
-				Polling every 3 seconds. {autoScroll ? 'Auto-scrolling enabled.' : 'Auto-scroll disabled.'}
-			</p>
 		</Card>
 
 	{:else if activeTab === 'env'}
-		<Card variant="light" padding={true} rounded="lg">
-			<div class="flex items-center justify-between mb-lg">
-				<h2 class="text-display-md font-semibold text-ink">Environment Variables</h2>
-			</div>
+		<Card>
+			<h2 class="text-h3 font-semibold mb-md" style="color: var(--text-primary);">Environment Variables</h2>
 
 			{#if saveMessage}
-				<div
-					class="{saveMessage.type === 'success' ? 'bg-green-50 border-green-200 text-green-700' : 'bg-red-50 border-red-200 text-red-700'} border px-lg py-md rounded-lg mb-lg"
-				>
+				<div class="rounded-md p-sm mb-md text-body-sm"
+					style="background: {saveMessage.type === 'success' ? 'rgba(0, 230, 118, 0.1)' : 'rgba(255, 82, 82, 0.1)'};
+					color: {saveMessage.type === 'success' ? '#00E676' : '#FF5252'};
+					border: 1px solid {saveMessage.type === 'success' ? 'rgba(0, 230, 118, 0.2)' : 'rgba(255, 82, 82, 0.2)'};">
 					{saveMessage.text}
 				</div>
 			{/if}
 
-			<!-- Add new env var -->
-			<div class="mb-lg p-md bg-canvas-parchment rounded-lg">
-				<h3 class="text-caption-strong text-ink-muted-80 uppercase tracking-wider mb-md">Add New Variable</h3>
+			<!-- Add new -->
+			<div class="mb-md p-md rounded-lg" style="background: var(--bg-surface); border: 1px solid var(--border-color);">
+				<h3 class="text-caption font-medium mb-sm" style="color: var(--text-secondary);">Add New Variable</h3>
 				<div class="flex gap-sm flex-wrap">
-					<input
-						type="text"
-						bind:value={newKey}
-						placeholder="Key (e.g., API_KEY)"
-						class="flex-1 min-w-[200px] px-md py-sm border border-hairline rounded-md text-body font-mono text-caption"
-					/>
-					<input
-						type="text"
-						bind:value={newValue}
-						placeholder="Value"
-						class="flex-1 min-w-[200px] px-md py-sm border border-hairline rounded-md text-body font-mono text-caption"
-					/>
-					<Button variant="secondary" size="sm" onclick={addEnvVar} disabled={!newKey.trim()}>
-						Add
-					</Button>
+					<input type="text" bind:value={newKey} placeholder="Key (e.g., API_KEY)" class="input-base flex-1 min-w-[180px] h-9 px-md text-code text-body-sm" />
+					<input type="text" bind:value={newValue} placeholder="Value" class="input-base flex-1 min-w-[180px] h-9 px-md text-code text-body-sm" />
+					<button class="btn-secondary px-3 py-1.5 text-caption" onclick={addEnvVar} disabled={!newKey.trim()}>Add</button>
 				</div>
 			</div>
 
-			<!-- Env vars list -->
+			<!-- List -->
 			{#if envVars.length === 0}
-				<p class="text-body text-ink-muted-80 py-lg text-center">
-					No environment variables configured.
-				</p>
+				<p class="text-center py-xl" style="color: var(--text-muted);">No environment variables configured</p>
 			{:else}
-				<div class="space-y-sm mb-lg">
+				<div class="space-y-xs mb-lg">
 					{#each envVars as env, index (env.key)}
-						<div class="flex items-center gap-sm py-sm border-b border-hairline">
-							<span class="text-body-strong text-ink min-w-[200px] font-mono text-caption">{env.key}</span>
-							<div class="flex-1 font-mono text-caption">
+						<div class="flex items-center gap-sm py-sm px-md rounded-md" style="background: var(--bg-surface);">
+							<span class="text-body-sm font-medium min-w-[160px] font-mono" style="color: var(--text-primary);">{env.key}</span>
+							<div class="flex-1 font-mono text-body-sm">
 								{#if isSensitiveKey(env.key)}
-									<span class="text-ink-muted-80">
+									<span style="color: var(--text-muted);">
 										{showSecrets[env.key] ? env.value : '••••••••••••'}
 									</span>
-									<button
-										onclick={() => toggleSecret(env.key)}
-										class="ml-sm text-action-blue hover:underline text-caption"
-									>
+									<button onclick={() => toggleSecret(env.key)} class="ml-sm text-caption font-medium" style="color: #38CDFF;">
 										{showSecrets[env.key] ? 'Hide' : 'Show'}
 									</button>
 								{:else}
-									<input
-										type="text"
-										value={env.value}
-										oninput={(e) => updateEnvVar(index, 'value', (e.target as HTMLInputElement).value)}
-										class="w-full px-sm py-xs border border-hairline rounded-md text-body font-mono text-caption"
-									/>
+									<input type="text" value={env.value} oninput={(e) => updateEnvVar(index, 'value', (e.target as HTMLInputElement).value)} class="input-base w-full h-8 px-sm text-code text-body-sm" />
 								{/if}
 							</div>
-							<button
-								onclick={() => removeEnvVar(index)}
-								class="text-red-500 hover:text-red-700 text-caption"
-								title="Remove"
-							>
-								✕
+							<button onclick={() => removeEnvVar(index)} class="w-6 h-6 rounded flex items-center justify-center transition-colors" style="color: #FF5252;" title="Remove">
+								<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
 							</button>
 						</div>
 					{/each}
 				</div>
 			{/if}
 
-			<!-- Save button -->
 			<div class="flex items-center gap-md">
-				<Button variant="primary" onclick={saveEnvVars} disabled={saving || envVars.length === 0}>
+				<button class="btn-primary px-4 py-2 text-body-sm" onclick={saveEnvVars} disabled={saving || envVars.length === 0}>
 					{saving ? 'Saving...' : 'Save & Restart'}
-				</Button>
-				<p class="text-caption text-ink-muted-80">
-					Saving will restart the process with updated environment variables.
-				</p>
+				</button>
+				<p class="text-caption" style="color: var(--text-muted);">Saving will restart the process</p>
 			</div>
 		</Card>
-	{/if}
+		{/if}
+		</div>
+	{/key}
 </div>

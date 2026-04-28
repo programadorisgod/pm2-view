@@ -28,6 +28,8 @@
 	},
 	"dependencies": {
 		"@better-auth/drizzle-adapter": "^1.6.9",
+		"@fontsource-variable/roboto": "^5.2.10",
+		"@fontsource/poppins": "^5.2.7",
 		"@libsql/client": "^0.17.3",
 		"@melt-ui/svelte": "^0.86.6",
 		"better-auth": "^1.6.9",

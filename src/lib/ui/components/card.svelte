@@ -2,44 +2,23 @@
 	import { cn } from '$lib/motion-core/utils/cn';
 
 	let {
-		variant = 'light',
+		variant = 'default',
 		padding = true,
-		rounded = false,
 		class: className = '',
 		children
 	}: {
-		variant?: 'light' | 'dark' | 'parchment';
+		variant?: 'default' | 'elevated' | 'ghost';
 		padding?: boolean;
-		rounded?: boolean | 'sm' | 'md' | 'lg' | 'pill';
 		class?: string;
 		children?: import('svelte').Snippet;
 	} = $props();
-
-	const variantClasses = {
-		light: 'bg-canvas text-ink',
-		dark: 'bg-surface-tile-1 text-on-dark',
-		parchment: 'bg-canvas-parchment text-ink'
-	};
-
-	const roundedClasses = {
-		true: 'rounded-lg',
-		false: '',
-		sm: 'rounded-sm',
-		md: 'rounded-md',
-		lg: 'rounded-lg',
-		pill: 'rounded-pill'
-	};
-
-	let computedRounded = $derived(
-		typeof rounded === 'boolean' ? (rounded ? 'rounded-lg' : '') : roundedClasses[rounded] || ''
-	);
 </script>
 
 <div
 	class={cn(
-		'border border-hairline',
-		variantClasses[variant],
-		computedRounded,
+		'card-base rounded-lg',
+		variant === 'elevated' ? 'glow-sm' : '',
+		variant === 'ghost' ? '!bg-transparent !border-transparent !shadow-none hover:!bg-transparent' : '',
 		padding ? 'p-lg' : '',
 		className
 	)}

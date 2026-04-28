@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { Card, Button, Badge, StatusIndicator } from '$lib/ui/components';
+	import { Card, Badge, Button } from '$lib/ui/components';
 	import type { PageData } from './$types';
 
 	let { data, form }: { data: PageData; form: { success?: boolean; message?: string; error?: string } | null } = $props();
@@ -34,111 +34,87 @@
 </script>
 
 <div class="max-w-6xl mx-auto">
-	<div class="mb-xxl">
-		<h1 class="text-hero-display tracking-negative-hero font-semibold text-ink mb-md">
-			Projects
-		</h1>
-		<p class="text-lead text-ink-muted-80">
-			Manage and monitor all your PM2 processes.
-		</p>
+	<!-- Header -->
+	<div class="mb-xl">
+		<h1 class="text-hero font-bold mb-xs" style="view-transition-name: page-title; color: var(--text-primary);">Projects</h1>
+		<p class="text-body-sm" style="color: var(--text-secondary);">Manage and monitor all your PM2 processes</p>
 	</div>
 
 	{#if form?.error}
-		<div class="bg-red-50 border border-red-200 text-red-700 px-lg py-md rounded-lg mb-lg">
+		<div class="rounded-md p-sm mb-lg text-body-sm" style="background: rgba(255, 82, 82, 0.1); color: #FF5252; border: 1px solid rgba(255, 82, 82, 0.2);">
 			{form.error}
 		</div>
 	{/if}
 
 	{#if form?.success}
-		<div class="bg-green-50 border border-green-200 text-green-700 px-lg py-md rounded-lg mb-lg">
+		<div class="rounded-md p-sm mb-lg text-body-sm" style="background: rgba(0, 230, 118, 0.1); color: #00E676; border: 1px solid rgba(0, 230, 118, 0.2);">
 			{form.message}
 		</div>
 	{/if}
 
 	{#if processes.length === 0}
-		<Card variant="light" padding={true} rounded="lg">
-			<div class="text-center py-xxl">
-				<p class="text-display-md font-semibold text-ink-muted-80 mb-md">No Processes Found</p>
-				<p class="text-body text-ink-muted-80">
-					PM2 is not running or no processes have been started.
-				</p>
+		<Card>
+			<div class="text-center py-2xl">
+				<p class="text-h3 font-semibold mb-xs" style="color: var(--text-secondary);">No Processes Found</p>
+				<p class="text-body-sm" style="color: var(--text-muted);">PM2 is not running or no processes have been started</p>
 			</div>
 		</Card>
 	{:else}
-		<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-lg">
-			{#each processes as process (process.pm_id)}
-				<Card variant="light" padding={true} rounded="lg" class="hover:shadow-md transition-shadow">
+		<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-md">
+			{#each processes as process, i (process.pm_id)}
+				<div class="stagger-item" style="--stagger-index: {i};">
+					<Card class="group">
 					<!-- Header -->
 					<div class="flex items-start justify-between mb-md">
 						<div>
-							<h3 class="text-body-strong text-ink mb-xs">{process.name}</h3>
+							<h3 class="text-body-sm font-semibold mb-xs" style="color: var(--text-primary);">{process.name}</h3>
 							<Badge variant={getStatusVariant(process.status)}>
 								{process.status}
 							</Badge>
 						</div>
-						<StatusIndicator status={getStatusVariant(process.status)} />
 					</div>
 
 					<!-- Stats -->
-					<div class="space-y-sm mb-lg">
+					<div class="space-y-xs mb-lg">
 						<div class="flex justify-between text-caption">
-							<span class="text-ink-muted-80">CPU</span>
-							<span class="text-ink font-medium">{process.cpu}%</span>
+							<span style="color: var(--text-muted);">CPU</span>
+							<span class="font-medium" style="color: var(--text-primary);">{process.cpu}%</span>
 						</div>
 						<div class="flex justify-between text-caption">
-							<span class="text-ink-muted-80">RAM</span>
-							<span class="text-ink font-medium">{process.memoryMB} MB</span>
+							<span style="color: var(--text-muted);">RAM</span>
+							<span class="font-medium" style="color: var(--text-primary);">{process.memoryMB} MB</span>
 						</div>
 						<div class="flex justify-between text-caption">
-							<span class="text-ink-muted-80">Uptime</span>
-							<span class="text-ink font-medium">{process.uptimeFormatted}</span>
-						</div>
-						<div class="flex justify-between text-caption">
-							<span class="text-ink-muted-80">PM2 ID</span>
-							<span class="text-ink font-medium">{process.pm_id}</span>
+							<span style="color: var(--text-muted);">Uptime</span>
+							<span class="font-medium" style="color: var(--text-primary);">{process.uptimeFormatted}</span>
 						</div>
 					</div>
 
 					<!-- Actions -->
-					<div class="flex gap-sm flex-wrap">
-						<a href="/projects/{process.pm_id}">
-							<Button variant="secondary" size="sm">View Details</Button>
+					<div class="flex gap-xs flex-wrap">
+						<a href="/projects/{process.pm_id}" class="btn-secondary px-3 py-1 text-caption flex-1 text-center">
+							Details
 						</a>
 
 						{#if process.status === 'online'}
-							<Button
-								variant="ghost"
-								size="sm"
-								onclick={handleAction(process.pm_id.toString(), 'restart')}
-							>
+							<button class="btn-secondary px-3 py-1 text-caption" onclick={handleAction(process.pm_id.toString(), 'restart')}>
 								Restart
-							</Button>
-							<Button
-								variant="ghost"
-								size="sm"
-								onclick={handleAction(process.pm_id.toString(), 'stop')}
-							>
+							</button>
+							<button class="btn-secondary px-3 py-1 text-caption" onclick={handleAction(process.pm_id.toString(), 'stop')}>
 								Stop
-							</Button>
+							</button>
 						{:else if process.status === 'stopped'}
-							<Button
-								variant="ghost"
-								size="sm"
-								onclick={handleAction(process.pm_id.toString(), 'restart')}
-							>
+							<button class="btn-secondary px-3 py-1 text-caption" onclick={handleAction(process.pm_id.toString(), 'restart')}>
 								Start
-							</Button>
+							</button>
 						{/if}
 
-						<Button
-							variant="danger"
-							size="sm"
-							onclick={handleAction(process.pm_id.toString(), 'delete')}
-						>
+						<button class="btn-danger px-3 py-1 text-caption" onclick={handleAction(process.pm_id.toString(), 'delete')}>
 							Delete
-						</Button>
+						</button>
 					</div>
 				</Card>
+				</div>
 			{/each}
 		</div>
 	{/if}

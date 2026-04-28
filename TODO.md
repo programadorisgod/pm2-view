@@ -8,5 +8,5 @@ Estas funcionalidades están identificadas pero **NO** se implementarán en esta
 - [ ] **Filtros/búsqueda avanzada** — Sin filtrado por nombre, estado, o recursos
 - [ ] **Roles multi-usuario** — Solo un usuario administrador por ahora
 - [ ] **Notificaciones/alertas** — Sin sistema de alertas por CPU/RAM alta o procesos caídos
-
+- [ ] **Abstraer los metodos de auth** - No depender de un solo proveedor. 
 ---

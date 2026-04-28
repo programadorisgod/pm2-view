@@ -1,6 +1,5 @@
 <script lang="ts">
 	import { cn } from '$lib/motion-core/utils/cn';
-	import { fade } from 'svelte/transition';
 
 	let {
 		items = [],
@@ -11,36 +10,62 @@
 		collapsed?: boolean;
 		class?: string;
 	} = $props();
+
+	const icons: Record<string, string> = {
+		Dashboard: `<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 5a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1H5a1 1 0 01-1-1V5zm10 0a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1V5zM4 15a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1H5a1 1 0 01-1-1v-4zm10 0a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1v-4z"/></svg>`,
+		Projects: `<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"/></svg>`,
+		Metrics: `<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>`
+	};
 </script>
 
 <aside
 	class={cn(
-		'bg-canvas border-r border-hairline h-screen flex flex-col transition-all duration-300',
-		collapsed ? 'w-0 overflow-hidden opacity-0' : 'w-64 opacity-100',
+		'h-screen flex flex-col transition-all duration-300',
+		collapsed ? 'w-0 overflow-hidden opacity-0' : 'w-[220px] opacity-100',
 		className
 	)}
-	transition:fade={{ duration: 200 }}
+	style="background: var(--bg-surface); border-right: 1px solid var(--border-color);"
 >
-	<nav class="flex-1 py-md">
-		<ul class="space-y-1 px-sm">
+	<!-- Logo -->
+	<div class="px-lg py-4 border-b" style="border-color: var(--border-color);">
+		<div class="flex items-center gap-2.5">
+			<div class="w-7 h-7 rounded-md flex items-center justify-center" style="background: linear-gradient(135deg, #38CDFF, #009DCD);">
+				<svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+					<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
+				</svg>
+			</div>
+			<span class="text-h3 font-bold ">PM2 View</span>
+		</div>
+	</div>
+
+	<!-- Nav -->
+	<nav class="flex-1 py-sm px-xs">
+		<ul class="space-y-1">
 			{#each items as item (item.href)}
 				<li>
 					<a
 						href={item.href}
 						class={cn(
-							'flex items-center gap-3 px-md py-2 rounded-md text-body transition-colors',
+							'flex items-center gap-3 px-md py-2 rounded-md text-body-sm transition-all duration-150',
 							item.active
-								? 'bg-action-blue/10 text-action-blue font-medium'
-								: 'text-ink hover:bg-canvas-parchment'
+								? 'font-medium'
+								: 'hover:bg-[var(--bg-card)]'
 						)}
+						style={item.active
+							? 'background: rgba(56, 205, 255, 0.08); color: #38CDFF;'
+							: 'color: var(--text-secondary);'
+						}
 					>
-						{#if item.icon}
-							<span class="w-5 h-5 flex items-center justify-center">{@html item.icon}</span>
-						{/if}
+						{@html icons[item.label] || ''}
 						<span>{item.label}</span>
 					</a>
 				</li>
 			{/each}
 		</ul>
 	</nav>
+
+	<!-- Bottom -->
+	<div class="px-lg py-sm text-center" style="border-top: 1px solid var(--border-color);">
+		<p class="text-caption-sm" style="color: var(--text-muted);">v0.1.0</p>
+	</div>
 </aside>

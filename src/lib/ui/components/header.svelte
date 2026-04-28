@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { cn } from '$lib/motion-core/utils/cn';
+	import { theme } from '$lib/theme.svelte';
 
 	let {
 		title = 'PM2 View',
@@ -14,19 +15,17 @@
 
 <header
 	class={cn(
-		'sticky top-0 z-50 backdrop-frosted bg-canvas-parchment/80 border-b border-hairline',
-		'flex items-center justify-between px-xl h-[64px]',
+		'sticky top-0 z-50 flex items-center justify-between px-lg h-[52px]',
 		className
 	)}
+	style="background: var(--glass-bg); backdrop-filter: blur(12px); border-bottom: 1px solid var(--border-color);"
 >
 	<div class="flex items-center gap-md">
-		<h1 class="text-display-md tracking-negative-hero font-semibold text-ink">
-			{title}
-		</h1>
+		<h2 class="text-h3 font-semibold" style="color: var(--text-primary);">{title}</h2>
 	</div>
 
 	{#if actions}
-		<div class="flex items-center gap-md">
+		<div class="flex items-center gap-sm">
 			{@render actions()}
 		</div>
 	{/if}

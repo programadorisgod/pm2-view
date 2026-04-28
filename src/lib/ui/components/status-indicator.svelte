@@ -1,6 +1,5 @@
 <script lang="ts">
 	import { cn } from '$lib/motion-core/utils/cn';
-	import { fade } from 'svelte/transition';
 
 	let {
 		status = 'online',
@@ -11,43 +10,33 @@
 	} = $props();
 
 	const statusConfig = {
-		online: {
-			dot: 'bg-green-500',
-			text: 'text-green-700',
-			pulse: true
-		},
-		offline: {
-			dot: 'bg-gray-400',
-			text: 'text-gray-600',
-			pulse: false
-		},
-		stopped: {
-			dot: 'bg-orange-500',
-			text: 'text-orange-700',
-			pulse: false
-		},
-		error: {
-			dot: 'bg-red-500',
-			text: 'text-red-700',
-			pulse: false
-		}
+		online: { dot: '#00E676', glow: 'rgba(0, 230, 118, 0.4)' },
+		offline: { dot: '#5A6474', glow: 'transparent' },
+		stopped: { dot: '#FFB74D', glow: 'rgba(255, 183, 77, 0.4)' },
+		error: { dot: '#FF5252', glow: 'rgba(255, 82, 82, 0.4)' }
 	};
 
 	let config = $derived(statusConfig[status]);
 </script>
 
-<div class={cn('inline-flex items-center gap-2', className)} in:fade={{ duration: 200 }}>
+<div class={cn('inline-flex items-center gap-2', className)}>
 	<div class="relative">
-		<span class={cn('w-3 h-3 rounded-full block', config.dot)}></span>
-		{#if config.pulse}
+		<span class="w-2.5 h-2.5 rounded-full block" style="background: {config.dot};"></span>
+		{#if status === 'online'}
 			<span
-				class={cn(
-					'w-3 h-3 rounded-full block absolute top-0 left-0 animate-ping',
-					config.dot
-				)}
-				style="animation-duration: 1.5s;"
+				class="w-2.5 h-2.5 rounded-full block absolute top-0 left-0"
+				style="background: {config.dot}; opacity: 0.5; animation: ping 1.5s cubic-bezier(0, 0, 0.2, 1) infinite;"
 			></span>
 		{/if}
 	</div>
-	<span class={cn('text-caption capitalize', config.text)}>{status}</span>
+	<span class="text-caption capitalize" style="color: {config.dot};">{status}</span>
 </div>
+
+<style>
+	@keyframes ping {
+		75%, 100% {
+			transform: scale(2);
+			opacity: 0;
+		}
+	}
+</style>

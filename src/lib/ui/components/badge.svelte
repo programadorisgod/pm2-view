@@ -12,31 +12,11 @@
 	} = $props();
 
 	const variantConfig = {
-		online: {
-			dot: 'bg-green-500',
-			text: 'text-green-700',
-			bg: 'bg-green-50'
-		},
-		offline: {
-			dot: 'bg-gray-400',
-			text: 'text-gray-600',
-			bg: 'bg-gray-50'
-		},
-		stopped: {
-			dot: 'bg-orange-500',
-			text: 'text-orange-700',
-			bg: 'bg-orange-50'
-		},
-		error: {
-			dot: 'bg-red-500',
-			text: 'text-red-700',
-			bg: 'bg-red-50'
-		},
-		warning: {
-			dot: 'bg-yellow-500',
-			text: 'text-yellow-700',
-			bg: 'bg-yellow-50'
-		}
+		online: { bg: 'rgba(0, 230, 118, 0.1)', text: '#00E676', dot: '#00E676' },
+		offline: { bg: 'rgba(90, 100, 116, 0.15)', text: '#8B95A5', dot: '#5A6474' },
+		stopped: { bg: 'rgba(255, 183, 77, 0.1)', text: '#FFB74D', dot: '#FFB74D' },
+		error: { bg: 'rgba(255, 82, 82, 0.1)', text: '#FF5252', dot: '#FF5252' },
+		warning: { bg: 'rgba(255, 215, 64, 0.1)', text: '#FFD740', dot: '#FFD740' }
 	};
 
 	let config = $derived(variantConfig[variant]);
@@ -44,12 +24,11 @@
 
 <span
 	class={cn(
-		'inline-flex items-center gap-2 px-3 py-1 rounded-pill text-caption-strong',
-		config.bg,
-		config.text,
+		'inline-flex items-center gap-1.5 px-2.5 py-1 rounded-pill text-caption font-medium',
 		className
 	)}
+	style="background: {config.bg}; color: {config.text};"
 >
-	<span class={cn('w-2 h-2 rounded-full', config.dot)}></span>
+	<span class="w-1.5 h-1.5 rounded-full" style="background: {config.dot}"></span>
 	{@render children?.()}
 </span>

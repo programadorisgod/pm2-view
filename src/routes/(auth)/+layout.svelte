@@ -2,7 +2,7 @@
 	let { children } = $props();
 </script>
 
-<div class="auth-layout">
+<div class="auth-layout page-transition-enter">
 	{@render children()}
 </div>
 
@@ -12,7 +12,8 @@
 		min-height: 100vh;
 		align-items: center;
 		justify-content: center;
-		background-color: #f5f5f7;
+		background: var(--bg-base);
 		padding: 1rem;
+		transition: background-color 0.2s ease;
 	}
 </style>

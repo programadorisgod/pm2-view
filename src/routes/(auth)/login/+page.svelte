@@ -20,7 +20,6 @@
 			if (result.error) {
 				error = result.error.message || 'Invalid email or password';
 			} else {
-				// Redirect to dashboard on success
 				window.location.href = '/';
 			}
 		} catch {
@@ -31,195 +30,71 @@
 	}
 </script>
 
-<div class="login-container">
-	<div class="login-card">
-		<div class="login-header">
-			<h1 class="login-title">Welcome Back</h1>
-			<p class="login-subtitle">Sign in to your PM2 Dashboard</p>
+<div class="min-h-screen flex items-center justify-center p-lg" style="background: var(--bg-base);">
+	<!-- Background grid -->
+	<div class="fixed inset-0 opacity-30 bg-grid pointer-events-none"></div>
+
+	<div class="w-full max-w-sm relative z-10">
+		<!-- Logo -->
+		<div class="flex items-center justify-center gap-2.5 mb-2xl">
+			<div class="w-10 h-10 rounded-lg flex items-center justify-center" style="background: linear-gradient(135deg, #38CDFF, #009DCD); box-shadow: 0 0 20px rgba(56, 205, 255, 0.3);">
+				<svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+					<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
+				</svg>
+			</div>
+			<span class="text-h1 font-bold ">PM2 View</span>
 		</div>
 
-		<form onsubmit={handleSubmit} class="login-form">
-			{#if error}
-				<div class="error-banner">
-					{error}
+		<div class="card-base rounded-xl p-xl">
+			<div class="text-center mb-lg">
+				<h1 class="text-h2 font-semibold mb-xs" style="color: var(--text-primary);">Welcome Back</h1>
+				<p class="text-body-sm" style="color: var(--text-secondary);">Sign in to your dashboard</p>
+			</div>
+
+			<form onsubmit={handleSubmit} class="space-y-md">
+				{#if error}
+					<div class="rounded-md p-sm text-body-sm" style="background: rgba(255, 82, 82, 0.1); color: #FF5252; border: 1px solid rgba(255, 82, 82, 0.2);">
+						{error}
+					</div>
+				{/if}
+
+				<div>
+					<label for="email" class="block text-caption font-medium mb-xs" style="color: var(--text-secondary);">Email</label>
+					<input
+						id="email"
+						type="email"
+						bind:value={email}
+						placeholder="you@example.com"
+						class="input-base w-full h-10 px-md text-body-sm"
+						autocomplete="email"
+						required
+					/>
 				</div>
-			{/if}
 
-			<div class="form-group">
-				<label for="email" class="form-label">Email</label>
-				<input
-					id="email"
-					type="email"
-					bind:value={email}
-					placeholder="you@example.com"
-					class="form-input"
-					autocomplete="email"
-					required
-				/>
+				<div>
+					<label for="password" class="block text-caption font-medium mb-xs" style="color: var(--text-secondary);">Password</label>
+					<input
+						id="password"
+						type="password"
+						bind:value={password}
+						placeholder="••••••••"
+						class="input-base w-full h-10 px-md text-body-sm"
+						autocomplete="current-password"
+						required
+					/>
+				</div>
+
+				<button type="submit" disabled={loading} class="btn-primary w-full h-10 text-body-sm font-medium">
+					{loading ? 'Signing in...' : 'Sign In'}
+				</button>
+			</form>
+
+			<div class="text-center mt-lg">
+				<p class="text-caption" style="color: var(--text-muted);">
+					Don't have an account?
+					<a href="/register" class="font-medium" style="color: #38CDFF;">Sign Up</a>
+				</p>
 			</div>
-
-			<div class="form-group">
-				<label for="password" class="form-label">Password</label>
-				<input
-					id="password"
-					type="password"
-					bind:value={password}
-					placeholder="••••••••"
-					class="form-input"
-					autocomplete="current-password"
-					required
-				/>
-			</div>
-
-			<button type="submit" disabled={loading} class="submit-button">
-				{loading ? 'Signing in...' : 'Sign In'}
-			</button>
-		</form>
-
-		<div class="login-footer">
-			<p>Don't have an account? <a href="/register" class="login-link">Sign Up</a></p>
 		</div>
 	</div>
 </div>
-
-<style>
-	.login-container {
-		width: 100%;
-		max-width: 400px;
-	}
-
-	.login-card {
-		background: #ffffff;
-		border-radius: 18px;
-		padding: 48px 32px;
-		box-shadow: rgba(0, 0, 0, 0.04) 0px 1px 0px;
-		border: 1px solid #e0e0e0;
-	}
-
-	.login-header {
-		text-align: center;
-		margin-bottom: 32px;
-	}
-
-	.login-title {
-		font-family: 'SF Pro Display', system-ui, -apple-system, sans-serif;
-		font-size: 34px;
-		font-weight: 600;
-		line-height: 1.47;
-		letter-spacing: -0.374px;
-		color: #1d1d1f;
-		margin: 0 0 8px 0;
-	}
-
-	.login-subtitle {
-		font-family: 'SF Pro Text', system-ui, -apple-system, sans-serif;
-		font-size: 17px;
-		font-weight: 400;
-		line-height: 1.47;
-		letter-spacing: -0.374px;
-		color: #7a7a7a;
-		margin: 0;
-	}
-
-	.login-form {
-		display: flex;
-		flex-direction: column;
-		gap: 17px;
-	}
-
-	.error-banner {
-		background: #fff5f5;
-		color: #c53030;
-		padding: 12px 16px;
-		border-radius: 8px;
-		font-family: 'SF Pro Text', system-ui, -apple-system, sans-serif;
-		font-size: 14px;
-		line-height: 1.43;
-		letter-spacing: -0.224px;
-	}
-
-	.form-group {
-		display: flex;
-		flex-direction: column;
-		gap: 8px;
-	}
-
-	.form-label {
-		font-family: 'SF Pro Text', system-ui, -apple-system, sans-serif;
-		font-size: 14px;
-		font-weight: 600;
-		line-height: 1.29;
-		letter-spacing: -0.224px;
-		color: #1d1d1f;
-	}
-
-	.form-input {
-		font-family: 'SF Pro Text', system-ui, -apple-system, sans-serif;
-		font-size: 17px;
-		font-weight: 400;
-		line-height: 1.47;
-		letter-spacing: -0.374px;
-		color: #1d1d1f;
-		background: #ffffff;
-		border: 1px solid rgba(0, 0, 0, 0.08);
-		border-radius: 9999px;
-		padding: 12px 20px;
-		height: 44px;
-		transition: border-color 0.2s ease;
-		outline: none;
-		box-sizing: border-box;
-		width: 100%;
-	}
-
-	.form-input:focus {
-		border-color: #0066cc;
-		box-shadow: 0 0 0 2px rgba(0, 102, 204, 0.2);
-	}
-
-	.submit-button {
-		font-family: 'SF Pro Text', system-ui, -apple-system, sans-serif;
-		font-size: 18px;
-		font-weight: 300;
-		line-height: 1.0;
-		letter-spacing: 0;
-		color: #ffffff;
-		background: #0066cc;
-		border: none;
-		border-radius: 9999px;
-		padding: 14px 28px;
-		cursor: pointer;
-		transition: transform 0.1s ease;
-		margin-top: 8px;
-	}
-
-	.submit-button:hover:not(:disabled) {
-		background: #0066cc;
-	}
-
-	.submit-button:active:not(:disabled) {
-		transform: scale(0.95);
-	}
-
-	.submit-button:disabled {
-		opacity: 0.6;
-		cursor: not-allowed;
-	}
-
-	.login-footer {
-		text-align: center;
-		margin-top: 24px;
-		font-family: 'SF Pro Text', system-ui, -apple-system, sans-serif;
-		font-size: 14px;
-		color: #7a7a7a;
-	}
-
-	.login-link {
-		color: #0066cc;
-		text-decoration: none;
-		font-weight: 400;
-	}
-
-	.login-link:hover {
-		text-decoration: underline;
-	}
-</style>

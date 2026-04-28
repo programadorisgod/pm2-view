@@ -2,6 +2,7 @@
 	import { Card, Badge, Button, StatusIndicator } from '$lib/ui/components';
 	import { base } from '$app/paths';
 	import type { PageData } from './$types';
+	import { goto, invalidateAll } from '$app/navigation';
 
 	let { data }: { data: PageData } = $props();
 
@@ -52,19 +53,18 @@
 		return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
 	}
 
-	function handleAction(action: 'restart' | 'stop' | 'delete') {
-		return () => {
-			const form = document.createElement('form');
-			form.method = 'POST';
-			form.action = '/projects?/' + action;
-			const input = document.createElement('input');
-			input.type = 'hidden';
-			input.name = 'pm_id';
-			input.value = process.pm_id.toString();
-			form.appendChild(input);
-			document.body.appendChild(form);
-			form.submit();
-		};
+	async function handleAction(action: 'restart' | 'stop' | 'delete') {
+		const res = await fetch(`${base}/projects?/${action}`, {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+			body: `pm_id=${encodeURIComponent(process.pm_id.toString())}`
+		});
+		if (res.ok) {
+			await invalidateAll();
+			if (action === 'delete') {
+				goto(`${base}/projects`);
+			}
+		}
 	}
 
 	// Real-time logs polling
@@ -73,7 +73,7 @@
 
 		const interval = setInterval(async () => {
 			try {
-				const res = await fetch(`/projects/${process.pm_id}/logs?lines=100`);
+				const res = await fetch(`${base}/projects/${process.pm_id}/logs?lines=100`);
 				const data = await res.json();
 				if (data.success && data.logs) {
 					logs = data.logs;
@@ -184,12 +184,12 @@
 
 		<div class="flex gap-xs">
 			{#if process.status === 'online'}
-				<button class="btn-secondary px-3 py-1.5 text-caption" onclick={handleAction('restart')}>Restart</button>
-				<button class="btn-secondary px-3 py-1.5 text-caption" onclick={handleAction('stop')}>Stop</button>
+				<button class="btn-secondary px-3 py-1.5 text-caption" onclick={() => handleAction('restart')}>Restart</button>
+				<button class="btn-secondary px-3 py-1.5 text-caption" onclick={() => handleAction('stop')}>Stop</button>
 			{:else if process.status === 'stopped'}
-				<button class="btn-secondary px-3 py-1.5 text-caption" onclick={handleAction('restart')}>Start</button>
+				<button class="btn-secondary px-3 py-1.5 text-caption" onclick={() => handleAction('restart')}>Start</button>
 			{/if}
-			<button class="btn-danger px-3 py-1.5 text-caption" onclick={handleAction('delete')}>Delete</button>
+			<button class="btn-danger px-3 py-1.5 text-caption" onclick={() => handleAction('delete')}>Delete</button>
 		</div>
 	</div>
 

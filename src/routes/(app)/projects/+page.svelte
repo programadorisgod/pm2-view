@@ -2,6 +2,7 @@
 	import { Card, Badge, Button } from '$lib/ui/components';
 	import { base } from '$app/paths';
 	import type { PageData } from './$types';
+	import { invalidateAll } from '$app/navigation';
 
 	let { data, form }: { data: PageData; form: { success?: boolean; message?: string; error?: string } | null } = $props();
 
@@ -16,21 +17,15 @@
 		}
 	}
 
-	function handleAction(pm_id: string, action: 'restart' | 'stop' | 'delete') {
-		return () => {
-			const form = document.createElement('form');
-			form.method = 'POST';
-			form.action = '?/' + action;
-
-			const input = document.createElement('input');
-			input.type = 'hidden';
-			input.name = 'pm_id';
-			input.value = pm_id;
-			form.appendChild(input);
-
-			document.body.appendChild(form);
-			form.submit();
-		};
+	async function handleAction(pm_id: string, action: 'restart' | 'stop' | 'delete') {
+		const res = await fetch(`${base}/projects?/${action}`, {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+			body: `pm_id=${encodeURIComponent(pm_id)}`
+		});
+		if (res.ok) {
+			await invalidateAll();
+		}
 	}
 </script>
 
@@ -98,19 +93,19 @@
 						</a>
 
 						{#if process.status === 'online'}
-							<button class="btn-secondary px-3 py-1 text-caption" onclick={handleAction(process.pm_id.toString(), 'restart')}>
+							<button class="btn-secondary px-3 py-1 text-caption" onclick={() => handleAction(process.pm_id.toString(), 'restart')}>
 								Restart
 							</button>
-							<button class="btn-secondary px-3 py-1 text-caption" onclick={handleAction(process.pm_id.toString(), 'stop')}>
+							<button class="btn-secondary px-3 py-1 text-caption" onclick={() => handleAction(process.pm_id.toString(), 'stop')}>
 								Stop
 							</button>
 						{:else if process.status === 'stopped'}
-							<button class="btn-secondary px-3 py-1 text-caption" onclick={handleAction(process.pm_id.toString(), 'restart')}>
+							<button class="btn-secondary px-3 py-1 text-caption" onclick={() => handleAction(process.pm_id.toString(), 'restart')}>
 								Start
 							</button>
 						{/if}
 
-						<button class="btn-danger px-3 py-1 text-caption" onclick={handleAction(process.pm_id.toString(), 'delete')}>
+						<button class="btn-danger px-3 py-1 text-caption" onclick={() => handleAction(process.pm_id.toString(), 'delete')}>
 							Delete
 						</button>
 					</div>

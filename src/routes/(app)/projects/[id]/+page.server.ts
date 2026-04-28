@@ -1,13 +1,10 @@
 import { PM2Repository } from '$lib/pm2/pm2-repository.impl';
 import { PM2Service } from '$lib/pm2/pm2.service';
 import { EnvVarService } from '$lib/env-vars/env-var.service';
+import { createServices } from '$lib/services/factory';
 import { error, fail } from '@sveltejs/kit';
 import { z } from 'zod';
 import type { PageServerLoad, Actions } from './$types';
-
-const pm2Repo = new PM2Repository();
-const pm2Service = new PM2Service(pm2Repo);
-const envVarService = new EnvVarService();
 
 // Schema for environment variables save action
 const envVarSchema = z.object({
@@ -15,6 +12,7 @@ const envVarSchema = z.object({
 });
 
 export const load: PageServerLoad = async ({ params }) => {
+	const { pm2Service, envVarService } = createServices();
 	const { id } = params;
 
 	const process = await pm2Service.getProcessById(id);
@@ -38,6 +36,7 @@ export const load: PageServerLoad = async ({ params }) => {
 
 export const actions: Actions = {
 	saveEnv: async ({ request, params }) => {
+		const { envVarService } = createServices();
 		const { id } = params;
 		const formData = await request.formData();
 		const data = Object.fromEntries(formData);

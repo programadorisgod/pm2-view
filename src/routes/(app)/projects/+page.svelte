@@ -1,5 +1,5 @@
 	<script lang="ts">
-	import { Card, Badge, ConfirmDeleteModal } from '$lib/ui/components';
+	import { Card, Badge, ConfirmDeleteModal, FeedbackBanner } from '$lib/ui/components';
 	import { base } from '$app/paths';
 	import type { PageData } from './$types';
 	import { invalidateAll } from '$app/navigation';
@@ -73,9 +73,7 @@
 	</div>
 
 	{#if feedback}
-		<div class="rounded-md p-sm mb-lg text-body-sm" style="background: {feedback.type === 'success' ? 'rgba(0, 230, 118, 0.1)' : 'rgba(255, 82, 82, 0.1)'}; color: {feedback.type === 'success' ? '#00E676' : '#FF5252'}; border: 1px solid {feedback.type === 'success' ? 'rgba(0, 230, 118, 0.2)' : 'rgba(255, 82, 82, 0.2)'};">
-			{feedback.text}
-		</div>
+		<FeedbackBanner type={feedback.type} message={feedback.text} />
 	{/if}
 
 	{#if processes.length === 0}

@@ -7,13 +7,13 @@ import type { PM2Process } from '$lib/pm2/pm2.types';
 const execAsync = promisify(exec);
 
 export class EnvVarService {
-	private pm2Repo: PM2Repository;
-	private pm2Service: PM2Service;
+  private pm2Repo: PM2Repository;
+  private pm2Service: PM2Service;
 
-	constructor() {
-		this.pm2Repo = new PM2Repository();
-		this.pm2Service = new PM2Service(this.pm2Repo);
-	}
+  constructor(pm2Repo: PM2Repository, pm2Service: PM2Service) {
+    this.pm2Repo = pm2Repo;
+    this.pm2Service = pm2Service;
+  }
 
 	async getEnvVars(processId: string): Promise<Record<string, string>> {
 		const rawProcess = await this.pm2Repo.describe(processId);

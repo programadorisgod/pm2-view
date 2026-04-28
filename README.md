@@ -4,12 +4,11 @@ A beautiful, modern visual dashboard for managing PM2 processes. Monitor CPU, RA
 
 ![Dashboard](https://img.shields.io/badge/SvelteKit-2.x-ff3e00?logo=svelte)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5.x-3178c6?logo=typescript)
-![Better Auth](https://img.shields.io/badge/Auth-Better%20Auth-0070f3)
-![Database](https://img.shields.io/badge/DB-Turso%20SQLite-4ff5d9)
+![Database](https://img.shields.io/badge/DB-PostgreSQL%20%7C%20SQLite-4ff5d9)
 
 ## ✨ Features
 
-- **Authentication** — Secure login/register with Better Auth and session management
+- **Authentication** — Pluggable auth system (Better Auth included, swap with any provider)
 - **Dashboard** — Overview of all PM2 processes with real-time status
 - **Project Cards** — Beautiful cards showing CPU, RAM, uptime, and status
 - **Process Actions** — Restart, stop, and delete processes directly from the UI
@@ -25,13 +24,11 @@ A beautiful, modern visual dashboard for managing PM2 processes. Monitor CPU, RA
 |-------|-----------|
 | **Framework** | SvelteKit 2.x + Svelte 5 (runes) |
 | **Language** | TypeScript |
-| **Auth** | Better Auth |
-| **Database** | Turso (libSQL/SQLite) |
+| **Auth** | Better Auth (pluggable — see [Auth Providers](#auth-providers)) |
+| **Database** | PostgreSQL or SQLite/Turso (see [Database](#database)) |
 | **ORM** | Drizzle ORM |
 | **Validation** | Zod |
 | **Styling** | Tailwind CSS |
-| **UI Components** | Custom components with Melt UI patterns |
-| **Animations** | Svelte transitions + View Transitions API |
 | **Testing** | Vitest |
 
 ## 📁 Architecture
@@ -40,20 +37,32 @@ Built with **Screaming Architecture** — organized by domain, not by technical 
 
 ```
 src/lib/
-├── auth/              # Authentication domain
+├── auth/              # Authentication domain (pluggable providers)
+│   ├── provider.interface.ts
+│   ├── providers/     # Auth implementations (better-auth, etc.)
+│   └── factory.ts     # Provider registry
+├── db/                # Database domain (dialect-agnostic)
+│   ├── driver.interface.ts
+│   ├── drivers/       # DB implementations (libsql, postgres)
+│   ├── dialect-registry.ts  # Extensible dialect detection
+│   ├── factory.ts     # Driver factory
+│   └── schema/        # Drizzle schema definitions
+├── services/          # Service container (DI factory)
+├── logger/            # Structured logging
+├── utils/             # Shared utilities
 ├── projects/          # Projects domain
 ├── pm2/               # PM2 process manager domain
 ├── metrics/           # Metrics & monitoring domain
 ├── env-vars/          # Environment variables domain
-├── db/                # Database infrastructure (Drizzle + schema)
 ├── ui/                # Shared UI components
-├── config/            # Configuration
-└── theme.svelte.ts    # Theme management (dark/light)
+└── config/            # Configuration
 ```
 
 **Patterns used:**
 - **Repository Pattern** — Interfaces decouple domain from implementation
 - **Service Layer** — Business logic encapsulated in services
+- **Dependency Injection** — Centralized `createServices()` factory
+- **Registry Pattern** — Extensible driver/provider selection (Open/Closed)
 - **Interface-first** — Contracts defined before implementations
 
 ## 🏁 Getting Started
@@ -61,9 +70,8 @@ src/lib/
 ### Prerequisites
 
 - Node.js 20+
-- PNPM (or npm)
+- npm (or pnpm/yarn)
 - PM2 installed globally (`npm i -g pm2`)
-- Turso account (or local SQLite)
 
 ### Installation
 
@@ -73,72 +81,99 @@ git clone <your-repo-url>
 cd pm2-view
 
 # Install dependencies
-pnpm install
+npm install
 
 # Copy environment variables
 cp .env.example .env
 
-# Edit .env with your Turso credentials
+# Edit .env with your database and auth configuration
 ```
+
+### Database
+
+PM2 View supports multiple database backends through a driver abstraction. The dialect is auto-detected from the connection URL.
+
+**SQLite / Turso (default):**
+```env
+DATABASE_URL=libsql://your-database.turso.io
+TURSO_AUTH_TOKEN=your-auth-token
+```
+
+**PostgreSQL:**
+```env
+DATABASE_URL=postgres://user:password@localhost:5432/pm2view
+```
+
+**Local SQLite file:**
+```env
+DATABASE_URL=file:./data/local.db
+```
+
+To add a new database driver, register a dialect rule and driver in the factory — no existing code needs modification.
+
+### Auth Providers
+
+The default auth provider is Better Auth. To swap to a different provider:
+
+```typescript
+// src/lib/auth/factory.ts
+import { MyAuthProvider } from './providers/my-auth.provider';
+
+registerAuthProvider('my-auth', () => new MyAuthProvider());
+```
+
+Then set `AUTH_PROVIDER=my-auth` in your environment.
 
 ### Environment Variables
 
 ```env
-# Turso Database
-TURSO_DATABASE_URL=libsql://your-database.turso.io
-TURSO_AUTH_TOKEN=your-auth-token
+# Database (required) — dialect auto-detected from URL
+DATABASE_URL=libsql://your-database.turso.io
+TURSO_AUTH_TOKEN=your-auth-token  # Only for libsql/Turso
 
-# Better Auth
+# Better Auth (required for default provider)
 BETTER_AUTH_URL=http://localhost:5179
 BETTER_AUTH_SECRET=your-secret-key
+
+# Auth Provider (optional — defaults to 'better-auth')
+AUTH_PROVIDER=better-auth
 
 # PM2 (optional)
 PM2_HOST=localhost
 PM2_PORT=4322
+
+# Logging (optional)
+DEBUG=true  # Enable debug-level logging
 ```
 
 ### Running
 
 ```bash
 # Development
-pnpm dev
+npm run dev
 
 # Build for production
-pnpm build
+npm run build
 
 # Preview production build
-pnpm preview
+npm run preview
 
 # Run tests
-pnpm test
+npm test
 
 # Type check
-pnpm check
+npm run check
 ```
 
 ### Database Setup
 
 ```bash
-# Push schema to Turso
+# Push schema to your database
 npx drizzle-kit push
 
 # Generate migrations
 npx drizzle-kit generate
 ```
-
-## 📸 Screenshots
-
-### Dashboard
-Process overview with summary cards and quick links.
-
-### Projects
-Grid of project cards with CPU, RAM, uptime, and action buttons.
-
-### Project Detail
-Tabs for Overview, Logs (real-time), and Environment Variables.
-
-### Metrics
-Visual performance metrics with progress bars and auto-refresh.
 
 ## 🎨 Design System
 
@@ -163,17 +198,31 @@ Visual performance metrics with progress bars and auto-refresh.
 - Theme toggle: 400ms crossfade
 - List items: 50ms stagger delay
 
+## 📸 Screenshots
+
+### Dashboard
+Process overview with summary cards and quick links.
+
+### Projects
+Grid of project cards with CPU, RAM, uptime, and action buttons.
+
+### Project Detail
+Tabs for Overview, Logs (real-time), and Environment Variables.
+
+### Metrics
+Visual performance metrics with progress bars and auto-refresh.
+
 ## 🧪 Testing
 
 ```bash
 # Run all tests
-pnpm test
+npm test
 
 # Run with coverage
-pnpm test -- --coverage
+npm test -- --coverage
 
 # Watch mode
-pnpm test -- --watch
+npm test -- --watch
 ```
 
 ## 📦 Project Structure
@@ -182,28 +231,23 @@ pnpm test -- --watch
 pm2-view/
 ├── src/
 │   ├── lib/
-│   │   ├── auth/           # Auth domain
+│   │   ├── auth/           # Auth domain (pluggable)
+│   │   ├── db/             # Database (dialect-agnostic)
+│   │   ├── services/       # DI factory
+│   │   ├── logger/         # Structured logging
+│   │   ├── utils/          # Shared utilities
 │   │   ├── projects/       # Projects domain
 │   │   ├── pm2/            # PM2 domain
 │   │   ├── metrics/        # Metrics domain
 │   │   ├── env-vars/       # Env vars domain
-│   │   ├── db/             # Database layer
-│   │   │   ├── schema/     # Drizzle schema
-│   │   │   └── repositories/  # Repo implementations
 │   │   ├── ui/             # UI components
-│   │   ├── config/         # Configuration
-│   │   └── theme.svelte.ts # Theme state
+│   │   └── config/         # Configuration
 │   ├── routes/
 │   │   ├── (auth)/         # Login, register
 │   │   ├── (app)/          # Protected routes
-│   │   │   ├── +page.svelte      # Dashboard
-│   │   │   ├── projects/         # Projects list
-│   │   │   ├── projects/[id]/    # Project detail
-│   │   │   └── metrics/          # Metrics page
 │   │   └── api/            # API endpoints
 │   ├── app.css             # Global styles
-│   ├── app.html            # HTML shell
-│   └── hooks.server.ts     # Server hooks
+│   └── app.html            # HTML shell
 ├── drizzle/                # Migrations
 ├── drizzle.config.ts       # Drizzle config
 ├── tailwind.config.ts      # Tailwind config
@@ -219,6 +263,13 @@ pm2-view/
 - CSRF protection built-in
 - Environment variables masked in UI (sensitive keys)
 - Auth guard on all protected routes
+- Shell commands sanitized with `escapeShellArg()` to prevent command injection
+
+See [SECURITY.md](SECURITY.md) for vulnerability reporting.
+
+## 🤝 Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for development workflow and guidelines.
 
 ## 📝 License
 

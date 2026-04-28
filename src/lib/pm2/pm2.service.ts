@@ -1,4 +1,5 @@
 import type { IPM2Repository, PM2Process, PM2Log, ProcessWithStatus } from './pm2.types';
+import { logger } from '$lib/logger';
 
 export interface ProcessSummary {
 	total: number;
@@ -20,7 +21,7 @@ export class PM2Service {
 			return processes.map((p) => this.enrichProcess(p));
 		} catch (error) {
 			// Graceful degradation when PM2 is not running
-			console.error('PM2 is not running or not accessible:', error);
+			logger.error('PM2 is not running or not accessible:', { error: String(error) });
 			return [];
 		}
 	}
@@ -31,7 +32,7 @@ export class PM2Service {
 			if (!process) return null;
 			return this.enrichProcess(process);
 		} catch (error) {
-			console.error(`Failed to get process ${id}:`, error);
+			logger.error(`Failed to get process ${id}:`, { error: String(error) });
 			return null;
 		}
 	}
@@ -76,7 +77,7 @@ export class PM2Service {
 		try {
 			return await this.repository.getLogs(id, lines);
 		} catch (error) {
-			console.error(`Failed to get logs for process ${id}:`, error);
+			logger.error(`Failed to get logs for process ${id}:`, { error: String(error) });
 			return [];
 		}
 	}

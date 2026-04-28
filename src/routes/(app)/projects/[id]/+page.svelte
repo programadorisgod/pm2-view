@@ -1,5 +1,5 @@
 	<script lang="ts">
-	import { Card, Badge, StatusIndicator, ConfirmDeleteModal } from '$lib/ui/components';
+	import { Card, Badge, StatusIndicator, ConfirmDeleteModal, FeedbackBanner } from '$lib/ui/components';
 	import { base } from '$app/paths';
 	import type { PageData } from './$types';
 	import { goto, invalidateAll } from '$app/navigation';
@@ -126,9 +126,9 @@
 						setTimeout(() => { if (errContainer) errContainer.scrollTop = errContainer.scrollHeight; }, 0);
 					}
 				}
-			} catch (error) {
-				console.error('Failed to fetch logs:', error);
-			}
+		} catch (error) {
+			// Failed to fetch logs - silently ignore for polling
+		}
 		}, 3000);
 
 		return () => clearInterval(interval);
@@ -217,9 +217,7 @@
 	</div>
 
 	{#if feedback}
-		<div class="rounded-md p-sm mb-lg text-body-sm" style="background: {feedback.type === 'success' ? 'rgba(0, 230, 118, 0.1)' : 'rgba(255, 82, 82, 0.1)'}; color: {feedback.type === 'success' ? '#00E676' : '#FF5252'}; border: 1px solid {feedback.type === 'success' ? 'rgba(0, 230, 118, 0.2)' : 'rgba(255, 82, 82, 0.2)'};">
-			{feedback.text}
-		</div>
+		<FeedbackBanner type={feedback.type} message={feedback.text} />
 	{/if}
 
 	<!-- Project Header -->
@@ -368,14 +366,9 @@
 		<Card>
 			<h2 class="text-h3 font-semibold mb-md" style="color: var(--text-primary);">Environment Variables</h2>
 
-			{#if saveMessage}
-				<div class="rounded-md p-sm mb-md text-body-sm"
-					style="background: {saveMessage.type === 'success' ? 'rgba(0, 230, 118, 0.1)' : 'rgba(255, 82, 82, 0.1)'};
-					color: {saveMessage.type === 'success' ? '#00E676' : '#FF5252'};
-					border: 1px solid {saveMessage.type === 'success' ? 'rgba(0, 230, 118, 0.2)' : 'rgba(255, 82, 82, 0.2)'};">
-					{saveMessage.text}
-				</div>
-			{/if}
+		{#if saveMessage}
+			<FeedbackBanner type={saveMessage.type} message={saveMessage.text} />
+		{/if}
 
 			<!-- Add new -->
 			<div class="mb-md p-md rounded-lg" style="background: var(--bg-surface); border: 1px solid var(--border-color);">

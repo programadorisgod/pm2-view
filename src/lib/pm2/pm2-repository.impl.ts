@@ -2,15 +2,18 @@ import { exec } from 'child_process';
 import { promisify } from 'util';
 import { readFileSync, existsSync } from 'fs';
 import type { IPM2Repository, PM2Process, PM2Log } from './pm2.types';
+import { escapeShellArg, isValidPm2Name } from '$lib/utils/shell';
+import { logger } from '$lib/logger';
 
-const execAsync = promisify(exec);
+	const execAsync = promisify(exec);
 
 export class PM2Repository implements IPM2Repository {
 	async list(): Promise<PM2Process[]> {
 		try {
 			const { stdout } = await execAsync('pm2 jlist');
 			return JSON.parse(stdout) as PM2Process[];
-		} catch {
+		} catch (error) {
+			logger.error('Failed to list PM2 processes', { error: String(error) });
 			return [];
 		}
 	}
@@ -20,21 +23,25 @@ export class PM2Repository implements IPM2Repository {
 			const { stdout } = await execAsync('pm2 jlist');
 			const processes = JSON.parse(stdout) as PM2Process[];
 			return processes.find(p => p.pm_id.toString() === name || p.name === name) ?? null;
-		} catch {
+		} catch (error) {
+			logger.error('Failed to describe PM2 process', { name, error: String(error) });
 			return null;
 		}
 	}
 
 	async restart(name: string): Promise<void> {
-		await execAsync(`pm2 restart ${name}`);
+		const safeName = escapeShellArg(name);
+		await execAsync(`pm2 restart ${safeName}`);
 	}
 
 	async stop(name: string): Promise<void> {
-		await execAsync(`pm2 stop ${name}`);
+		const safeName = escapeShellArg(name);
+		await execAsync(`pm2 stop ${safeName}`);
 	}
 
 	async delete(name: string): Promise<void> {
-		await execAsync(`pm2 delete ${name}`);
+		const safeName = escapeShellArg(name);
+		await execAsync(`pm2 delete ${safeName}`);
 	}
 
 	async getLogs(name: string, lines: number = 100): Promise<PM2Log[]> {

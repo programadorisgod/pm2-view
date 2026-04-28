@@ -35,15 +35,15 @@ export class EnvVarRepository implements IEnvVarRepository {
 	}
 
 	async bulkUpdate(projectId: string, envVarsList: Omit<EnvVar, 'id'>[]): Promise<EnvVar[]> {
-		// Delete existing env vars for the project
-		await db.delete(envVars).where(eq(envVars.projectId, projectId));
+		return await db.transaction(async (tx) => {
+			await tx.delete(envVars).where(eq(envVars.projectId, projectId));
 
-		// Insert new env vars
-		const newEnvVars = envVarsList.map((envVar) => ({
-			...envVar,
-			id: crypto.randomUUID()
-		}));
+			const newEnvVars = envVarsList.map((envVar) => ({
+				...envVar,
+				id: crypto.randomUUID()
+			}));
 
-		return await db.insert(envVars).values(newEnvVars).returning();
+			return await tx.insert(envVars).values(newEnvVars).returning();
+		});
 	}
 }

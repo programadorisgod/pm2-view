@@ -3,6 +3,7 @@ import { auth } from '$lib/auth';
 import { z } from 'zod';
 import type { Actions } from './$types';
 import { fail, redirect } from '@sveltejs/kit';
+import { logger } from '$lib/logger';
 
 const loginSchema = z.object({
 	email: z.string().email('Invalid email address'),
@@ -19,11 +20,16 @@ export const actions: Actions = {
 
 		if (!result.success) {
 			const errors: Record<string, string> = {};
-			const zodError = result.error as any;
-			for (const err of zodError.errors) {
-				if (err.path && err.path[0]) {
-					errors[err.path[0].toString()] = err.message;
+			try {
+				const zodError = JSON.parse(result.error.message) as Array<{ path: string[]; message: string }>;
+				for (const err of zodError) {
+					if (err.path && err.path[0]) {
+						errors[err.path[0].toString()] = err.message;
+					}
 				}
+			} catch {
+				// If parsing fails, use the raw message
+				errors['form'] = result.error.message;
 			}
 			return fail(400, {
 				error: 'Validation failed',
@@ -39,7 +45,7 @@ export const actions: Actions = {
 					password: result.data.password
 				},
 				headers: new Headers()
-			}) as any;
+			});
 
 			if (!signInResult || !signInResult.user) {
 				return fail(401, {
@@ -54,7 +60,7 @@ export const actions: Actions = {
 				throw error;
 			}
 
-			console.error('Login error:', error);
+			logger.error('Login error:', { error: String(error) });
 			return fail(500, {
 				error: 'An unexpected error occurred',
 				email

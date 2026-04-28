@@ -5,6 +5,7 @@ import { PM2Service } from '$lib/pm2/pm2.service';
 import { db } from '$lib/db/db';
 import { metrics } from '$lib/db/schema';
 import { eq, desc } from 'drizzle-orm';
+import { logger } from '$lib/logger';
 
 export interface MetricsSummary {
 	totalCpu: number;
@@ -40,7 +41,7 @@ export class MetricsService {
 
 			return latestMetrics;
 		} catch (error) {
-			console.error('Failed to get latest metrics:', error);
+			logger.error('Failed to get latest metrics:', { error: String(error) });
 			return [];
 		}
 	}
@@ -53,7 +54,7 @@ export class MetricsService {
 			const allMetrics = await this.repository.getHistory(processId, 1000);
 			return allMetrics.filter((m) => m.recordedAt && m.recordedAt >= since);
 		} catch (error) {
-			console.error(`Failed to get metrics history for ${processId}:`, error);
+			logger.error(`Failed to get metrics history for ${processId}:`, { error: String(error) });
 			return [];
 		}
 	}
@@ -125,7 +126,7 @@ export class MetricsService {
 				totalProcesses: processes.length
 			};
 		} catch (error) {
-			console.error('Failed to get aggregated metrics:', error);
+			logger.error('Failed to get aggregated metrics:', { error: String(error) });
 			return {
 				totalCpu: 0,
 				totalRam: 0,

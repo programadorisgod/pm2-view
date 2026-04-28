@@ -7,9 +7,19 @@ import { getRequestEvent } from '$app/server';
 import { env } from '$env/dynamic/private';
 import { base } from '$app/paths';
 
+const allowedHosts = (process.env.VITE_ALLOWED_HOSTS || 'localhost')
+	.split(',')
+	.map((h) => h.trim())
+	.filter(Boolean);
+
+const trustedOrigins = allowedHosts.map((host) =>
+	host === 'localhost' ? 'http://localhost:5179' : `https://${host}`
+);
+
 export const auth = betterAuth({
 	baseURL: env.BETTER_AUTH_URL || 'http://localhost:5179',
 	basePath: `${base}/api/auth`,
+	trustedOrigins,
 	database: drizzleAdapter(db, {
 		provider: 'sqlite',
 		schema: {

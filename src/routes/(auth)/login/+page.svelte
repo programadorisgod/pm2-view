@@ -21,7 +21,7 @@
 			if (result.error) {
 				error = result.error.message || 'Invalid email or password';
 			} else {
-				window.location.href = '/';
+				window.location.href = `${base}/`;
 			}
 		} catch {
 			error = 'An unexpected error occurred';

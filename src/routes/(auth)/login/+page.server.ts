@@ -1,3 +1,4 @@
+import { base } from '$app/paths';
 import { auth } from '$lib/auth';
 import { z } from 'zod';
 import type { Actions } from './$types';
@@ -47,7 +48,7 @@ export const actions: Actions = {
 				});
 			}
 
-			throw redirect(303, '/dashboard');
+			throw redirect(303, `${base}/`);
 		} catch (error) {
 			if (error instanceof Response && error.status >= 300 && error.status < 400) {
 				throw error;

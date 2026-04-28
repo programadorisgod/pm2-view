@@ -45,11 +45,11 @@
 	}
 </script>
 
-<div class="min-h-screen flex items-center justify-center p-lg" style="background: var(--bg-base);">
+<div class="h-screen flex items-center justify-center p-lg overflow-hidden" style="background: var(--bg-base);">
 	<!-- Background grid -->
 	<div class="fixed inset-0 opacity-30 bg-grid pointer-events-none"></div>
 
-	<div class="w-full max-w-sm relative z-10">
+	<div class="w-[480px] relative z-10">
 		<!-- Logo -->
 		<div class="flex items-center justify-center gap-2.5 mb-2xl">
 			<div class="w-10 h-10 rounded-lg flex items-center justify-center" style="background: linear-gradient(135deg, #38CDFF, #009DCD); box-shadow: 0 0 20px rgba(56, 205, 255, 0.3);">

@@ -2,6 +2,7 @@
 	import { Header, Sidebar } from '$lib/ui/components';
 	import { page } from '$app/state';
 	import { base } from '$app/paths';
+	import { goto } from '$app/navigation';
 	import { theme } from '$lib/theme.svelte';
 	import type { LayoutData } from './$types';
 
@@ -18,6 +19,16 @@
 
 	let user = $derived(data.user);
 	let initials = $derived(user ? (user.name || user.email).substring(0, 2).toUpperCase() : '');
+
+	async function handleLogout() {
+		userMenuOpen = false;
+		try {
+			await fetch(`${base}/api/logout`, { method: 'POST' });
+			goto(`${base}/login`);
+		} catch (err) {
+			console.error('Logout failed:', err);
+		}
+	}
 </script>
 
 <div class="flex h-screen overflow-hidden" style="background: var(--bg-base);">
@@ -114,26 +125,29 @@
 									</div>
 
 									<!-- Logout -->
-									<form action="{base}/logout" method="POST">
-										<button
-											type="submit"
-											class="w-full flex items-center gap-2 px-3 py-2 text-body-sm transition-colors hover:bg-[var(--bg-card)]"
-											style="color: #ff6b6b;"
-											onclick={() => (userMenuOpen = false)}
-										>
-											<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-												<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/>
-											</svg>
-											Cerrar sesión
-										</button>
-									</form>
+									<button
+										type="button"
+										class="w-full flex items-center gap-2 px-3 py-2 text-body-sm transition-colors hover:bg-[var(--bg-card)]"
+										style="color: #ff6b6b;"
+										onclick={handleLogout}
+									>
+										<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+											<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/>
+										</svg>
+										Cerrar sesión
+									</button>
 								</div>
 							{/if}
 						</div>
 
 						<!-- Click outside to close -->
 						{#if userMenuOpen}
-							<div class="fixed inset-0 z-40" onclick={() => (userMenuOpen = false)}></div>
+							<button
+								type="button"
+								class="fixed inset-0 z-40 w-full h-full"
+								onclick={() => (userMenuOpen = false)}
+								aria-label="Close user menu"
+							></button>
 						{/if}
 					{/if}
 

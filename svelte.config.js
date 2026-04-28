@@ -1,6 +1,7 @@
 import adapter from "@sveltejs/adapter-node";
 
 /** @type {import('@sveltejs/kit').Config} */
+const isProd = process.env.NODE_ENV === "production";
 const config = {
     compilerOptions: {
         // Force runes mode for the project, except for libraries. Can be removed in svelte 6.
@@ -17,7 +18,7 @@ const config = {
             "$lib/*": "src/lib/*",
         },
         paths: {
-            base: "/pm2",
+            base: isProd ? "/pm2" : "",
         },
     },
 };

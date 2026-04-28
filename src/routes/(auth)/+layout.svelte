@@ -13,7 +13,6 @@
 		align-items: center;
 		justify-content: center;
 		background: var(--bg-base);
-		padding: 1rem;
 		transition: background-color 0.2s ease;
 	}
 </style>

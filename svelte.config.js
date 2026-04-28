@@ -16,6 +16,9 @@ const config = {
             $lib: "src/lib",
             "$lib/*": "src/lib/*",
         },
+        paths: {
+            base: "/pm2",
+        },
     },
 };
 

@@ -19,8 +19,16 @@
 			logs = initialLogs;
 		}
 	});
-	let logsContainer: HTMLDivElement | undefined = $state();
-	let autoScroll = $state(true);
+
+	// Derived: split logs by type (repository already sorts chronologically)
+	let outLogs = $derived(logs.filter(l => l.type === 'out'));
+	let errLogs = $derived(logs.filter(l => l.type === 'err'));
+
+	// Independent scroll state per panel
+	let outContainer: HTMLDivElement | undefined = $state();
+	let errContainer: HTMLDivElement | undefined = $state();
+	let autoScrollOut = $state(true);
+	let autoScrollErr = $state(true);
 
 	let envVars = $state<Array<{ key: string; value: string; isNew?: boolean }>>([]);
 
@@ -110,10 +118,12 @@
 				const data = await res.json();
 				if (data.success && data.logs) {
 					logs = data.logs;
-					if (autoScroll && logsContainer) {
-						setTimeout(() => {
-							if (logsContainer) logsContainer.scrollTop = logsContainer.scrollHeight;
-						}, 0);
+					// Auto-scroll both panels independently
+					if (autoScrollOut && outContainer) {
+						setTimeout(() => { if (outContainer) outContainer.scrollTop = outContainer.scrollHeight; }, 0);
+					}
+					if (autoScrollErr && errContainer) {
+						setTimeout(() => { if (errContainer) errContainer.scrollTop = errContainer.scrollHeight; }, 0);
 					}
 				}
 			} catch (error) {
@@ -124,11 +134,16 @@
 		return () => clearInterval(interval);
 	});
 
-	function handleLogsScroll(e: Event) {
+	function handleOutScroll(e: Event) {
 		const target = e.target as HTMLDivElement;
-		const threshold = 50;
-		const isNearBottom = target.scrollHeight - target.scrollTop - target.clientHeight < threshold;
-		autoScroll = isNearBottom;
+		const isNearBottom = target.scrollHeight - target.scrollTop - target.clientHeight < 50;
+		autoScrollOut = isNearBottom;
+	}
+
+	function handleErrScroll(e: Event) {
+		const target = e.target as HTMLDivElement;
+		const isNearBottom = target.scrollHeight - target.scrollTop - target.clientHeight < 50;
+		autoScrollErr = isNearBottom;
 	}
 
 	function isSensitiveKey(key: string): boolean {
@@ -287,31 +302,67 @@
 		</Card>
 
 	{:else if activeTab === 'logs'}
-		<Card>
-			<div class="flex items-center justify-between mb-md">
-				<h2 class="text-h3 font-semibold" style="color: var(--text-primary);">Real-time Logs</h2>
-				<label class="flex items-center gap-xs text-caption cursor-pointer" style="color: var(--text-muted);">
-					<input type="checkbox" checked={autoScroll} onchange={(e) => (autoScroll = (e.target as HTMLInputElement).checked)} class="rounded" />
-					Auto-scroll
-				</label>
-			</div>
-			{#if !logs || logs.length === 0}
-				<p class="text-center py-xl" style="color: var(--text-muted);">No logs available</p>
-			{:else}
-				<div
-					bind:this={logsContainer}
-					onscroll={handleLogsScroll}
-					class="rounded-lg p-md font-mono text-code overflow-x-auto max-h-[400px] overflow-y-auto scrollbar-thin"
-					style="background: var(--bg-base); border: 1px solid var(--border-color);"
-				>
-					{#each logs as log}
-						<div class="py-2xs" style="color: {log.type === 'err' ? '#FF5252' : '#00E676'};">
-							<span style="opacity: 0.4;">[{log.type}]</span> {log.data}
-						</div>
-					{/each}
+		<div class="grid grid-cols-1 lg:grid-cols-2 gap-md">
+			<!-- OUT Panel -->
+			<Card>
+				<div class="flex items-center justify-between mb-md">
+					<h2 class="text-h3 font-semibold" style="color: #00E676;">
+						<span class="inline-block w-2 h-2 rounded-full mr-2" style="background: #00E676;"></span>
+						OUT
+					</h2>
+					<label class="flex items-center gap-xs text-caption cursor-pointer" style="color: var(--text-muted);">
+						<input type="checkbox" checked={autoScrollOut} onchange={(e) => (autoScrollOut = (e.target as HTMLInputElement).checked)} class="rounded" />
+						Auto-scroll
+					</label>
 				</div>
-			{/if}
-		</Card>
+				{#if outLogs.length === 0}
+					<p class="text-center py-xl" style="color: var(--text-muted);">No output logs</p>
+				{:else}
+					<div
+						bind:this={outContainer}
+						onscroll={handleOutScroll}
+						class="rounded-lg p-md font-mono text-code overflow-x-auto max-h-[500px] overflow-y-auto scrollbar-thin"
+						style="background: var(--bg-base); border: 1px solid var(--border-color);"
+					>
+						{#each outLogs as log}
+							<div class="py-2xs" style="color: #00E676;">
+								{log.data}
+							</div>
+						{/each}
+					</div>
+				{/if}
+			</Card>
+
+			<!-- ERRORS Panel -->
+			<Card>
+				<div class="flex items-center justify-between mb-md">
+					<h2 class="text-h3 font-semibold" style="color: #FF5252;">
+						<span class="inline-block w-2 h-2 rounded-full mr-2" style="background: #FF5252;"></span>
+						ERRORS
+					</h2>
+					<label class="flex items-center gap-xs text-caption cursor-pointer" style="color: var(--text-muted);">
+						<input type="checkbox" checked={autoScrollErr} onchange={(e) => (autoScrollErr = (e.target as HTMLInputElement).checked)} class="rounded" />
+						Auto-scroll
+					</label>
+				</div>
+				{#if errLogs.length === 0}
+					<p class="text-center py-xl" style="color: var(--text-muted);">No error logs</p>
+				{:else}
+					<div
+						bind:this={errContainer}
+						onscroll={handleErrScroll}
+						class="rounded-lg p-md font-mono text-code overflow-x-auto max-h-[500px] overflow-y-auto scrollbar-thin"
+						style="background: var(--bg-base); border: 1px solid var(--border-color);"
+					>
+						{#each errLogs as log}
+							<div class="py-2xs" style="color: #FF5252;">
+								{log.data}
+							</div>
+						{/each}
+					</div>
+				{/if}
+			</Card>
+		</div>
 
 	{:else if activeTab === 'env'}
 		<Card>

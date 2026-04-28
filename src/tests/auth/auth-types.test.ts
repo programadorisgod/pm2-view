@@ -12,19 +12,13 @@ describe('Auth Types', () => {
 		email: 'test@example.com',
 		name: null,
 		emailVerified: false,
-		createdAt: new Date(),
-		updatedAt: new Date()
+		createdAt: new Date()
 	};
 
 	const mockSession: Session = {
-		id: 'session-1',
-		userId: 'user-1',
+		user: mockUser,
 		token: 'session-token-123',
-		expiresAt: new Date(),
-		createdAt: new Date(),
-		updatedAt: new Date(),
-		ipAddress: null,
-		userAgent: null
+		expiresAt: new Date()
 	};
 
 	it('should have createSession method', () => {
@@ -91,8 +85,8 @@ describe('Auth Types', () => {
 	});
 
 	it('should create Session type with correct structure', () => {
-		expect(mockSession.id).toBe('session-1');
-		expect(mockSession.userId).toBe('user-1');
+		expect(mockSession.user).toBeDefined();
 		expect(mockSession.token).toBe('session-token-123');
+		expect(mockSession.expiresAt).toBeInstanceOf(Date);
 	});
 });

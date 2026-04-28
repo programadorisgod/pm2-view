@@ -1,75 +1,71 @@
-import { auth } from './auth';
-import type { User } from './auth.types';
+import type { AuthProvider, AuthSession, AuthUser } from './provider.interface';
+import { createAuthProvider } from './factory';
 
 export interface LoginResult {
-	user: User;
-	token: string;
-	redirect: boolean;
-	url?: string;
+  user: AuthUser;
+  token: string;
+  redirect: boolean;
+  url?: string;
 }
 
 export interface SessionResult {
-	user: User | null;
-	session: {
-		token: string;
-		userId: string;
-		expiresAt: Date;
-	} | null;
+  user: AuthUser | null;
+  session: {
+    token: string;
+    userId: string;
+    expiresAt: Date;
+  } | null;
+}
+
+let provider: AuthProvider | null = null;
+
+function getProvider(): AuthProvider {
+  if (!provider) {
+    provider = createAuthProvider();
+  }
+  return provider;
 }
 
 export const authService = {
-	async login(email: string, password: string): Promise<LoginResult> {
-		const result = await auth.api.signInEmail({
-			body: {
-				email,
-				password
-			}
-		}) as unknown as { user: User; token: string; redirect: boolean; url?: string };
+  async login(email: string, password: string): Promise<LoginResult> {
+    const session = await getProvider().login(email, password);
+    return {
+      user: session.user,
+      token: session.token,
+      redirect: false,
+    };
+  },
 
-		return {
-			user: result.user,
-			token: result.token || '',
-			redirect: result.redirect || false,
-			url: result.url
-		};
-	},
+  async signup(email: string, password: string, name?: string): Promise<LoginResult> {
+    const session = await getProvider().signup(email, password, name);
+    return {
+      user: session.user,
+      token: session.token,
+      redirect: false,
+    };
+  },
 
-	async signup(email: string, password: string, name?: string): Promise<LoginResult> {
-		const body: Record<string, string> = {
-			email,
-			password
-		};
-		if (name) body.name = name;
+  async logout(headers: Headers): Promise<void> {
+    await getProvider().logout(headers);
+  },
 
-		const result = await auth.api.signUpEmail({
-			body: body as any
-		}) as unknown as { user: User; token: string; redirect: boolean; url?: string };
+  async getSession(headers: Headers): Promise<SessionResult> {
+    const session = await getProvider().getSession(headers);
+    if (!session) {
+      return { user: null, session: null };
+    }
+    return {
+      user: session.user,
+      session: {
+        token: session.token,
+        userId: session.user.id,
+        expiresAt: session.expiresAt,
+      },
+    };
+  },
 
-		return {
-			user: result.user,
-			token: result.token || '',
-			redirect: result.redirect || false,
-			url: result.url
-		};
-	},
-
-	async logout(): Promise<void> {
-		await auth.api.signOut();
-	},
-
-	async getSession(): Promise<SessionResult> {
-		const result = await auth.api.getSession({
-			headers: new Headers()
-		}) as unknown as { user: User | null; session: SessionResult['session'] };
-
-		return {
-			user: result?.user ?? null,
-			session: result?.session ?? null
-		};
-	},
-
-	async getUser(): Promise<User | null> {
-		const result = await this.getSession();
-		return result.user;
-	}
+  async getUser(headers: Headers): Promise<AuthUser | null> {
+    const result = await this.getSession(headers);
+    return result.user;
+  }
 };

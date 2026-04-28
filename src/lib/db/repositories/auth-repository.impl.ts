@@ -14,14 +14,28 @@ export class AuthRepository implements IAuthRepository {
 				expiresAt
 			})
 			.returning();
-		return session;
+
+		// Fetch the user to create a complete AuthSession
+		const user = await db.query.users.findFirst({
+			where: eq(users.id, userId)
+		});
+
+		return this.mapToAuthSession(session, user);
 	}
 
 	async getSession(sessionId: string): Promise<Session | null> {
 		const session = await db.query.sessions.findFirst({
 			where: eq(sessions.id, sessionId)
 		});
-		return session ?? null;
+
+		if (!session) return null;
+
+		// Fetch the user to create a complete AuthSession
+		const user = await db.query.users.findFirst({
+			where: eq(users.id, session.userId)
+		});
+
+		return this.mapToAuthSession(session, user);
 	}
 
 	async deleteSession(sessionId: string): Promise<void> {
@@ -32,7 +46,9 @@ export class AuthRepository implements IAuthRepository {
 		const user = await db.query.users.findFirst({
 			where: eq(users.email, email)
 		});
-		return user ?? null;
+
+		if (!user) return null;
+		return this.mapToAuthUser(user);
 	}
 
 	async createUser(user: Omit<User, 'id' | 'createdAt'>): Promise<User> {
@@ -43,6 +59,33 @@ export class AuthRepository implements IAuthRepository {
 				id: crypto.randomUUID()
 			})
 			.returning();
-		return newUser;
+		return this.mapToAuthUser(newUser);
+	}
+
+	private mapToAuthUser(user: typeof users.$inferSelect): User {
+		return {
+			id: user.id,
+			email: user.email,
+			name: user.name,
+			emailVerified: user.emailVerified ?? false,
+			createdAt: user.createdAt
+		};
+	}
+
+	private mapToAuthSession(
+		session: typeof sessions.$inferSelect,
+		user: typeof users.$inferSelect | undefined
+	): Session {
+		return {
+			user: user ? this.mapToAuthUser(user) : {
+				id: session.userId,
+				email: '',
+				name: null,
+				emailVerified: false,
+				createdAt: new Date()
+			},
+			token: session.token,
+			expiresAt: session.expiresAt
+		};
 	}
 }

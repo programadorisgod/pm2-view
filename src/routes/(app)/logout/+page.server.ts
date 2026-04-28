@@ -1,6 +1,7 @@
 import { auth } from '$lib/auth';
 import type { Actions } from './$types';
 import { redirect } from '@sveltejs/kit';
+import { base } from '$app/paths';
 
 export const actions: Actions = {
 	default: async ({ request }) => {
@@ -12,6 +13,6 @@ export const actions: Actions = {
 			console.error('Logout error:', error);
 		}
 
-		throw redirect(303, '/login');
+		throw redirect(303, `${base}/login`);
 	}
 };

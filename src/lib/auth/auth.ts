@@ -6,8 +6,11 @@ import { sveltekitCookies } from 'better-auth/svelte-kit';
 import { getRequestEvent } from '$app/server';
 import { env } from '$env/dynamic/private';
 
+const basePath = process.env.PUBLIC_BASE_PATH || '/pm2';
+
 export const auth = betterAuth({
 	baseURL: env.BETTER_AUTH_URL || 'http://localhost:5179',
+	basePath: `${basePath}/api/auth`,
 	database: drizzleAdapter(db, {
 		provider: 'sqlite',
 		schema: {

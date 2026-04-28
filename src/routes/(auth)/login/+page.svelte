@@ -1,5 +1,6 @@
-<script lang="ts">
+	<script lang="ts">
 	import { authClient } from '$lib/auth/client';
+	import { base } from '$app/paths';
 
 	let email = $state('');
 	let password = $state('');
@@ -92,7 +93,7 @@
 			<div class="text-center mt-lg">
 				<p class="text-caption" style="color: var(--text-muted);">
 					Don't have an account?
-					<a href="/register" class="font-medium" style="color: #38CDFF;">Sign Up</a>
+					<a href="{base}/register" class="font-medium" style="color: #38CDFF;">Sign Up</a>
 				</p>
 			</div>
 		</div>

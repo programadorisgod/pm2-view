@@ -1,5 +1,6 @@
-<script lang="ts">
+	<script lang="ts">
 	import { Card, Badge, Button, StatusIndicator } from '$lib/ui/components';
+	import { base } from '$app/paths';
 	import type { PageData } from './$types';
 
 	let { data }: { data: PageData } = $props();
@@ -161,7 +162,7 @@
 <div class="max-w-5xl mx-auto">
 	<!-- Back Button -->
 	<div class="mb-lg">
-		<a href="/projects" class="btn-secondary px-3 py-1.5 text-caption inline-flex items-center gap-1.5">
+		<a href="{base}/projects" class="btn-secondary px-3 py-1.5 text-caption inline-flex items-center gap-1.5">
 			<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
 			Back
 		</a>

@@ -1,5 +1,6 @@
-<script lang="ts">
+	<script lang="ts">
 	import { Card, Badge, Button } from '$lib/ui/components';
+	import { base } from '$app/paths';
 	import type { PageData } from './$types';
 
 	let { data, form }: { data: PageData; form: { success?: boolean; message?: string; error?: string } | null } = $props();
@@ -92,7 +93,7 @@
 
 					<!-- Actions -->
 					<div class="flex gap-xs flex-wrap">
-						<a href="/projects/{process.pm_id}" class="btn-secondary px-3 py-1 text-caption flex-1 text-center">
+						<a href="{base}/projects/{process.pm_id}" class="btn-secondary px-3 py-1 text-caption flex-1 text-center">
 							Details
 						</a>
 

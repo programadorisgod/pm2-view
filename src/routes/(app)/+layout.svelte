@@ -1,6 +1,7 @@
-<script lang="ts">
+	<script lang="ts">
 	import { Header, Sidebar } from '$lib/ui/components';
 	import { page } from '$app/state';
+	import { base } from '$app/paths';
 	import { theme } from '$lib/theme.svelte';
 	import type { LayoutData } from './$types';
 
@@ -9,9 +10,9 @@
 	let mobileMenuOpen = $state(false);
 
 	let navItems = $derived([
-		{ label: 'Dashboard', href: '/', active: page.url.pathname === '/' },
-		{ label: 'Projects', href: '/projects', active: page.url.pathname.startsWith('/projects') },
-		{ label: 'Metrics', href: '/metrics', active: page.url.pathname === '/metrics' }
+		{ label: 'Dashboard', href: base, active: page.url.pathname === base || page.url.pathname === base + '/' },
+		{ label: 'Projects', href: `${base}/projects`, active: page.url.pathname.startsWith(`${base}/projects`) },
+		{ label: 'Metrics', href: `${base}/metrics`, active: page.url.pathname === `${base}/metrics` }
 	]);
 
 	let user = $derived(data.user);

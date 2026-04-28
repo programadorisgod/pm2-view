@@ -1,5 +1,6 @@
 import { auth } from '$lib/auth';
 import { redirect } from '@sveltejs/kit';
+import { base } from '$app/paths';
 import type { LayoutServerLoad } from './$types';
 
 export const load: LayoutServerLoad = async (event) => {
@@ -8,7 +9,7 @@ export const load: LayoutServerLoad = async (event) => {
 	});
 
 	if (!session) {
-		throw redirect(302, '/login');
+		throw redirect(302, `${base}/login`);
 	}
 
 	return {

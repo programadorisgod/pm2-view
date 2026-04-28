@@ -1,5 +1,6 @@
-<script lang="ts">
+	<script lang="ts">
 	import { Card, StatusIndicator } from '$lib/ui/components';
+	import { base } from '$app/paths';
 	import type { PageData } from './$types';
 
 	let { data }: { data: PageData } = $props();
@@ -63,7 +64,7 @@
 		{:else}
 			<div class="space-y-xs">
 				{#each processes as process, i (process.pm_id)}
-					<a href="/projects/{process.pm_id}" class="flex items-center justify-between py-sm px-md rounded-md transition-colors hover:bg-[var(--bg-surface)] cursor-pointer group stagger-item" style="--stagger-index: {i + 4};">
+					<a href="{base}/projects/{process.pm_id}" class="flex items-center justify-between py-sm px-md rounded-md transition-colors hover:bg-[var(--bg-surface)] cursor-pointer group stagger-item" style="--stagger-index: {i + 4};">
 						<div class="flex items-center gap-md">
 							<StatusIndicator status={getStatusVariant(process.status)} />
 							<div>
@@ -84,7 +85,7 @@
 
 	<!-- Quick Links -->
 	<div class="flex flex-wrap gap-sm mt-xl">
-		<a href="/projects" class="btn-primary px-4 py-2 text-body-sm">View All Projects</a>
-		<a href="/metrics" class="btn-secondary px-4 py-2 text-body-sm">View Metrics</a>
+		<a href="{base}/projects" class="btn-primary px-4 py-2 text-body-sm">View All Projects</a>
+		<a href="{base}/metrics" class="btn-secondary px-4 py-2 text-body-sm">View Metrics</a>
 	</div>
 </div>

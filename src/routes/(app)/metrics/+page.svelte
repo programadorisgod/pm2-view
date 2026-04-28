@@ -1,6 +1,7 @@
-<script lang="ts">
+	<script lang="ts">
 	import { Card, StatusIndicator } from '$lib/ui/components';
 	import { invalidate } from '$app/navigation';
+	import { base } from '$app/paths';
 	import type { PageData } from './$types';
 
 	let { data }: { data: PageData } = $props();
@@ -128,7 +129,7 @@
 									<p class="text-caption" style="color: var(--text-muted);">PM2 ID: {process.pm_id}</p>
 								</div>
 							</div>
-							<a href="/projects/{process.pm_id}" class="text-caption font-medium" style="color: #38CDFF;">View Details</a>
+							<a href="{base}/projects/{process.pm_id}" class="text-caption font-medium" style="color: #38CDFF;">View Details</a>
 						</div>
 
 						<!-- Metrics -->

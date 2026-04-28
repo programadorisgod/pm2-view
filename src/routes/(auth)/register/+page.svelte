@@ -1,5 +1,6 @@
-<script lang="ts">
+	<script lang="ts">
 	import { authClient } from '$lib/auth/client';
+	import { base } from '$app/paths';
 
 	let name = $state('');
 	let email = $state('');
@@ -34,7 +35,7 @@
 			if (result.error) {
 				error = result.error.message || 'Registration failed';
 			} else {
-				window.location.href = '/login';
+				window.location.href = `${base}/login`;
 			}
 		} catch {
 			error = 'An unexpected error occurred';
@@ -132,7 +133,7 @@
 			<div class="text-center mt-lg">
 				<p class="text-caption" style="color: var(--text-muted);">
 					Already have an account?
-					<a href="/login" class="font-medium" style="color: #38CDFF;">Sign In</a>
+					<a href="{base}/login" class="font-medium" style="color: #38CDFF;">Sign In</a>
 				</p>
 			</div>
 		</div>

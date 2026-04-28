@@ -12,7 +12,7 @@
 	let userMenuOpen = $state(false);
 
 	let navItems = $derived([
-		{ label: 'Dashboard', href: base, active: page.url.pathname === base || page.url.pathname === base + '/' },
+		{ label: 'Dashboard', href: `${base}/`, active: page.url.pathname === base || page.url.pathname === base + '/' },
 		{ label: 'Projects', href: `${base}/projects`, active: page.url.pathname.startsWith(`${base}/projects`) },
 		{ label: 'Metrics', href: `${base}/metrics`, active: page.url.pathname === `${base}/metrics` }
 	]);

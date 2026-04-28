@@ -1,3 +1,8 @@
+/**
+ * @deprecated Use `src/lib/db/index.ts` instead. This file is kept for backward compatibility.
+ * The new abstraction supports multiple database dialects (libSQL, PostgreSQL) via DatabaseDriver interface.
+ */
+
 import { drizzle as createDrizzle } from 'drizzle-orm/libsql';
 import { createClient } from '@libsql/client';
 import * as schema from './schema/index';

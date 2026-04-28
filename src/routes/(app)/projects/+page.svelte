@@ -1,5 +1,5 @@
 	<script lang="ts">
-	import { Card, Badge, Button } from '$lib/ui/components';
+	import { Card, Badge, ConfirmDeleteModal } from '$lib/ui/components';
 	import { base } from '$app/paths';
 	import type { PageData } from './$types';
 	import { invalidateAll } from '$app/navigation';
@@ -8,6 +8,7 @@
 
 	let processes = $derived(data.processes ?? []);
 	let feedback = $state<{ type: 'success' | 'error'; text: string } | null>(null);
+	let deleteModal = $state<{ open: boolean; name: string; pm_id: string }>({ open: false, name: '', pm_id: '' });
 
 	function getStatusVariant(status: string) {
 		switch (status) {
@@ -18,7 +19,7 @@
 		}
 	}
 
-	async function handleAction(pm_id: string, action: 'restart' | 'stop' | 'delete') {
+	async function handleAction(pm_id: string, action: 'restart' | 'stop') {
 		feedback = null;
 		try {
 			const res = await fetch(`${base}/projects/api?action=${action}`, {
@@ -35,6 +36,31 @@
 			}
 		} catch {
 			feedback = { type: 'error', text: `Failed to ${action}` };
+		}
+	}
+
+	function requestDelete(pm_id: string, name: string) {
+		deleteModal = { open: true, name, pm_id };
+	}
+
+	async function confirmDelete() {
+		deleteModal.open = false;
+		feedback = null;
+		try {
+			const res = await fetch(`${base}/projects/api?action=delete`, {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ pm_id: deleteModal.pm_id })
+			});
+			const result = await res.json();
+			if (res.ok) {
+				feedback = { type: 'success', text: result.message || 'Delete successful' };
+				await invalidateAll();
+			} else {
+				feedback = { type: 'error', text: result.error || 'Delete failed' };
+			}
+		} catch {
+			feedback = { type: 'error', text: 'Failed to delete' };
 		}
 	}
 </script>
@@ -109,7 +135,7 @@
 							</button>
 						{/if}
 
-						<button class="btn-danger px-3 py-1 text-caption" onclick={() => handleAction(process.pm_id.toString(), 'delete')}>
+						<button class="btn-danger px-3 py-1 text-caption" onclick={() => requestDelete(process.pm_id.toString(), process.name)}>
 							Delete
 						</button>
 					</div>
@@ -119,3 +145,10 @@
 		</div>
 	{/if}
 </div>
+
+<ConfirmDeleteModal
+	open={deleteModal.open}
+	itemName={deleteModal.name}
+	onConfirm={confirmDelete}
+	onCancel={() => { deleteModal.open = false; }}
+/>

@@ -1,5 +1,5 @@
 	<script lang="ts">
-	import { Card, Badge, Button, StatusIndicator } from '$lib/ui/components';
+	import { Card, Badge, StatusIndicator, ConfirmDeleteModal } from '$lib/ui/components';
 	import { base } from '$app/paths';
 	import type { PageData } from './$types';
 	import { goto, invalidateAll } from '$app/navigation';
@@ -10,6 +10,7 @@
 
 	let activeTab = $state('overview');
 	let feedback = $state<{ type: 'success' | 'error'; text: string } | null>(null);
+	let deleteModal = $state({ open: false });
 
 	let logs = $state<Array<{ type: 'out' | 'err'; data: string; timestamp: Date }>>([]);
 
@@ -54,7 +55,7 @@
 		return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
 	}
 
-	async function handleAction(action: 'restart' | 'stop' | 'delete') {
+	async function handleAction(action: 'restart' | 'stop') {
 		feedback = null;
 		try {
 			const res = await fetch(`${base}/projects/api?action=${action}`, {
@@ -66,14 +67,36 @@
 			if (res.ok) {
 				feedback = { type: 'success', text: result.message || `${action} successful` };
 				await invalidateAll();
-				if (action === 'delete') {
-					goto(`${base}/projects`);
-				}
 			} else {
 				feedback = { type: 'error', text: result.error || `${action} failed` };
 			}
 		} catch {
 			feedback = { type: 'error', text: `Failed to ${action}` };
+		}
+	}
+
+	function requestDelete() {
+		deleteModal.open = true;
+	}
+
+	async function confirmDelete() {
+		deleteModal.open = false;
+		feedback = null;
+		try {
+			const res = await fetch(`${base}/projects/api?action=delete`, {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ pm_id: process.pm_id.toString() })
+			});
+			const result = await res.json();
+			if (res.ok) {
+				feedback = { type: 'success', text: result.message || 'Delete successful' };
+				goto(`${base}/projects`);
+			} else {
+				feedback = { type: 'error', text: result.error || 'Delete failed' };
+			}
+		} catch {
+			feedback = { type: 'error', text: 'Failed to delete' };
 		}
 	}
 
@@ -205,7 +228,7 @@
 			{:else if process.status === 'stopped'}
 				<button class="btn-secondary px-3 py-1.5 text-caption" onclick={() => handleAction('restart')}>Start</button>
 			{/if}
-			<button class="btn-danger px-3 py-1.5 text-caption" onclick={() => handleAction('delete')}>Delete</button>
+			<button class="btn-danger px-3 py-1.5 text-caption" onclick={requestDelete}>Delete</button>
 		</div>
 	</div>
 
@@ -352,3 +375,10 @@
 		</div>
 	{/key}
 </div>
+
+<ConfirmDeleteModal
+	open={deleteModal.open}
+	itemName={process.name}
+	onConfirm={confirmDelete}
+	onCancel={() => { deleteModal.open = false; }}
+/>

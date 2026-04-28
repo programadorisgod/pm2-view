@@ -14,11 +14,13 @@
 
 	let input = $state('');
 	let dialogRef = $state<HTMLDialogElement | undefined>();
+	let inputRef = $state<HTMLInputElement | undefined>();
 
 	$effect(() => {
 		if (open) {
 			input = '';
 			dialogRef?.showModal();
+			inputRef?.focus();
 		} else {
 			dialogRef?.close();
 		}
@@ -44,11 +46,13 @@
 		onclose={handleClose}
 	>
 		<!-- Backdrop -->
-		<div
+		<button
+			type="button"
 			class="fixed inset-0"
-			style="background: rgba(0,0,0,0.6);"
+			style="background: rgba(0,0,0,0.6); border: none; cursor: pointer;"
 			onclick={() => { if (!matches) onCancel(); }}
-		></div>
+			aria-label="Close modal"
+		></button>
 
 		<!-- Modal content -->
 		<div
@@ -76,9 +80,9 @@
 			<input
 				type="text"
 				bind:value={input}
+				bind:this={inputRef}
 				placeholder="Type project name here..."
 				class="input-base w-full h-10 px-md text-body-sm font-mono mb-lg"
-				autofocus
 				onkeydown={(e) => { if (e.key === 'Escape' && !matches) onCancel(); }}
 			/>
 

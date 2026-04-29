@@ -1,5 +1,4 @@
-export { sseManager } from './sse-manager';
+// Client-safe exports — safe to import in Svelte components
 export { createSSEClient } from './client';
-export { startMetricsEmitter, stopMetricsEmitter } from './metrics-emitter';
-export { startStatusWatcher, stopStatusWatcher } from './status-watcher';
 export type { SSEEventType, SSEEvent, LogEvent, MetricsEvent, ProcessStatusEvent } from './types';
+export type { SSEClient } from './client';

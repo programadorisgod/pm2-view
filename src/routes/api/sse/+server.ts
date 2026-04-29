@@ -1,4 +1,4 @@
-import { sseManager } from '$lib/sse';
+import { sseManager } from '$lib/sse/server';
 import { logger } from '$lib/logger';
 import type { RequestHandler } from './$types';
 

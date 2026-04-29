@@ -2,7 +2,7 @@ import { auth } from '$lib/auth';
 import { svelteKitHandler } from 'better-auth/svelte-kit';
 import { building } from '$app/environment';
 import { startMetricsRecorder, stopMetricsRecorder } from '$lib/metrics/metrics-recorder';
-import { startMetricsEmitter, stopMetricsEmitter, startStatusWatcher, stopStatusWatcher } from '$lib/sse';
+import { startMetricsEmitter, stopMetricsEmitter, startStatusWatcher, stopStatusWatcher } from '$lib/sse/server';
 import { logger } from '$lib/logger';
 import type { Handle } from '@sveltejs/kit';
 

@@ -7,7 +7,7 @@ A beautiful, modern visual dashboard for managing PM2 processes. Monitor CPU, RA
 ![Database](https://img.shields.io/badge/DB-PostgreSQL%20%7C%20SQLite-4ff5d9)
 ![Real-time](https://img.shields.io/badge/Real--time-SSE-00E676)
 
-## ✨ Features
+## Features
 
 - **Authentication** — Pluggable auth system (Better Auth included, swap with any provider)
 - **Dashboard** — Overview of all PM2 processes with real-time status
@@ -20,21 +20,21 @@ A beautiful, modern visual dashboard for managing PM2 processes. Monitor CPU, RA
 - **Dark/Light Mode** — Toggle between themes with smooth transitions
 - **Premium Animations** — Page transitions, staggered lists, smooth tab switching
 
-## 🚀 Tech Stack
+## Tech Stack
 
-| Layer | Technology |
-|-------|-----------|
-| **Framework** | SvelteKit 2.x + Svelte 5 (runes) |
-| **Language** | TypeScript |
-| **Auth** | Better Auth (pluggable — see [Auth Providers](#auth-providers)) |
-| **Database** | PostgreSQL or SQLite/Turso (see [Database](#database)) |
-| **ORM** | Drizzle ORM |
-| **Validation** | Zod |
-| **Styling** | Tailwind CSS |
-| **Real-time** | Server-Sent Events (SSE) |
-| **Testing** | Vitest |
+| Layer          | Technology                                                      |
+| -------------- | --------------------------------------------------------------- |
+| **Framework**  | SvelteKit 2.x + Svelte 5 (runes)                                |
+| **Language**   | TypeScript                                                      |
+| **Auth**       | Better Auth (pluggable — see [Auth Providers](#auth-providers)) |
+| **Database**   | PostgreSQL or SQLite/Turso (see [Database](#database))          |
+| **ORM**        | Drizzle ORM                                                     |
+| **Validation** | Zod                                                             |
+| **Styling**    | Tailwind CSS                                                    |
+| **Real-time**  | Server-Sent Events (SSE)                                        |
+| **Testing**    | Vitest                                                          |
 
-## 📁 Architecture
+## Architecture
 
 Built with **Screaming Architecture** — organized by domain, not by technical layer:
 
@@ -70,6 +70,7 @@ src/lib/
 ```
 
 **Patterns used:**
+
 - **Repository Pattern** — Interfaces decouple domain from implementation
 - **Service Layer** — Business logic encapsulated in services
 - **Dependency Injection** — Centralized `createServices()` factory
@@ -77,7 +78,7 @@ src/lib/
 - **Interface-first** — Contracts defined before implementations
 - **Client/Server Split** — Clean separation of browser and Node.js code
 
-## 🏁 Getting Started
+## Getting Started
 
 ### Prerequisites
 
@@ -106,17 +107,20 @@ cp .env.example .env
 PM2 View supports multiple database backends through a driver abstraction. The dialect is auto-detected from the connection URL.
 
 **SQLite / Turso (default):**
+
 ```env
 DATABASE_URL=libsql://your-database.turso.io
 TURSO_AUTH_TOKEN=your-auth-token
 ```
 
 **PostgreSQL:**
+
 ```env
 DATABASE_URL=postgres://user:password@localhost:5432/pm2view
 ```
 
 **Local SQLite file:**
+
 ```env
 DATABASE_URL=file:./data/local.db
 ```
@@ -129,9 +133,9 @@ The default auth provider is Better Auth. To swap to a different provider:
 
 ```typescript
 // src/lib/auth/factory.ts
-import { MyAuthProvider } from './providers/my-auth.provider';
+import { MyAuthProvider } from "./providers/my-auth.provider";
 
-registerAuthProvider('my-auth', () => new MyAuthProvider());
+registerAuthProvider("my-auth", () => new MyAuthProvider());
 ```
 
 Then set `AUTH_PROVIDER=my-auth` in your environment.
@@ -187,7 +191,7 @@ npx drizzle-kit push
 npx drizzle-kit generate
 ```
 
-## 🔄 Real-time (SSE)
+## Real-time (SSE)
 
 PM2 View uses **Server-Sent Events** for real-time updates — no polling, no WebSockets:
 
@@ -198,50 +202,57 @@ PM2 View uses **Server-Sent Events** for real-time updates — no polling, no We
 The SSE endpoint is at `/api/sse`. Connect from any browser:
 
 ```javascript
-const es = new EventSource('/api/sse');
-es.addEventListener('log', (e) => console.log(JSON.parse(e.data)));
-es.addEventListener('metrics', (e) => console.log(JSON.parse(e.data)));
-es.addEventListener('process-status', (e) => console.log(JSON.parse(e.data)));
+const es = new EventSource("/api/sse");
+es.addEventListener("log", (e) => console.log(JSON.parse(e.data)));
+es.addEventListener("metrics", (e) => console.log(JSON.parse(e.data)));
+es.addEventListener("process-status", (e) => console.log(JSON.parse(e.data)));
 ```
 
-## 🎨 Design System
+## Design System
 
 ### Colors (Dark Mode)
-| Token | Hex | Usage |
-|-------|-----|-------|
-| Base | `#0A0E17` | Page background |
-| Surface | `#0F1623` | Secondary surfaces |
-| Card | `#141D2F` | Card backgrounds |
-| Accent 1 | `#CAF8FF` | Lightest accent |
+
+| Token    | Hex       | Usage               |
+| -------- | --------- | ------------------- |
+| Base     | `#0A0E17` | Page background     |
+| Surface  | `#0F1623` | Secondary surfaces  |
+| Card     | `#141D2F` | Card backgrounds    |
+| Accent 1 | `#CAF8FF` | Lightest accent     |
 | Accent 3 | `#38CDFF` | Primary interactive |
-| Accent 4 | `#009DCD` | Buttons, links |
-| Accent 6 | `#005C79` | Dark accent |
+| Accent 4 | `#009DCD` | Buttons, links      |
+| Accent 6 | `#005C79` | Dark accent         |
 
 ### Fonts
+
 - **Headings**: Roboto (300, 400, 500, 700)
 - **Body**: Poppins (300, 400, 500, 600, 700)
 
 ### Transitions
+
 - Page navigation: 350ms slide-up fade
 - Tab switching: 300ms slide-up
 - Theme toggle: 400ms crossfade
 - List items: 50ms stagger delay
 
-## 📸 Screenshots
+## Screenshots
 
 ### Dashboard
+
 Process overview with summary cards and quick links.
 
 ### Projects
+
 Grid of project cards with CPU, RAM, uptime, and action buttons.
 
 ### Project Detail
+
 Tabs for Overview, Logs (real-time), and Environment Variables.
 
 ### Metrics
+
 Visual performance metrics with progress bars and auto-refresh.
 
-## 🧪 Testing
+## Testing
 
 ```bash
 # Run all tests
@@ -254,7 +265,7 @@ npm test -- --coverage
 npm test -- --watch
 ```
 
-## 📦 Project Structure
+## Project Structure
 
 ```
 pm2-view/
@@ -288,7 +299,7 @@ pm2-view/
 └── vitest.config.ts        # Vitest config
 ```
 
-## 🔐 Security
+## Security
 
 - Passwords hashed by Better Auth (bcrypt)
 - HTTP-only session cookies
@@ -300,7 +311,7 @@ pm2-view/
 
 See [SECURITY.md](SECURITY.md) for vulnerability reporting.
 
-## 🤝 Contributing
+## Contributing
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for development workflow and guidelines.
 

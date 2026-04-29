@@ -1,6 +1,8 @@
 import { PM2Repository } from '$lib/pm2/pm2-repository.impl';
 import { PM2Service } from '$lib/pm2/pm2.service';
 import { createServices } from '$lib/services/factory';
+import { rateLimiter } from '$lib/rate-limiter';
+import { logger } from '$lib/logger';
 import { json } from '@sveltejs/kit';
 import { z } from 'zod';
 import type { RequestHandler } from './$types';
@@ -15,17 +17,27 @@ function getZodErrorMessage(result: any): string {
 	return firstError?.message || 'Validation failed';
 }
 
-export const POST: RequestHandler = async ({ request, url }) => {
+export const POST: RequestHandler = async ({ request, url, getClientAddress }) => {
+	const ip = getClientAddress();
+	const rateLimitResult = rateLimiter.check(ip);
+
+	if (!rateLimitResult.allowed) {
+		return json(
+			{ error: 'Too many requests. Please try again later.' },
+			{ status: 429, headers: { 'Retry-After': String(rateLimitResult.retryAfter ?? 60) } }
+		);
+	}
+
 	const { pm2Service } = createServices();
 	const action = url.searchParams.get('action');
 	const body = await request.json();
 
-	const result = actionSchema.safeParse(body);
-	if (!result.success) {
-		return json({ error: getZodErrorMessage(result) }, { status: 400 });
+	const validationResult = actionSchema.safeParse(body);
+	if (!validationResult.success) {
+		return json({ error: getZodErrorMessage(validationResult) }, { status: 400 });
 	}
 
-	const { pm_id } = result.data;
+	const { pm_id } = validationResult.data;
 
 	let response;
 	switch (action) {

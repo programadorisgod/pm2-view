@@ -1,23 +1,33 @@
 	<script lang="ts">
 	import { Card, StatusIndicator } from '$lib/ui/components';
-	import { invalidate } from '$app/navigation';
 	import { base } from '$app/paths';
 	import type { PageData } from './$types';
+	import type { ProcessWithStatus } from '$lib/pm2/pm2.types';
+	import { createSSEClient } from '$lib/sse';
+	import type { MetricsEvent } from '$lib/sse/types';
 
 	let { data }: { data: PageData } = $props();
 
-	let processes = $derived(data.processes ?? []);
+	let processes = $state<ProcessWithStatus[]>(data.processes ?? []);
 	let summary = $derived(data.summary);
 
-	let intervalId = $state<ReturnType<typeof setInterval> | null>(null);
+	let sseClient: ReturnType<typeof createSSEClient> | null = null;
 
 	$effect(() => {
-		intervalId = setInterval(async () => {
-			await invalidate('/metrics');
-		}, 10000);
+		sseClient = createSSEClient(`${base}/api/sse`);
+
+		sseClient.onMetrics((event: MetricsEvent) => {
+			// Update the specific process metrics in the list
+			processes = processes.map((p) =>
+				p.pm_id.toString() === event.processId
+					? { ...p, cpu: event.cpu, memoryMB: event.memoryMB, status: event.status as ProcessWithStatus['status'] }
+					: p
+			);
+		});
 
 		return () => {
-			if (intervalId) clearInterval(intervalId);
+			sseClient?.close();
+			sseClient = null;
 		};
 	});
 
@@ -177,9 +187,4 @@
 			</div>
 		{/if}
 	</Card>
-
-	<!-- Auto-refresh indicator -->
-	<div class="mt-md text-center">
-		<p class="text-caption" style="color: var(--text-muted);">Auto-refreshing every 10 seconds</p>
-	</div>
 </div>

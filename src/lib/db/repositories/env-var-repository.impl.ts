@@ -35,6 +35,13 @@ export class EnvVarRepository implements IEnvVarRepository {
 	}
 
 	async bulkUpdate(projectId: string, envVarsList: Omit<EnvVar, 'id'>[]): Promise<EnvVar[]> {
+		const keys = envVarsList.map((e) => e.key);
+		const uniqueKeys = new Set(keys);
+
+		if (uniqueKeys.size !== keys.length) {
+			throw new Error('Duplicate environment variable keys detected');
+		}
+
 		return await db.transaction(async (tx) => {
 			await tx.delete(envVars).where(eq(envVars.projectId, projectId));
 

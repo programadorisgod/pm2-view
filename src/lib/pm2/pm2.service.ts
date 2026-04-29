@@ -17,7 +17,8 @@ export class PM2Service {
 
 	async getAllProcesses(): Promise<ProcessWithStatus[]> {
 		try {
-			const processes = await this.repository.list();
+			const result = await this.repository.list();
+			const processes = Array.isArray(result) ? result : result.data;
 			return processes.map((p) => this.enrichProcess(p));
 		} catch (error) {
 			// Graceful degradation when PM2 is not running

@@ -2,6 +2,7 @@ import { db } from '../db';
 import { metrics } from '../schema';
 import { eq, desc } from 'drizzle-orm';
 import type { IMetricsRepository, Metric } from '../../metrics/metrics.types';
+import { normalizePagination, type PaginationParams, type PaginatedResult } from '$lib/pagination';
 
 export class MetricsRepository implements IMetricsRepository {
 	async record(metric: Omit<Metric, 'id' | 'recordedAt'>): Promise<Metric> {
@@ -30,11 +31,26 @@ export class MetricsRepository implements IMetricsRepository {
 		return latest ?? null;
 	}
 
-	async getHistory(projectId: string, limit: number = 100): Promise<Metric[]> {
-		return await db.query.metrics.findMany({
+	async getHistory(projectId: string, params?: PaginationParams): Promise<Metric[] | PaginatedResult<Metric>> {
+		const { limit, offset } = params ? normalizePagination(params) : { limit: 100, offset: 0 };
+
+		const allMetrics = await db.query.metrics.findMany({
 			where: eq(metrics.projectId, projectId),
 			orderBy: [desc(metrics.recordedAt)],
-			limit
+			limit: limit + offset
 		});
+
+		const total = allMetrics.length;
+		const paginated = allMetrics.slice(offset, offset + limit);
+
+		if (!params) return allMetrics;
+
+		return {
+			data: paginated,
+			total,
+			limit,
+			offset,
+			hasMore: offset + paginated.length < total
+		};
 	}
 }

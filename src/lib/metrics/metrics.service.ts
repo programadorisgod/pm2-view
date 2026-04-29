@@ -51,7 +51,8 @@ export class MetricsService {
 			const since = new Date();
 			since.setHours(since.getHours() - hours);
 
-			const allMetrics = await this.repository.getHistory(processId, 1000);
+			const result = await this.repository.getHistory(processId, { limit: 1000 });
+			const allMetrics = Array.isArray(result) ? result : result.data;
 			return allMetrics.filter((m) => m.recordedAt && m.recordedAt >= since);
 		} catch (error) {
 			logger.error(`Failed to get metrics history for ${processId}:`, { error: String(error) });

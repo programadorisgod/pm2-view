@@ -28,8 +28,10 @@ export interface ProcessWithStatus extends PM2Process {
 	uptimeFormatted: string;
 }
 
+import type { PaginationParams, PaginatedResult } from '$lib/pagination';
+
 export interface IPM2Repository {
-	list(): Promise<PM2Process[]>;
+	list(params?: PaginationParams): Promise<PM2Process[] | PaginatedResult<PM2Process>>;
 	describe(name: string): Promise<PM2Process | null>;
 	restart(name: string): Promise<void>;
 	stop(name: string): Promise<void>;

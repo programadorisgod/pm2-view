@@ -48,7 +48,7 @@ describe('PM2 Repository', () => {
 	it('should have correct method signatures', () => {
 		const repo = new PM2Repository();
 		// Verify methods accept correct parameters
-		expect(repo.list.length).toBe(0); // list() takes no args
+		expect(repo.list.length).toBe(1); // list(params?) - optional pagination params
 		expect(repo.describe.length).toBe(1); // describe(name)
 		expect(repo.restart.length).toBe(1); // restart(name)
 		expect(repo.stop.length).toBe(1); // stop(name)

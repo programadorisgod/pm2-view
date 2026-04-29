@@ -1,20 +1,34 @@
 import { exec } from 'child_process';
 import { promisify } from 'util';
-import { readFileSync, existsSync } from 'fs';
+import { readFile, existsSync } from 'fs';
 import type { IPM2Repository, PM2Process, PM2Log } from './pm2.types';
-import { escapeShellArg, isValidPm2Name } from '$lib/utils/shell';
+import { normalizePagination, type PaginationParams, type PaginatedResult } from '$lib/pagination';
+import { escapeShellArg } from '$lib/utils/shell';
 import { logger } from '$lib/logger';
 
-	const execAsync = promisify(exec);
+const execAsync = promisify(exec);
+const readFileAsync = promisify(readFile);
 
 export class PM2Repository implements IPM2Repository {
-	async list(): Promise<PM2Process[]> {
+	async list(params?: PaginationParams): Promise<PM2Process[] | PaginatedResult<PM2Process>> {
 		try {
 			const { stdout } = await execAsync('pm2 jlist');
-			return JSON.parse(stdout) as PM2Process[];
+			const processes = JSON.parse(stdout) as PM2Process[];
+
+			if (!params) return processes;
+
+			const { limit, offset } = normalizePagination(params);
+			const paginated = processes.slice(offset, offset + limit);
+			return {
+				data: paginated,
+				total: processes.length,
+				limit,
+				offset,
+				hasMore: offset + paginated.length < processes.length
+			};
 		} catch (error) {
 			logger.error('Failed to list PM2 processes', { error: String(error) });
-			return [];
+			return params ? { data: [], total: 0, limit: 50, offset: 0, hasMore: false } : [];
 		}
 	}
 
@@ -53,26 +67,31 @@ export class PM2Repository implements IPM2Repository {
 
 		const result: PM2Log[] = [];
 
-		// Read stdout logs from actual PM2 path
 		if (outLogPath && existsSync(outLogPath)) {
-			const content = readFileSync(outLogPath, 'utf-8');
-			const logLines = content.split('\n').filter(l => l.trim()).slice(-lines);
+			const logLines = await this.readLogFile(outLogPath, lines);
 			for (const line of logLines) {
 				result.push({ type: 'out', data: line, timestamp: parseTimestamp(line) });
 			}
 		}
 
-		// Read error logs from actual PM2 path
 		if (errLogPath && existsSync(errLogPath)) {
-			const content = readFileSync(errLogPath, 'utf-8');
-			const logLines = content.split('\n').filter(l => l.trim()).slice(-lines);
+			const logLines = await this.readLogFile(errLogPath, lines);
 			for (const line of logLines) {
 				result.push({ type: 'err', data: line, timestamp: parseTimestamp(line) });
 			}
 		}
 
-		// Sort chronologically: oldest first
 		return result.sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
+	}
+
+	private async readLogFile(path: string, lines: number): Promise<string[]> {
+		try {
+			const content = await readFileAsync(path, 'utf-8');
+			return content.split('\n').filter(l => l.trim()).slice(-lines);
+		} catch (error) {
+			logger.warn('Failed to read log file', { path, error: String(error) });
+			return [];
+		}
 	}
 }
 

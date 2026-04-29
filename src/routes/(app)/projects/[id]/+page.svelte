@@ -3,6 +3,8 @@
 	import { base } from '$app/paths';
 	import type { PageData } from './$types';
 	import { goto, invalidateAll } from '$app/navigation';
+	import { createSSEClient } from '$lib/sse';
+	import type { LogEvent } from '$lib/sse/types';
 
 	let { data }: { data: PageData } = $props();
 
@@ -108,30 +110,35 @@
 		}
 	}
 
-	// Real-time logs polling
+	// Real-time logs via SSE
+	let sseClient: ReturnType<typeof createSSEClient> | null = null;
+
 	$effect(() => {
-		if (activeTab !== 'logs') return;
-
-		const interval = setInterval(async () => {
-			try {
-				const res = await fetch(`${base}/projects/${process.pm_id}/logs?lines=100`);
-				const data = await res.json();
-				if (data.success && data.logs) {
-					logs = data.logs;
-					// Auto-scroll both panels independently
-					if (autoScrollOut && outContainer) {
-						setTimeout(() => { if (outContainer) outContainer.scrollTop = outContainer.scrollHeight; }, 0);
-					}
-					if (autoScrollErr && errContainer) {
-						setTimeout(() => { if (errContainer) errContainer.scrollTop = errContainer.scrollHeight; }, 0);
-					}
-				}
-		} catch (error) {
-			// Failed to fetch logs - silently ignore for polling
+		if (activeTab !== 'logs') {
+			sseClient?.close();
+			sseClient = null;
+			return;
 		}
-		}, 3000);
 
-		return () => clearInterval(interval);
+		sseClient = createSSEClient(`${base}/api/sse`);
+
+		sseClient.onLog((event: LogEvent) => {
+			if (event.processId === process.pm_id.toString()) {
+				logs = [...logs, { type: event.logType, data: event.line, timestamp: new Date() }];
+				// Auto-scroll both panels independently
+				if (autoScrollOut && outContainer) {
+					setTimeout(() => { if (outContainer) outContainer.scrollTop = outContainer.scrollHeight; }, 0);
+				}
+				if (autoScrollErr && errContainer) {
+					setTimeout(() => { if (errContainer) errContainer.scrollTop = errContainer.scrollHeight; }, 0);
+				}
+			}
+		});
+
+		return () => {
+			sseClient?.close();
+			sseClient = null;
+		};
 	});
 
 	function handleOutScroll(e: Event) {

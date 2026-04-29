@@ -22,6 +22,21 @@
 		}
 	});
 
+	// Scroll to bottom on initial load (resets when tab changes)
+	$effect(() => {
+		if (activeTab === 'logs') {
+			initialScrollDone = false;
+		}
+	});
+
+	$effect(() => {
+		if (!initialScrollDone && logs.length > 0 && outContainer && errContainer) {
+			outContainer.scrollTop = outContainer.scrollHeight;
+			errContainer.scrollTop = errContainer.scrollHeight;
+			initialScrollDone = true;
+		}
+	});
+
 	// Derived: split logs by type (repository already sorts chronologically)
 	let outLogs = $derived(logs.filter(l => l.type === 'out'));
 	let errLogs = $derived(logs.filter(l => l.type === 'err'));
@@ -31,6 +46,7 @@
 	let errContainer: HTMLDivElement | undefined = $state();
 	let autoScrollOut = $state(true);
 	let autoScrollErr = $state(true);
+	let initialScrollDone = $state(false);
 
 	let envVars = $state<Array<{ key: string; value: string; isNew?: boolean }>>([]);
 

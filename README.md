@@ -1,10 +1,11 @@
 # PM2 View
 
-A beautiful, modern visual dashboard for managing PM2 processes. Monitor CPU, RAM, uptime, view real-time logs, and manage environment variables — all from a sleek web interface.
+A beautiful, modern visual dashboard for managing PM2 processes. Monitor CPU, RAM, uptime, view real-time logs via SSE, and manage environment variables — all from a sleek web interface.
 
 ![Dashboard](https://img.shields.io/badge/SvelteKit-2.x-ff3e00?logo=svelte)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5.x-3178c6?logo=typescript)
 ![Database](https://img.shields.io/badge/DB-PostgreSQL%20%7C%20SQLite-4ff5d9)
+![Real-time](https://img.shields.io/badge/Real--time-SSE-00E676)
 
 ## ✨ Features
 
@@ -12,9 +13,10 @@ A beautiful, modern visual dashboard for managing PM2 processes. Monitor CPU, RA
 - **Dashboard** — Overview of all PM2 processes with real-time status
 - **Project Cards** — Beautiful cards showing CPU, RAM, uptime, and status
 - **Process Actions** — Restart, stop, and delete processes directly from the UI
-- **Real-time Logs** — Live log streaming with auto-scroll and color-coded output
+- **Real-time Logs** — Live log streaming via Server-Sent Events (SSE) with auto-scroll
+- **Real-time Metrics** — Push-based CPU/RAM updates every 10s via SSE
 - **Environment Variables** — View, edit, add, and delete env vars with auto-restart on save
-- **Metrics Dashboard** — Visual CPU/RAM bars, aggregated stats, auto-refresh every 10s
+- **Metrics Dashboard** — Visual CPU/RAM bars, aggregated stats
 - **Dark/Light Mode** — Toggle between themes with smooth transitions
 - **Premium Animations** — Page transitions, staggered lists, smooth tab switching
 
@@ -29,6 +31,7 @@ A beautiful, modern visual dashboard for managing PM2 processes. Monitor CPU, RA
 | **ORM** | Drizzle ORM |
 | **Validation** | Zod |
 | **Styling** | Tailwind CSS |
+| **Real-time** | Server-Sent Events (SSE) |
 | **Testing** | Vitest |
 
 ## 📁 Architecture
@@ -47,9 +50,17 @@ src/lib/
 │   ├── dialect-registry.ts  # Extensible dialect detection
 │   ├── factory.ts     # Driver factory
 │   └── schema/        # Drizzle schema definitions
+├── sse/               # Real-time communication
+│   ├── sse-manager.ts # Server-side connection manager
+│   ├── client.ts      # Browser EventSource wrapper
+│   ├── server.ts      # Server-only exports
+│   ├── metrics-emitter.ts
+│   └── status-watcher.ts
 ├── services/          # Service container (DI factory)
 ├── logger/            # Structured logging
-├── utils/             # Shared utilities
+├── rate-limiter/      # In-memory rate limiting
+├── pagination/        # Pagination types and helpers
+├── utils/             # Shared utilities (status, format, validation, shell)
 ├── projects/          # Projects domain
 ├── pm2/               # PM2 process manager domain
 ├── metrics/           # Metrics & monitoring domain
@@ -64,6 +75,7 @@ src/lib/
 - **Dependency Injection** — Centralized `createServices()` factory
 - **Registry Pattern** — Extensible driver/provider selection (Open/Closed)
 - **Interface-first** — Contracts defined before implementations
+- **Client/Server Split** — Clean separation of browser and Node.js code
 
 ## 🏁 Getting Started
 
@@ -175,6 +187,23 @@ npx drizzle-kit push
 npx drizzle-kit generate
 ```
 
+## 🔄 Real-time (SSE)
+
+PM2 View uses **Server-Sent Events** for real-time updates — no polling, no WebSockets:
+
+- **Logs**: Push new log lines as they arrive
+- **Metrics**: CPU/RAM updates every 10 seconds
+- **Process Status**: State change notifications (online → stopped → error)
+
+The SSE endpoint is at `/api/sse`. Connect from any browser:
+
+```javascript
+const es = new EventSource('/api/sse');
+es.addEventListener('log', (e) => console.log(JSON.parse(e.data)));
+es.addEventListener('metrics', (e) => console.log(JSON.parse(e.data)));
+es.addEventListener('process-status', (e) => console.log(JSON.parse(e.data)));
+```
+
 ## 🎨 Design System
 
 ### Colors (Dark Mode)
@@ -233,8 +262,11 @@ pm2-view/
 │   ├── lib/
 │   │   ├── auth/           # Auth domain (pluggable)
 │   │   ├── db/             # Database (dialect-agnostic)
+│   │   ├── sse/            # Real-time SSE communication
 │   │   ├── services/       # DI factory
 │   │   ├── logger/         # Structured logging
+│   │   ├── rate-limiter/   # Rate limiting
+│   │   ├── pagination/     # Pagination helpers
 │   │   ├── utils/          # Shared utilities
 │   │   ├── projects/       # Projects domain
 │   │   ├── pm2/            # PM2 domain
@@ -245,7 +277,7 @@ pm2-view/
 │   ├── routes/
 │   │   ├── (auth)/         # Login, register
 │   │   ├── (app)/          # Protected routes
-│   │   └── api/            # API endpoints
+│   │   └── api/            # API endpoints (including /api/sse)
 │   ├── app.css             # Global styles
 │   └── app.html            # HTML shell
 ├── drizzle/                # Migrations
@@ -264,6 +296,7 @@ pm2-view/
 - Environment variables masked in UI (sensitive keys)
 - Auth guard on all protected routes
 - Shell commands sanitized with `escapeShellArg()` to prevent command injection
+- Rate limiting on API endpoints (100 req/min per IP)
 
 See [SECURITY.md](SECURITY.md) for vulnerability reporting.
 
@@ -271,6 +304,15 @@ See [SECURITY.md](SECURITY.md) for vulnerability reporting.
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for development workflow and guidelines.
 
-## 📝 License
+## 📄 License
 
-MIT
+Copyright (c) 2026 Jerson Tapias, operating as Camidev
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files, to use, copy, modify,
+merge, publish, and distribute the Software for **non-commercial purposes only**.
+
+Commercial use is strictly prohibited without prior written permission from
+the copyright holder.
+
+See [LICENSE](LICENSE) for the full license text.

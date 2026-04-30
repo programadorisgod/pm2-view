@@ -8,4 +8,5 @@ Estas funcionalidades están identificadas pero **NO** se implementarán en esta
 - [ ] **Filtros/búsqueda avanzada** — Sin filtrado por nombre, estado, o recursos
 - [ ] **Notificaciones/alertas** — Sin sistema de alertas por CPU/RAM alta o procesos caídos
 - [ ] **Mejorar/alertas** --- Cambiar alertas (alert) por toast
+- [ ] **Mejorar traza** --- Agregar una db secundaria para audi logs.
 ---

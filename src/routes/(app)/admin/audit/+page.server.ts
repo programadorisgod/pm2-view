@@ -1,11 +1,8 @@
 import { requireAdmin } from '$lib/server/route-guards';
-import { db } from '$lib/db';
-import { auditLogs } from '$lib/db/schema';
-import { eq, and, gte, lte, desc, sql } from 'drizzle-orm';
+import { createAuditService } from '$lib/services/admin/audit.service';
+import type { AuditLogFilters } from '$lib/db/repositories/audit-log-repository.interface';
 import { error } from '@sveltejs/kit';
 import type { PageServerLoad } from './$types';
-
-const drizzleDb = db as any;
 
 export const load: PageServerLoad = async ({ url, locals }) => {
 	if (!locals.user) {
@@ -16,48 +13,28 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 
 	const page = parseInt(url.searchParams.get('page') || '1', 10);
 	const limit = parseInt(url.searchParams.get('limit') || '20', 10);
-	const offset = (page - 1) * limit;
 
-	const actionFilter = url.searchParams.get('action');
-	const actorIdFilter = url.searchParams.get('actorId');
-	const startDate = url.searchParams.get('startDate');
-	const endDate = url.searchParams.get('endDate');
+	const actionFilter = url.searchParams.get('action') || undefined;
+	const actorIdFilter = url.searchParams.get('actorId') || undefined;
+	const startDate = url.searchParams.get('startDate') || undefined;
+	const endDate = url.searchParams.get('endDate') || undefined;
+
+	const filters: AuditLogFilters | undefined = (actionFilter || actorIdFilter || startDate || endDate)
+		? {
+			action: actionFilter,
+			actorId: actorIdFilter,
+			startDate: startDate ? new Date(startDate) : undefined,
+			endDate: endDate ? new Date(endDate) : undefined
+		}
+		: undefined;
 
 	try {
-		const conditions = [];
-		if (actionFilter) conditions.push(eq(auditLogs.action, actionFilter));
-		if (actorIdFilter) conditions.push(eq(auditLogs.actorId, actorIdFilter));
-		if (startDate) conditions.push(gte(auditLogs.timestamp, new Date(startDate)));
-		if (endDate) conditions.push(lte(auditLogs.timestamp, new Date(endDate)));
-
-		const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
-
-		const logs = await drizzleDb.query.auditLogs.findMany({
-			where: whereClause,
-			limit,
-			offset,
-			orderBy: [desc(auditLogs.timestamp)],
-			with: { actor: { columns: { id: true, email: true, name: true } } }
-		});
-
-		const totalResult = await drizzleDb.select({ count: sql<number>`count(*)` })
-			.from(auditLogs)
-			.where(whereClause || sql`1=1`);
-
-		const total = totalResult[0]?.count || 0;
+		const auditService = createAuditService();
+		const result = await auditService.listLogs({ page, limit, filters });
 
 		return {
-			logs: logs.map((log: any) => ({
-				id: log.id,
-				action: log.action,
-				actor: log.actor,
-				targetId: log.targetId,
-				resourceType: log.resourceType,
-				resourceId: log.resourceId,
-				details: log.details ? JSON.parse(log.details) : null,
-				timestamp: log.timestamp
-			})),
-			pagination: { page, limit, total, totalPages: Math.ceil(total / limit) }
+			logs: result.logs,
+			pagination: result.pagination
 		};
 	} catch (e) {
 		console.error('Failed to load audit logs:', e);

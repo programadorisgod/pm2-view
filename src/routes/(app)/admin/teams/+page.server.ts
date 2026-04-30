@@ -1,6 +1,6 @@
 import { requireAdmin } from '$lib/server/route-guards';
-import { db } from '$lib/db';
-import { teams, teamMembers } from '$lib/db/schema';
+import { createTeamService } from '$lib/services/admin/team.service';
+import { BetterAuthUserRepository } from '$lib/db/repositories/better-auth-user-repository.impl';
 import { error } from '@sveltejs/kit';
 import type { PageServerLoad } from './$types';
 
@@ -13,36 +13,25 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 
 	const page = parseInt(url.searchParams.get('page') || '1', 10);
 	const limit = parseInt(url.searchParams.get('limit') || '20', 10);
-	const offset = (page - 1) * limit;
 
 	try {
-		const teamsList = await db.query.teams.findMany({
-			limit,
-			offset,
-			with: {
-				teamMembers: {
-					with: {
-						user: { columns: { id: true, email: true, name: true, role: true } }
-					}
-				}
-			}
-		});
+		const teamService = createTeamService();
+		const result = await teamService.listTeams({ page, limit });
 
-		const formattedTeams = teamsList.map(team => ({
-			id: team.id,
-			name: team.name,
-			description: team.description,
-			createdAt: team.createdAt,
-			memberCount: team.teamMembers.length,
-			members: team.teamMembers.map(tm => ({
-				userId: tm.userId,
-				role: tm.role,
-				joinedAt: tm.createdAt,
-				user: tm.user
-			}))
+		// Load all users for member selection
+		const authRepo = new BetterAuthUserRepository();
+		const allUsersResult = await authRepo.listUsers({ limit: 1000, offset: 0 });
+		const availableUsers = allUsersResult.users.map(u => ({
+			id: u.id,
+			email: u.email,
+			name: u.name
 		}));
 
-		return { teams: formattedTeams };
+		return {
+			teams: result.teams,
+			pagination: result.pagination,
+			availableUsers
+		};
 	} catch (e) {
 		console.error('Failed to load teams:', e);
 		throw error(500, 'Failed to retrieve teams');

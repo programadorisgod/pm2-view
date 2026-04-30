@@ -4,6 +4,7 @@ import { TeamRepository } from '$lib/db/repositories/team-repository.impl';
 import type { IProjectRepository, Project } from '$lib/projects/project.types';
 import type { ITeamRepository, Team } from '$lib/db/repositories/team-repository.interface';
 import type { ProcessWithStatus } from '$lib/pm2/pm2.types';
+import { PM2Service } from '$lib/pm2/pm2.service';
 
 export interface VisibleProject extends ProcessWithStatus {
 	accessType: 'personal' | 'team' | 'shared' | 'admin';
@@ -44,16 +45,15 @@ export class ProjectListingService {
 
 		// Get accessible projects from DB
 		const dbProjects = await this.projectRepo.findByAccess({ userId, teamIds });
-		const accessibleProjectIds = new Set(dbProjects.map(p => p.id));
-		const dbProjectMap = new Map(dbProjects.map(p => [p.id, p]));
+		const dbProjectMap = new Map(dbProjects.map(p => [p.pm2Name, p]));
 
-		// Get PM2 processes and filter
+		// Get PM2 processes and filter by matching pm2Name
 		const processes = await this.pm2Service.getAllProcesses();
 
 		return processes
-			.filter(p => accessibleProjectIds.has(p.pm_id?.toString() ?? ''))
+			.filter(p => dbProjectMap.has(p.name))
 			.map(p => {
-				const dbProject = dbProjectMap.get(p.pm_id?.toString() ?? '');
+				const dbProject = dbProjectMap.get(p.name);
 				const accessType = this.determineAccessType(p, dbProject, userId);
 				const teamName = dbProject?.teamId ? teamNameMap.get(dbProject.teamId) : undefined;
 

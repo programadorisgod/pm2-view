@@ -44,7 +44,7 @@ export const actions: Actions = {
 		const memberRole = (locals as any)?.memberRole;
 		const user = (locals as any)?.user;
 
-		if (memberRole === 'viewer' || (user && user.role === 'viewer')) {
+		if (user && !hasPermission(user.role, 'project', 'update')) {
 			throw error(403, 'Access denied: Insufficient permissions to modify project');
 		}
 

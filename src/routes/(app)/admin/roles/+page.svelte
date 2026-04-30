@@ -1,47 +1,18 @@
 <script lang="ts">
 	import { base } from '$app/paths';
+	import { hasPermission } from '$lib/auth/permissions';
 
-	// Permission matrix definition
+	// Permission matrix — mirrors statements in $lib/auth/permissions.ts
 	const permissions = [
-		{ resource: 'user', actions: ['create', 'read', 'update', 'delete', 'set-role', 'ban'] },
+		{ resource: 'user', actions: ['create', 'read', 'list', 'get', 'update', 'delete', 'set-role', 'ban', 'set-password', 'impersonate', 'impersonate-admins'] },
 		{ resource: 'project', actions: ['create', 'read', 'update', 'delete'] },
 		{ resource: 'project_member', actions: ['create', 'read', 'update', 'delete'] },
 		{ resource: 'team', actions: ['create', 'read', 'update', 'delete'] },
 		{ resource: 'team_member', actions: ['create', 'read', 'update', 'delete'] },
-		{ resource: 'audit_log', actions: ['read'] }
+		{ resource: 'audit_log', actions: ['create', 'read', 'delete'] }
 	];
 
 	const roles = ['admin', 'user', 'viewer'];
-
-	// Import hasPermission function - we'll use fetch to check
-	async function checkPermission(role: string, resource: string, action: string) {
-		try {
-			const res = await fetch(`${base}/api/permissions/check`, {
-				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ role, resource, action })
-			});
-			if (res.ok) {
-				const data = await res.json();
-				return data.allowed;
-			}
-		} catch {
-			// Fallback: admin always true, viewer read-only, user standard
-			if (role === 'admin') return true;
-			if (role === 'viewer' && action === 'read') return true;
-			if (role === 'user' && ['read', 'create', 'update'].includes(action)) return true;
-			return false;
-		}
-		return false;
-	}
-
-	// Simplified permission check (static for display)
-	function hasPermission(role: string, resource: string, action: string): boolean {
-		if (role === 'admin') return true;
-		if (role === 'viewer') return action === 'read' || action === 'list';
-		if (role === 'user') return ['read', 'list', 'create', 'update'].includes(action);
-		return false;
-	}
 </script>
 
 <div class="max-w-6xl mx-auto">

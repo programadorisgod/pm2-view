@@ -1,9 +1,9 @@
 import { requireAdmin } from '$lib/server/route-guards';
-import { auth } from '$lib/auth';
+import { createUserService } from '$lib/services/admin/user.service';
 import { error } from '@sveltejs/kit';
 import type { PageServerLoad } from './$types';
 
-export const load: PageServerLoad = async ({ url, locals, request }) => {
+export const load: PageServerLoad = async ({ url, locals }) => {
 	if (!locals.user) {
 		throw error(401, 'Unauthorized');
 	}
@@ -12,23 +12,12 @@ export const load: PageServerLoad = async ({ url, locals, request }) => {
 
 	const page = parseInt(url.searchParams.get('page') || '1', 10);
 	const limit = parseInt(url.searchParams.get('limit') || '20', 10);
-	const offset = (page - 1) * limit;
 
 	try {
-		const result = await auth.api.listUsers({
-			headers: request.headers,
-			query: { limit, offset }
-		});
+		const userService = createUserService();
+		const result = await userService.listUsers({ page, limit });
 
-		return {
-			users: result.users || [],
-			pagination: {
-				page,
-				limit,
-				total: result.total || 0,
-				totalPages: Math.ceil((result.total || 0) / limit)
-			}
-		};
+		return result;
 	} catch (e) {
 		console.error('Failed to list users:', e);
 		throw error(500, 'Failed to retrieve users');

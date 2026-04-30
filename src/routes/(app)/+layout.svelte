@@ -19,6 +19,7 @@
 	let navItems = $derived([
 		{ label: 'Dashboard', href: `${base}/`, active: page.url.pathname === base || page.url.pathname === base + '/' },
 		{ label: 'Projects', href: `${base}/projects`, active: page.url.pathname.startsWith(`${base}/projects`) && !page.url.pathname.includes('/sharing') },
+		{ label: 'Teams', href: `${base}/teams`, active: page.url.pathname.startsWith(`${base}/teams`) },
 		{ label: 'Metrics', href: `${base}/metrics`, active: page.url.pathname === `${base}/metrics` },
 		...(isAdmin ? [
 			{

@@ -58,12 +58,3 @@ export const POST = adminHandler(async ({ params, request }, user) => {
 
 	return json({ success: true });
 });
-
-/**
- * GET /admin/projects/[id]/team/available
- * Get all available teams for assignment dropdown
- */
-export const available: typeof GET = adminHandler(async () => {
-	const teams = await projectSharingService.getAllTeams();
-	return json({ teams: teams.map(t => ({ id: t.id, name: t.name })) });
-});

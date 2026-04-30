@@ -369,7 +369,7 @@
     class="flex gap-xs mb-lg"
     style="border-bottom: 1px solid var(--border-color);"
   >
-    {#each ["overview", "logs", "env"] as tab}
+    {#each ["overview", "logs", "env", "sharing"] as tab}
       <button
         class="px-md py-sm text-caption font-medium transition-colors border-b-2"
         style="border-color: {activeTab === tab
@@ -381,6 +381,8 @@
       >
         {tab === "env"
           ? "Environment"
+          : tab === "sharing"
+          ? "Sharing"
           : tab.charAt(0).toUpperCase() + tab.slice(1)}
       </button>
     {/each}
@@ -674,6 +676,24 @@
               Saving will restart the process
             </p>
           </div>
+        </Card>
+      {:else if activeTab === "sharing"}
+        <Card>
+          <h2 class="text-h3 font-semibold mb-md" style="color: var(--text-primary);">
+            Project Sharing
+          </h2>
+          <p class="text-body-sm mb-lg" style="color: var(--text-secondary);">
+            Manage who has access to this project. Invite users or assign the project to a team.
+          </p>
+          <a
+            href="{base}/projects/{data?.process?.pm_id}/sharing"
+            class="btn-primary px-4 py-2 text-body-sm inline-flex items-center gap-2"
+          >
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5-9a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0z" />
+            </svg>
+            Manage Collaborators
+          </a>
         </Card>
       {/if}
     </div>

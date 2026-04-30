@@ -19,6 +19,16 @@
 	let search = $state('');
 	let selectedRole = $state('');
 
+	let filteredUsers = $derived(
+		users.filter(u => {
+			const matchesRole = !selectedRole || u.role === selectedRole;
+			const matchesSearch = !search ||
+				(u.name && u.name.toLowerCase().includes(search.toLowerCase())) ||
+				u.email.toLowerCase().includes(search.toLowerCase());
+			return matchesRole && matchesSearch;
+		})
+	);
+
 	function handleRoleChange(userId: string, event: Event) {
 		const select = event.target as HTMLSelectElement;
 		onrolechange?.(userId, select.value);
@@ -79,7 +89,7 @@
 				</tr>
 			</thead>
 			<tbody>
-				{#each users as user (user.id)}
+				{#each filteredUsers as user (user.id)}
 					<tr style="border-bottom: 1px solid var(--border-color);" class="hover:bg-[var(--bg-card)]">
 						<td class="p-3" style="color: var(--text-primary);">{user.name || 'N/A'}</td>
 						<td class="p-3" style="color: var(--text-secondary);">{user.email}</td>
@@ -120,7 +130,7 @@
 			</tbody>
 		</table>
 
-		{#if users.length === 0}
+		{#if filteredUsers.length === 0}
 			<div class="text-center py-2xl" style="color: var(--text-muted);">
 				No users found
 			</div>

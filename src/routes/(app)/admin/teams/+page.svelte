@@ -64,8 +64,17 @@
 				</div>
 
 				<!-- Team Members -->
-				{#if team.members}
-					<TeamMembers members={team.members} teamId={team.id} />
+				{#if team.members && team.members.length > 0}
+					<TeamMembers
+						members={team.members.map(tm => ({
+							id: tm.user.id,
+							name: tm.user.name,
+							email: tm.user.email,
+							role: tm.user.role,
+							teamRole: tm.role
+						}))}
+						teamId={team.id}
+					/>
 				{/if}
 			</div>
 		{/each}

@@ -1,21 +1,28 @@
-import { auth } from '$lib/auth';
 import { getProjectRole } from '$lib/server/project-access';
 import { db } from '$lib/db';
 import { projects, projectMembers, users, teams } from '$lib/db/schema';
-import { eq, and } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 import { error } from '@sveltejs/kit';
+import { createServices } from '$lib/services/factory';
 import type { PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async ({ params, locals }) => {
-	const projectId = params.id;
+	const pmId = params.id;
 	if (!locals.user) {
 		throw error(401, 'Unauthorized');
 	}
 
 	try {
-		// Resolve PM2 pm_id to database project UUID
+		// Step 1: Resolve PM2 pm_id (e.g. "0") → PM2 process name (e.g. "my-app")
+		const { pm2Service } = createServices();
+		const pm2Process = await pm2Service.getProcessById(pmId);
+		if (!pm2Process) {
+			throw error(404, 'PM2 process not found');
+		}
+
+		// Step 2: Look up project in DB by pm2Name (the PM2 process name, NOT the numeric pm_id)
 		const project = await db.query.projects.findFirst({
-			where: eq(projects.pm2Name, projectId)
+			where: eq(projects.pm2Name, pm2Process.name)
 		});
 		if (!project) {
 			throw error(404, 'Project not found');

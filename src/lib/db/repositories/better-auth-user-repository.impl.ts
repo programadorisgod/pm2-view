@@ -78,35 +78,38 @@ export class BetterAuthUserRepository implements IAuthRepository {
 	}
 
 	async listUsers(options: { limit: number; offset: number; role?: string }): Promise<{ users: User[]; total: number }> {
-		const result = await (auth.api as any).listUsers({
-			query: {
-				limit: options.limit,
-				offset: options.offset,
-				...(options.role && { role: options.role })
-			}
-		});
-
-		if (!result || !result.data) {
-			throw new Error('Failed to list users via Better Auth API');
+		// Build base query
+		let baseQuery = db.select().from(users);
+		if (options.role) {
+			baseQuery = baseQuery.where(eq(users.role, options.role));
 		}
 
-		const users = (result.data.users || []).map((u: Record<string, unknown>) => this.mapBetterAuthUser(u));
+		const allUsers = await baseQuery;
+		const mappedUsers = allUsers.map(u => this.mapToAuthUser(u));
+
+		// Get total count
+		let countQuery = db.select({ count: db.$count() }).from(users);
+		if (options.role) {
+			countQuery = countQuery.where(eq(users.role, options.role));
+		}
+		const [{ count: total }] = await countQuery;
+
+		// Paginate in memory (Drizzle SQLite doesn't support offset without limit in some cases)
+		const paginated = mappedUsers.slice(options.offset, options.offset + options.limit);
+
 		return {
-			users,
-			total: result.data.total ?? users.length
+			users: paginated,
+			total: Number(total)
 		};
 	}
 
 	async getUserById(userId: string): Promise<User | null> {
-		const result = await (auth.api as any).getUser({
-			body: { userId }
+		const user = await db.query.users.findFirst({
+			where: eq(users.id, userId)
 		});
 
-		if (!result || !result.data?.user) {
-			return null;
-		}
-
-		return this.mapBetterAuthUser(result.data.user);
+		if (!user) return null;
+		return this.mapToAuthUser(user);
 	}
 
 	async setRole(userId: string, role: string): Promise<void> {

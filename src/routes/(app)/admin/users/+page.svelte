@@ -35,7 +35,8 @@
 		if (res.ok) {
 			users = users.map(u => u.id === userId ? { ...u, banned: !u.banned } : u);
 		} else {
-			alert('Failed to update ban status');
+			const errorData = await res.json().catch(() => null);
+			alert(`Failed to update ban: ${errorData?.message || res.statusText}`);
 		}
 	}
 </script>

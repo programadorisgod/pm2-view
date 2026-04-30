@@ -20,9 +20,7 @@ export const PATCH = adminHandler(async ({ params, request }, user) => {
 
 	await userService.updateUser(targetUserId, parseResult.data, user.id);
 
-	// Return updated user
-	const updatedUser = await userService.getUserById(targetUserId);
-	return json({ user: updatedUser });
+	return json({ success: true, role: parseResult.data.role, banned: parseResult.data.banned });
 });
 
 export const DELETE = adminHandler(async ({ params }, user) => {

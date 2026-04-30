@@ -34,13 +34,3 @@ export const DELETE = adminHandler(async ({ params }, user) => {
 	await userService.deleteUser(targetUserId, user.id);
 	return json({ success: true });
 });
-
-export const DELETE = adminHandler(async ({ params }, user) => {
-	const targetUserId = params.id;
-	if (!targetUserId) {
-		throw new Error('User ID is required');
-	}
-
-	await userService.deleteUser(targetUserId, user.id);
-	return json({ success: true });
-});

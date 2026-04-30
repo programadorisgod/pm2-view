@@ -12,22 +12,25 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 		throw error(401, 'Unauthorized');
 	}
 
-	// Check project access (admin bypass included)
-	const hasAccess = await getProjectRole(locals.user.id, projectId, locals.user.role);
-	if (!hasAccess) {
-		throw error(403, 'You do not have access to this project');
-	}
-
 	try {
+		// Resolve PM2 pm_id to database project UUID
 		const project = await db.query.projects.findFirst({
-			where: eq(projects.id, projectId)
+			where: eq(projects.pm2Name, projectId)
 		});
 		if (!project) {
 			throw error(404, 'Project not found');
 		}
 
+		const projectDbId = project.id;
+
+		// Check project access (admin bypass included)
+		const hasAccess = await getProjectRole(locals.user.id, projectDbId, locals.user.role);
+		if (!hasAccess) {
+			throw error(403, 'You do not have access to this project');
+		}
+
 		const members = await db.query.projectMembers.findMany({
-			where: eq(projectMembers.projectId, projectId),
+			where: eq(projectMembers.projectId, projectDbId),
 			with: {
 				user: { columns: { id: true, email: true, name: true, role: true } }
 			}

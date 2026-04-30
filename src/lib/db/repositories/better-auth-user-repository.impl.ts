@@ -109,71 +109,26 @@ export class BetterAuthUserRepository implements IAuthRepository {
 		return this.mapBetterAuthUser(result.data.user);
 	}
 
-	async setRole(userId: string, role: string, headers?: Headers): Promise<void> {
-		try {
-			const result = await (auth.api as any).setRole({
-				body: { userId, role },
-				...(headers && { headers })
-			});
-
-			if (result?.error) {
-				throw new Error(`Failed to set role: ${result.error.message}`);
-			}
-		} catch (err) {
-			if (err instanceof Error && err.message.startsWith('Failed to set role')) throw err;
-			throw new Error(`setRole failed: ${err instanceof Error ? err.message : String(err)}`);
-		}
+	async setRole(userId: string, role: string): Promise<void> {
+		await db.update(users)
+			.set({ role, updatedAt: new Date() })
+			.where(eq(users.id, userId));
 	}
 
-	async banUser(userId: string, reason?: string, headers?: Headers): Promise<void> {
-		try {
-			const result = await (auth.api as any).banUser({
-				body: {
-					userId,
-					banReason: reason ?? 'Banned by administrator'
-				},
-				...(headers && { headers })
-			});
-
-			if (result?.error) {
-				throw new Error(`Failed to ban user: ${result.error.message}`);
-			}
-		} catch (err) {
-			if (err instanceof Error && err.message.startsWith('Failed to ban user')) throw err;
-			throw new Error(`banUser failed: ${err instanceof Error ? err.message : String(err)}`);
-		}
+	async banUser(userId: string, reason?: string): Promise<void> {
+		await db.update(users)
+			.set({ banned: true, banReason: reason ?? 'Banned by administrator', updatedAt: new Date() })
+			.where(eq(users.id, userId));
 	}
 
-	async unbanUser(userId: string, headers?: Headers): Promise<void> {
-		try {
-			const result = await (auth.api as any).unbanUser({
-				body: { userId },
-				...(headers && { headers })
-			});
-
-			if (result?.error) {
-				throw new Error(`Failed to unban user: ${result.error.message}`);
-			}
-		} catch (err) {
-			if (err instanceof Error && err.message.startsWith('Failed to unban user')) throw err;
-			throw new Error(`unbanUser failed: ${err instanceof Error ? err.message : String(err)}`);
-		}
+	async unbanUser(userId: string): Promise<void> {
+		await db.update(users)
+			.set({ banned: false, banReason: null, updatedAt: new Date() })
+			.where(eq(users.id, userId));
 	}
 
-	async deleteUser(userId: string, headers?: Headers): Promise<void> {
-		try {
-			const result = await (auth.api as any).deleteUser({
-				body: { userId },
-				...(headers && { headers })
-			});
-
-			if (result?.error) {
-				throw new Error(`Failed to delete user: ${result.error.message}`);
-			}
-		} catch (err) {
-			if (err instanceof Error && err.message.startsWith('Failed to delete user')) throw err;
-			throw new Error(`deleteUser failed: ${err instanceof Error ? err.message : String(err)}`);
-		}
+	async deleteUser(userId: string): Promise<void> {
+		await db.delete(users).where(eq(users.id, userId));
 	}
 
 	private mapToAuthUser(user: typeof users.$inferSelect): User {

@@ -93,7 +93,7 @@ export class UserService {
     return this.authRepo.getUserById(userId);
   }
 
-  async updateUser(userId: string, updates: UpdateUserInput, actorId: string, headers?: Headers): Promise<void> {
+  async updateUser(userId: string, updates: UpdateUserInput, actorId: string): Promise<void> {
     // Handle role change
     if (updates.role !== undefined) {
       // Check not self
@@ -117,7 +117,7 @@ export class UserService {
       }
 
       // Sequence: auth call first, then audit
-      await this.authRepo.setRole(userId, updates.role, headers);
+      await this.authRepo.setRole(userId, updates.role);
 
       await this.auditRepo.create({
         action: 'user_role_change',
@@ -152,7 +152,7 @@ export class UserService {
       }
 
       // Sequence: auth call first, then audit
-      await this.authRepo.banUser(userId, updates.banReason ?? 'Banned by administrator', headers);
+      await this.authRepo.banUser(userId, updates.banReason ?? 'Banned by administrator');
 
       await this.auditRepo.create({
         action: 'user_ban',
@@ -169,7 +169,7 @@ export class UserService {
     // Handle unban
     if (updates.banned === false) {
       // Sequence: auth call first, then audit
-      await this.authRepo.unbanUser(userId, headers);
+      await this.authRepo.unbanUser(userId);
 
       await this.auditRepo.create({
         action: 'user_unban',
@@ -182,7 +182,7 @@ export class UserService {
     }
   }
 
-  async deleteUser(userId: string, actorId: string, headers?: Headers): Promise<void> {
+  async deleteUser(userId: string, actorId: string): Promise<void> {
     // Check not self
     if (userId === actorId) {
       throw error(403, 'Cannot delete yourself');

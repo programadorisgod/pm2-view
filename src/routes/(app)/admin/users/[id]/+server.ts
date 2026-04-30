@@ -18,7 +18,7 @@ export const PATCH = adminHandler(async ({ params, request }, user) => {
 		throw error(400, parseResult.error.issues[0].message);
 	}
 
-	await userService.updateUser(targetUserId, parseResult.data, user.id, request.headers);
+	await userService.updateUser(targetUserId, parseResult.data, user.id);
 
 	// Return updated user
 	const updatedUser = await userService.getUserById(targetUserId);

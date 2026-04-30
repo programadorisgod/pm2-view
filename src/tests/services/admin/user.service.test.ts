@@ -146,7 +146,7 @@ describe('UserService', () => {
 
       await userService.updateUser('user-1', { role: 'admin' }, 'admin-1');
 
-      expect(authRepo.setRole).toHaveBeenCalledWith('user-1', 'admin', undefined);
+      expect(authRepo.setRole).toHaveBeenCalledWith('user-1', 'admin');
       expect(auditRepo.create).toHaveBeenCalledWith(
         expect.objectContaining({ action: 'user_role_change' })
       );
@@ -181,7 +181,7 @@ describe('UserService', () => {
 
       await userService.updateUser('user-1', { banned: true, banReason: 'Violation' }, 'admin-1');
 
-      expect(authRepo.banUser).toHaveBeenCalledWith('user-1', 'Violation', undefined);
+      expect(authRepo.banUser).toHaveBeenCalledWith('user-1', 'Violation');
       expect(auditRepo.create).toHaveBeenCalledWith(
         expect.objectContaining({ action: 'user_ban' })
       );

@@ -21,11 +21,19 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 		}
 
 		// Step 2: Look up project in DB by pm2Name (the PM2 process name, NOT the numeric pm_id)
-		const project = await db.query.projects.findFirst({
+		let project = await db.query.projects.findFirst({
 			where: eq(projects.pm2Name, pm2Process.name)
 		});
+
+		// Auto-provision: create project record if it doesn't exist yet
 		if (!project) {
-			throw error(404, 'Project not found');
+			const [created] = await db.insert(projects).values({
+				userId: locals.user.id,
+				name: pm2Process.name,
+				pm2Name: pm2Process.name,
+				description: `PM2 process: ${pm2Process.name}`
+			}).returning();
+			project = created;
 		}
 
 		const projectDbId = project.id;

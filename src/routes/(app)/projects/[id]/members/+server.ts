@@ -5,7 +5,7 @@ import { getProjectRole } from '$lib/server/project-access';
 import { logAudit } from '$lib/server/audit';
 import { db } from '$lib/db';
 import { projectMembers, projects, users } from '$lib/db/schema';
-import { eq, and } from 'drizzle-orm';
+import { eq, and, count } from 'drizzle-orm';
 import { z } from 'zod';
 
 const inviteSchema = z.object({
@@ -174,7 +174,7 @@ export const PATCH: RequestHandler = async ({ params, request, locals }) => {
 
 		// Prevent removing last owner
 		if (existing.role === 'owner' && role !== 'owner') {
-			const ownerCount = await db.select({ count: db.$count() })
+			const ownerCount = await db.select({ count: count() })
 				.from(projectMembers)
 				.where(and(eq(projectMembers.projectId, projectId), eq(projectMembers.role, 'owner')));
 			if (ownerCount[0]?.count <= 1) {
@@ -231,7 +231,7 @@ export const DELETE: RequestHandler = async ({ params, request, locals }) => {
 
 		// Prevent removing last owner
 		if (existing.role === 'owner') {
-			const ownerCount = await db.select({ count: db.$count() })
+			const ownerCount = await db.select({ count: count() })
 				.from(projectMembers)
 				.where(and(eq(projectMembers.projectId, projectId), eq(projectMembers.role, 'owner')));
 			if (ownerCount[0]?.count <= 1) {

@@ -1,7 +1,7 @@
 import { auth } from '$lib/auth';
 import { db } from '../db';
 import { users, sessions } from '../schema';
-import { eq } from 'drizzle-orm';
+import { eq, count } from 'drizzle-orm';
 import type { IAuthRepository, User, Session } from '../../auth/auth.types';
 
 /**
@@ -88,13 +88,13 @@ export class BetterAuthUserRepository implements IAuthRepository {
 		const mappedUsers = allUsers.map(u => this.mapToAuthUser(u));
 
 		// Get total count
-		let countQuery = db.select({ count: db.$count() }).from(users);
+		let countQuery = db.select({ count: count() }).from(users);
 		if (options.role) {
 			countQuery = countQuery.where(eq(users.role, options.role));
 		}
 		const [{ count: total }] = await countQuery;
 
-		// Paginate in memory (Drizzle SQLite doesn't support offset without limit in some cases)
+		// Paginate in memory
 		const paginated = mappedUsers.slice(options.offset, options.offset + options.limit);
 
 		return {

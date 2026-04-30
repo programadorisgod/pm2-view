@@ -12,8 +12,8 @@ export interface IAuthRepository {
   createUser(user: Omit<User, 'id' | 'createdAt'>): Promise<User>;
   listUsers(options: { limit: number; offset: number; role?: string }): Promise<{ users: User[]; total: number }>;
   getUserById(userId: string): Promise<User | null>;
-  setRole(userId: string, role: string): Promise<void>;
-  banUser(userId: string, reason?: string): Promise<void>;
-  unbanUser(userId: string): Promise<void>;
-  deleteUser(userId: string): Promise<void>;
+  setRole(userId: string, role: string, headers?: Headers): Promise<void>;
+  banUser(userId: string, reason?: string, headers?: Headers): Promise<void>;
+  unbanUser(userId: string, headers?: Headers): Promise<void>;
+  deleteUser(userId: string, headers?: Headers): Promise<void>;
 }

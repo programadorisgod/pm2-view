@@ -8,7 +8,7 @@ const userService = createUserService();
 export const PATCH = adminHandler(async ({ params, request }, user) => {
 	const targetUserId = params.id;
 	if (!targetUserId) {
-		throw new Error('User ID is required');
+		throw error(400, 'User ID is required');
 	}
 
 	const body = await request.json();
@@ -18,11 +18,21 @@ export const PATCH = adminHandler(async ({ params, request }, user) => {
 		throw error(400, parseResult.error.issues[0].message);
 	}
 
-	await userService.updateUser(targetUserId, parseResult.data, user.id);
+	await userService.updateUser(targetUserId, parseResult.data, user.id, request.headers);
 
 	// Return updated user
 	const updatedUser = await userService.getUserById(targetUserId);
 	return json({ user: updatedUser });
+});
+
+export const DELETE = adminHandler(async ({ params }, user) => {
+	const targetUserId = params.id;
+	if (!targetUserId) {
+		throw error(400, 'User ID is required');
+	}
+
+	await userService.deleteUser(targetUserId, user.id);
+	return json({ success: true });
 });
 
 export const DELETE = adminHandler(async ({ params }, user) => {

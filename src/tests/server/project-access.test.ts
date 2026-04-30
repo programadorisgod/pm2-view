@@ -72,6 +72,18 @@ describe('getProjectRole', () => {
 		
 		expect(role).toBeNull();
 	});
+
+	it('should return owner when global role is admin', async () => {
+		// Admin bypass — no member record, not project creator
+		mockProjectMembersFindFirst.mockResolvedValue(null);
+		mockProjectsFindFirst.mockResolvedValue({ userId: 'other-user' });
+
+		const role = await getProjectRole('admin-1', 'project-1', 'admin');
+		
+		expect(role).toBe('owner');
+		// Should NOT query project_members or projects for admin
+		expect(mockProjectMembersFindFirst).not.toHaveBeenCalled();
+	});
 });
 
 describe('isProjectMember', () => {

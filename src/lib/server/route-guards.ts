@@ -39,26 +39,35 @@ export function requireRole(user: AuthUser, role: string): void {
 
 /**
  * Checks if a user has access to a project and optionally verifies a specific role.
- * Uses getProjectRole() which checks both project_members table and project creator.
- * Returns the member record if access is granted (or undefined for project creators).
+ * Admin users have universal access to all projects.
+ * For non-admins, uses getProjectRole() which checks both project_members table and project creator.
+ * Returns the member record if access is granted (or undefined for project creators/admins).
  *
  * @param projectId - The project ID to check access for
- * @param userId - The user ID to check
+ * @param user - The authenticated user (role is checked for admin bypass)
  * @param requiredRole - Optional role requirement ('owner', 'editor', 'viewer')
- * @returns The project member record if available, or undefined for project creators
+ * @returns The project member record if available, or undefined for admins/creators
  * @throws {Error} With status 403 if user is not a project member
  * @throws {Error} With status 403 if user does not have the required role
  */
 export async function requireProjectAccess(
 	projectId: string,
-	userId: string,
+	user: AuthUser,
 	requiredRole?: string
 ): Promise<typeof projectMembers.$inferSelect | undefined> {
+	// Admin has universal access to all projects
+	if (user.role === 'admin') {
+		// Return member record if it exists, otherwise undefined (admin bypass)
+		const member = await db.query.projectMembers.findFirst({
+			where: and(eq(projectMembers.projectId, projectId), eq(projectMembers.userId, user.id))
+		});
+		return member;
+	}
+
 	// Use getProjectRole to check access (checks both project_members and creator)
-	const role = await getProjectRole(userId, projectId);
+	const role = await getProjectRole(user.id, projectId);
 
 	if (!role) {
-		// Changed from 404 to 403 for security (don't leak project existence)
 		throw error(403, 'You do not have access to this project');
 	}
 
@@ -68,8 +77,8 @@ export async function requireProjectAccess(
 
 	// Fetch the member record if it exists (for project creators, there may not be a member record)
 	const member = await db.query.projectMembers.findFirst({
-		where: and(eq(projectMembers.projectId, projectId), eq(projectMembers.userId, userId))
+		where: and(eq(projectMembers.projectId, projectId), eq(projectMembers.userId, user.id))
 	});
 
-	return member; // Returns undefined for project creators without explicit member record
+	return member;
 }

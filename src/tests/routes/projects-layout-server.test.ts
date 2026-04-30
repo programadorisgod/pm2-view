@@ -25,7 +25,7 @@ describe('projects/[id]/+layout.server.ts', () => {
 		vi.clearAllMocks();
 	});
 
-	it('should throw 404 when user is not a project member', async () => {
+	it('should throw 403 when user is not a project member', async () => {
 		const user = {
 			id: 'user-1',
 			email: 'user@test.com',
@@ -40,9 +40,8 @@ describe('projects/[id]/+layout.server.ts', () => {
 			session: { id: 'session-1' }
 		});
 
-		// Mock requireProjectAccess to throw 404
 		mockRequireProjectAccess.mockImplementation(() => {
-			throw { status: 404, body: { message: 'Project not found' } };
+			throw { status: 403, body: { message: 'You do not have access to this project' } };
 		});
 
 		const event = {
@@ -50,15 +49,8 @@ describe('projects/[id]/+layout.server.ts', () => {
 			params: { id: 'project-1' }
 		} as unknown as Parameters<LayoutServerLoad>[0];
 
-		try {
-			await load(event);
-			expect.fail('Expected error to be thrown');
-		} catch (e: unknown) {
-			const err = e as { status?: number };
-			expect(err.status).toBe(404);
-		}
-
-		expect(mockRequireProjectAccess).toHaveBeenCalledWith('project-1', 'user-1');
+		await expect(load(event)).rejects.toMatchObject({ status: 403 });
+		expect(mockRequireProjectAccess).toHaveBeenCalledWith('project-1', user);
 	});
 
 	it('should load successfully when user is project member', async () => {
@@ -76,7 +68,6 @@ describe('projects/[id]/+layout.server.ts', () => {
 			session: { id: 'session-1' }
 		});
 
-		// Mock requireProjectAccess to return member data
 		mockRequireProjectAccess.mockResolvedValue({
 			id: 'pm-1',
 			projectId: 'project-1',
@@ -92,7 +83,7 @@ describe('projects/[id]/+layout.server.ts', () => {
 
 		const result = await load(event);
 
-		expect(mockRequireProjectAccess).toHaveBeenCalledWith('project-1', 'user-1');
+		expect(mockRequireProjectAccess).toHaveBeenCalledWith('project-1', user);
 		expect(result).toEqual({
 			user,
 			session: { id: 'session-1' },
@@ -111,24 +102,12 @@ describe('projects/[id]/+layout.server.ts', () => {
 			banReason: null
 		};
 
-		mockGetSession.mockResolvedValue({
-			user,
-			session: { id: 'session-1' }
-		});
-
+		mockGetSession.mockResolvedValue({ user, session: { id: 'session-1' } });
 		mockRequireProjectAccess.mockResolvedValue({
-			id: 'pm-1',
-			projectId: 'project-1',
-			userId: 'owner-1',
-			role: 'owner',
-			createdAt: new Date()
+			id: 'pm-1', projectId: 'project-1', userId: 'owner-1', role: 'owner', createdAt: new Date()
 		});
 
-		const event = {
-			request: { headers: new Headers() },
-			params: { id: 'project-1' }
-		} as unknown as Parameters<LayoutServerLoad>[0];
-
+		const event = { request: { headers: new Headers() }, params: { id: 'project-1' } } as unknown as Parameters<LayoutServerLoad>[0];
 		const result = await load(event);
 
 		expect(result.memberRole).toBe('owner');
@@ -144,26 +123,54 @@ describe('projects/[id]/+layout.server.ts', () => {
 			banReason: null
 		};
 
-		mockGetSession.mockResolvedValue({
-			user,
-			session: { id: 'session-1' }
-		});
-
+		mockGetSession.mockResolvedValue({ user, session: { id: 'session-1' } });
 		mockRequireProjectAccess.mockResolvedValue({
-			id: 'pm-1',
-			projectId: 'project-1',
-			userId: 'viewer-1',
-			role: 'viewer',
-			createdAt: new Date()
+			id: 'pm-1', projectId: 'project-1', userId: 'viewer-1', role: 'viewer', createdAt: new Date()
 		});
 
-		const event = {
-			request: { headers: new Headers() },
-			params: { id: 'project-1' }
-		} as unknown as Parameters<LayoutServerLoad>[0];
-
+		const event = { request: { headers: new Headers() }, params: { id: 'project-1' } } as unknown as Parameters<LayoutServerLoad>[0];
 		const result = await load(event);
 
 		expect(result.memberRole).toBe('viewer');
+	});
+
+	it('should handle admin role with member record', async () => {
+		const adminUser = {
+			id: 'admin-1',
+			email: 'admin@test.com',
+			name: 'Admin',
+			role: 'admin',
+			banned: false,
+			banReason: null
+		};
+
+		mockGetSession.mockResolvedValue({ user: adminUser, session: { id: 'session-1' } });
+		mockRequireProjectAccess.mockResolvedValue({
+			id: 'pm-1', projectId: 'project-1', userId: 'admin-1', role: 'editor', createdAt: new Date()
+		});
+
+		const event = { request: { headers: new Headers() }, params: { id: 'project-1' } } as unknown as Parameters<LayoutServerLoad>[0];
+		const result = await load(event);
+
+		expect(result.memberRole).toBe('admin'); // Admin always gets 'admin' role
+	});
+
+	it('should handle admin role without member record', async () => {
+		const adminUser = {
+			id: 'admin-1',
+			email: 'admin@test.com',
+			name: 'Admin',
+			role: 'admin',
+			banned: false,
+			banReason: null
+		};
+
+		mockGetSession.mockResolvedValue({ user: adminUser, session: { id: 'session-1' } });
+		mockRequireProjectAccess.mockResolvedValue(undefined); // No member record for admin
+
+		const event = { request: { headers: new Headers() }, params: { id: 'project-1' } } as unknown as Parameters<LayoutServerLoad>[0];
+		const result = await load(event);
+
+		expect(result.memberRole).toBe('admin');
 	});
 });

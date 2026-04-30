@@ -146,7 +146,7 @@ describe('projects/[id]/members/+server.ts - GET', () => {
 		const response = await GET(event);
 		const data = await response.json();
 
-		expect(mockRequireProjectAccess).toHaveBeenCalledWith('project-1', 'user-1');
+		expect(mockRequireProjectAccess).toHaveBeenCalledWith('project-1', user);
 		expect(data.members).toHaveLength(2);
 		expect(data.members[0].role).toBe('owner');
 		expect(data.members[1].role).toBe('editor');

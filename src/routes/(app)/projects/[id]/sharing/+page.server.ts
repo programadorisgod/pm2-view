@@ -12,10 +12,10 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 		throw error(401, 'Unauthorized');
 	}
 
-	// Check project access
-	const hasAccess = await getProjectRole(locals.user.id, projectId);
+	// Check project access (admin bypass included)
+	const hasAccess = await getProjectRole(locals.user.id, projectId, locals.user.role);
 	if (!hasAccess) {
-		throw error(404, 'Project not found');
+		throw error(403, 'You do not have access to this project');
 	}
 
 	try {

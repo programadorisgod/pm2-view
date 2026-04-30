@@ -15,12 +15,24 @@ export const load: LayoutServerLoad = async (event) => {
 	const { id: projectId } = event.params;
 
 	// Check project membership and get member record
-	const member = await requireProjectAccess(projectId, session.user.id);
+	// Admins have universal access, creators get 'owner' role
+	const member = await requireProjectAccess(projectId, session.user);
+
+	// Determine the effective role: from member record, or 'owner' for creator, or 'admin' for admins
+	let effectiveRole: string;
+	if (session.user.role === 'admin') {
+		effectiveRole = 'admin';
+	} else if (member) {
+		effectiveRole = member.role;
+	} else {
+		// Project creator without explicit member record
+		effectiveRole = 'owner';
+	}
 
 	return {
 		user: session.user,
 		session: session.session,
 		projectId,
-		memberRole: member.role
+		memberRole: effectiveRole
 	};
 };

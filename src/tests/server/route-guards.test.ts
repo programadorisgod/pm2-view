@@ -126,16 +126,18 @@ describe('requireRole', () => {
 });
 
 describe('requireProjectAccess', () => {
+	const regularUser = { id: 'user-1', email: 'user@test.com', name: 'User', role: 'user', banned: false, banReason: null };
+	const adminUser = { id: 'user-1', email: 'admin@test.com', name: 'Admin', role: 'admin', banned: false, banReason: null };
+
 	beforeEach(() => {
 		vi.clearAllMocks();
 		mockStore.findFirst.mockClear();
 	});
 
-	it('should throw 404 when user is not a project member', async () => {
-		// Mock no project membership found
+	it('should throw 403 when user is not a project member', async () => {
 		mockStore.findFirst.mockResolvedValue(null);
 
-		await expect(requireProjectAccess('project-1', 'user-1')).rejects.toThrow();
+		await expect(requireProjectAccess('project-1', regularUser)).rejects.toThrow();
 	});
 
 	it('should not throw when user is project owner', async () => {
@@ -147,7 +149,7 @@ describe('requireProjectAccess', () => {
 			createdAt: new Date()
 		});
 
-		await expect(requireProjectAccess('project-1', 'user-1')).resolves.not.toThrow();
+		await expect(requireProjectAccess('project-1', regularUser)).resolves.not.toThrow();
 	});
 
 	it('should throw 403 when user does not have required role', async () => {
@@ -159,7 +161,7 @@ describe('requireProjectAccess', () => {
 			createdAt: new Date()
 		});
 
-		await expect(requireProjectAccess('project-1', 'user-1', 'editor')).rejects.toThrow();
+		await expect(requireProjectAccess('project-1', regularUser, 'editor')).rejects.toThrow();
 	});
 
 	it('should not throw when user has required role', async () => {
@@ -171,7 +173,7 @@ describe('requireProjectAccess', () => {
 			createdAt: new Date()
 		});
 
-		await expect(requireProjectAccess('project-1', 'user-1', 'editor')).resolves.not.toThrow();
+		await expect(requireProjectAccess('project-1', regularUser, 'editor')).resolves.not.toThrow();
 	});
 
 	it('should not throw when user is member without specific role requirement', async () => {
@@ -183,6 +185,12 @@ describe('requireProjectAccess', () => {
 			createdAt: new Date()
 		});
 
-		await expect(requireProjectAccess('project-1', 'user-1')).resolves.not.toThrow();
+		await expect(requireProjectAccess('project-1', regularUser)).resolves.not.toThrow();
+	});
+
+	it('should not throw when admin accesses any project', async () => {
+		mockStore.findFirst.mockResolvedValue(null); // No member record
+
+		await expect(requireProjectAccess('project-1', adminUser)).resolves.not.toThrow();
 	});
 });

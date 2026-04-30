@@ -29,7 +29,7 @@ export const GET: RequestHandler = async ({ params, locals }) => {
 	}
 
 	// Check project access
-	requireProjectAccess(projectId, user.id);
+	requireProjectAccess(projectId, user);
 
 	try {
 		const members = await db.query.projectMembers.findMany({
@@ -68,8 +68,8 @@ export const POST: RequestHandler = async ({ params, request, locals }) => {
 		throw error(400, 'Project ID is required');
 	}
 
-	// Only owner or editor can invite
-	const currentRole = await getProjectRole(user.id, projectId);
+	// Only owner, editor, or admin can invite
+	const currentRole = await getProjectRole(user.id, projectId, user.role);
 	if (!currentRole || (currentRole !== 'owner' && currentRole !== 'editor')) {
 		throw error(403, 'Insufficient permissions to invite users');
 	}
@@ -148,7 +148,7 @@ export const PATCH: RequestHandler = async ({ params, request, locals }) => {
 		throw error(400, 'Project ID is required');
 	}
 
-	const currentRole = await getProjectRole(user.id, projectId);
+	const currentRole = await getProjectRole(user.id, projectId, user.role);
 	if (currentRole !== 'owner') {
 		throw error(403, 'Only project owner can change member roles');
 	}
@@ -216,7 +216,7 @@ export const DELETE: RequestHandler = async ({ params, request, locals }) => {
 		throw error(400, 'userId query parameter is required');
 	}
 
-	const currentRole = await getProjectRole(user.id, projectId);
+	const currentRole = await getProjectRole(user.id, projectId, user.role);
 	if (!currentRole || (currentRole !== 'owner' && currentRole !== 'editor')) {
 		throw error(403, 'Insufficient permissions to remove members');
 	}

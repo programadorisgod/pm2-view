@@ -110,12 +110,17 @@ export class BetterAuthUserRepository implements IAuthRepository {
 	}
 
 	async setRole(userId: string, role: string): Promise<void> {
-		const result = await (auth.api as any).setRole({
-			body: { userId, role }
-		});
+		try {
+			const result = await (auth.api as any).setRole({
+				body: { userId, role }
+			});
 
-		if (result?.error) {
-			throw new Error(`Failed to set role: ${result.error.message}`);
+			if (result?.error) {
+				throw new Error(`Failed to set role: ${result.error.message}`);
+			}
+		} catch (err) {
+			if (err instanceof Error && err.message.startsWith('Failed to set role')) throw err;
+			throw new Error(`setRole failed: ${err instanceof Error ? err.message : String(err)}`);
 		}
 	}
 

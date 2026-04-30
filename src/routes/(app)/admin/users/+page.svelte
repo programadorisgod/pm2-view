@@ -18,7 +18,8 @@
 		if (res.ok) {
 			users = users.map(u => u.id === userId ? { ...u, role: newRole } : u);
 		} else {
-			alert('Failed to update role');
+			const errorData = await res.json().catch(() => null);
+			alert(`Failed to update role: ${errorData?.message || res.statusText}`);
 		}
 	}
 

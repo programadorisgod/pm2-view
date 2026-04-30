@@ -15,6 +15,18 @@
 	let showInviteModal = $state(false);
 	let selectedUserId = $state('');
 	let selectedRole = $state('viewer');
+	let showRoleWarning = $state(false);
+
+	const ELEVATED_ROLES = new Set(['owner', 'admin']);
+
+	function confirmElevatedRole(role: string): boolean {
+		if (!ELEVATED_ROLES.has(role)) return true;
+		const messages: Record<string, string> = {
+			owner: 'Granting Owner role gives full control including deletion. Continue?',
+			admin: 'Granting Admin role gives full management permissions. Continue?'
+		};
+		return confirm(messages[role] ?? `Grant ${role} role?`);
+	}
 
 	// Team assignment state
 	let showTeamModal = $state(false);
@@ -64,6 +76,7 @@
 
 	async function handleInvite() {
 		if (!selectedUserId) return;
+		if (!confirmElevatedRole(selectedRole)) return;
 
 		try {
 			const res = await fetch(`${base}/projects/${project?.id}/members`, {
@@ -84,6 +97,8 @@
 	}
 
 	async function handleRoleChange(memberId: string, newRole: string) {
+		if (!confirmElevatedRole(newRole)) return;
+
 		try {
 			const res = await fetch(`${base}/projects/${project?.id}/members`, {
 				method: 'PATCH',
@@ -189,8 +204,9 @@
 								class="px-3 py-1.5 rounded-md text-caption border"
 								style="background: var(--bg-card); border-color: var(--border-color); color: var(--text-primary);"
 							>
-								<option value="editor">Editor</option>
 								<option value="viewer">Viewer</option>
+								<option value="editor">Editor</option>
+								<option value="owner">Owner</option>
 							</select>
 							<button
 								class="text-caption text-[#FF5252] hover:underline"
@@ -302,8 +318,9 @@
 						class="w-full px-4 py-2 rounded-md border text-body-sm"
 						style="background: var(--bg-card); border-color: var(--border-color); color: var(--text-primary);"
 					>
-						<option value="viewer">Viewer</option>
-						<option value="editor">Editor</option>
+						<option value="viewer">Viewer (read-only)</option>
+						<option value="editor">Editor (can modify)</option>
+						<option value="owner">Owner (full control)</option>
 					</select>
 				</div>
 			</div>

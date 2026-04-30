@@ -6,35 +6,52 @@ import { error } from '@sveltejs/kit';
 import { createServices } from '$lib/services/factory';
 import type { PageServerLoad } from './$types';
 
+/** Check if a string looks like a UUID (project DB ID) */
+function isUuid(id: string): boolean {
+	return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
+}
+
 export const load: PageServerLoad = async ({ params, locals }) => {
-	const pmId = params.id;
+	const paramId = params.id;
 	if (!locals.user) {
 		throw error(401, 'Unauthorized');
 	}
 
 	try {
-		// Step 1: Resolve PM2 pm_id (e.g. "0") → PM2 process name (e.g. "my-app")
-		const { pm2Service } = createServices();
-		const pm2Process = await pm2Service.getProcessById(pmId);
-		if (!pm2Process) {
-			throw error(404, 'PM2 process not found');
+		let project;
+
+		if (isUuid(paramId)) {
+			// Direct DB UUID — look up by projects.id
+			project = await db.query.projects.findFirst({
+				where: eq(projects.id, paramId)
+			});
+		} else {
+			// PM2 pm_id (numeric) — resolve via PM2Service → pm2Name
+			const { pm2Service } = createServices();
+			const pm2Process = await pm2Service.getProcessById(paramId);
+			if (!pm2Process) {
+				throw error(404, 'PM2 process not found');
+			}
+
+			project = await db.query.projects.findFirst({
+				where: eq(projects.pm2Name, pm2Process.name)
+			});
+
+			// Auto-provision: create project record if it doesn't exist yet
+			if (!project) {
+				const [created] = await db.insert(projects).values({
+					id: crypto.randomUUID(),
+					userId: locals.user.id,
+					name: pm2Process.name,
+					pm2Name: pm2Process.name,
+					description: `PM2 process: ${pm2Process.name}`
+				}).returning();
+				project = created;
+			}
 		}
 
-		// Step 2: Look up project in DB by pm2Name (the PM2 process name, NOT the numeric pm_id)
-		let project = await db.query.projects.findFirst({
-			where: eq(projects.pm2Name, pm2Process.name)
-		});
-
-		// Auto-provision: create project record if it doesn't exist yet
 		if (!project) {
-			const [created] = await db.insert(projects).values({
-				id: crypto.randomUUID(),
-				userId: locals.user.id,
-				name: pm2Process.name,
-				pm2Name: pm2Process.name,
-				description: `PM2 process: ${pm2Process.name}`
-			}).returning();
-			project = created;
+			throw error(404, 'Project not found');
 		}
 
 		const projectDbId = project.id;
@@ -76,7 +93,8 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 				id: m.id,
 				userId: m.userId,
 				role: m.role,
-				user: m.user
+				name: m.user?.name ?? '',
+				email: m.user?.email ?? ''
 			})),
 			availableUsers,
 			team: teamInfo,

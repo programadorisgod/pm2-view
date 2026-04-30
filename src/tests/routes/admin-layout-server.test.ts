@@ -1,95 +1,66 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-// Mock requireAdmin from route-guards (not used anymore but keep for compatibility)
-const mockRequireAdmin = vi.fn();
-vi.mock('$lib/server/route-guards', () => ({
-	requireAdmin: (...args: unknown[]) => mockRequireAdmin(...args)
+const { mockRequireAdmin, mockError } = vi.hoisted(() => ({
+  mockRequireAdmin: vi.fn(),
+  mockError: vi.fn((status: number, message: string) => {
+    const err = new Error(message);
+    (err as any).status = status;
+    throw err;
+  })
 }));
 
-// Import after mocking
+vi.mock('$lib/server/route-guards', () => ({
+  requireAdmin: (...args: unknown[]) => mockRequireAdmin(...args)
+}));
+
+vi.mock('@sveltejs/kit', async (importOriginal) => {
+  const actual = await importOriginal();
+  return { ...(actual as object), error: mockError };
+});
+
 import { load } from '../../../src/routes/(app)/admin/+layout.server.ts';
 
 describe('admin/+layout.server.ts', () => {
-	beforeEach(() => {
-		vi.clearAllMocks();
-	});
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockRequireAdmin.mockImplementation(() => {});
+  });
 
-	it('should return user and isAdmin=true when admin accesses admin route', async () => {
-		const adminUser = {
-			id: 'admin-1',
-			email: 'admin@test.com',
-			name: 'Admin',
-			role: 'admin',
-			banned: false,
-			banReason: null
-		};
+  it('should return user and isAdmin=true when admin accesses admin route', async () => {
+    const adminUser = { id: 'admin-1', email: 'admin@test.com', name: 'Admin', role: 'admin', banned: false, banReason: null };
+    const event = { locals: { user: adminUser } } as any;
 
-		const event = {
-			locals: { user: adminUser }
-		} as any;
+    const result = await load(event);
 
-		const result = await load(event);
+    expect(mockRequireAdmin).toHaveBeenCalledWith(adminUser);
+    expect(result).toEqual({ user: adminUser, isAdmin: true });
+  });
 
-		expect(result).toEqual({
-			user: adminUser,
-			isAdmin: true
-		});
-	});
+  it('should throw 403 when non-admin accesses admin route', async () => {
+    mockRequireAdmin.mockImplementation(() => {
+      throw mockError(403, 'Access denied: Admin role required');
+    });
 
-	it('should return user and isAdmin=false when non-admin accesses admin route', async () => {
-		const regularUser = {
-			id: 'user-1',
-			email: 'user@test.com',
-			name: 'User',
-			role: 'user',
-			banned: false,
-			banReason: null
-		};
+    const regularUser = { id: 'user-1', email: 'user@test.com', name: 'User', role: 'user', banned: false, banReason: null };
+    const event = { locals: { user: regularUser } } as any;
 
-		const event = {
-			locals: { user: regularUser }
-		} as any;
+    await expect(load(event)).rejects.toThrow('Access denied: Admin role required');
+    expect(mockRequireAdmin).toHaveBeenCalledWith(regularUser);
+  });
 
-		const result = await load(event);
+  it('should throw 403 when viewer accesses admin route', async () => {
+    mockRequireAdmin.mockImplementation(() => {
+      throw mockError(403, 'Access denied: Admin role required');
+    });
 
-		expect(result).toEqual({
-			user: regularUser,
-			isAdmin: false
-		});
-	});
+    const viewerUser = { id: 'viewer-1', email: 'viewer@test.com', name: 'Viewer', role: 'viewer', banned: false, banReason: null };
+    const event = { locals: { user: viewerUser } } as any;
 
-	it('should return user and isAdmin=false when viewer accesses admin route', async () => {
-		const viewerUser = {
-			id: 'viewer-1',
-			email: 'viewer@test.com',
-			name: 'Viewer',
-			role: 'viewer',
-			banned: false,
-			banReason: null
-		};
+    await expect(load(event)).rejects.toThrow('Access denied: Admin role required');
+  });
 
-		const event = {
-			locals: { user: viewerUser }
-		} as any;
-
-		const result = await load(event);
-
-		expect(result).toEqual({
-			user: viewerUser,
-			isAdmin: false
-		});
-	});
-
-	it('should handle unauthenticated user', async () => {
-		const event = {
-			locals: { user: null }
-		} as any;
-
-		const result = await load(event);
-
-		expect(result).toEqual({
-			user: null,
-			isAdmin: false
-		});
-	});
+  it('should throw 401 when unauthenticated', async () => {
+    const event = { locals: { user: null } } as any;
+    await expect(load(event)).rejects.toThrow('Unauthorized');
+  });
 });

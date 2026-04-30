@@ -1,4 +1,4 @@
-import { json, error } from '@sveltejs/kit';
+import { error } from '@sveltejs/kit';
 import { adminHandler } from '$lib/server/admin-handler';
 import { createAuditService } from '$lib/services/admin/audit.service';
 import { listAuditQuerySchema } from '$lib/validation/audit-schemas';
@@ -7,8 +7,6 @@ const auditService = createAuditService();
 
 export const GET = adminHandler(async ({ url }) => {
 	const parseResult = listAuditQuerySchema.safeParse({
-		page: url.searchParams.get('page'),
-		limit: url.searchParams.get('limit'),
 		action: url.searchParams.get('action'),
 		actorId: url.searchParams.get('actorId'),
 		targetId: url.searchParams.get('targetId'),
@@ -21,7 +19,7 @@ export const GET = adminHandler(async ({ url }) => {
 		throw error(400, parseResult.error.issues[0].message);
 	}
 
-	const { page, limit, ...filters } = parseResult.data;
+	const { page: _page, limit: _limit, ...filters } = parseResult.data;
 
 	// Convert date strings to Date objects if present
 	const auditFilters: Record<string, any> = { ...filters };
@@ -32,26 +30,12 @@ export const GET = adminHandler(async ({ url }) => {
 		auditFilters.endDate = new Date(auditFilters.endDate);
 	}
 
-	const result = await auditService.listLogs({
-		page,
-		limit,
-		filters: auditFilters
-	});
+	const csvString = await auditService.exportCSV(auditFilters);
 
-	// Format response to match original structure
-	const formattedLogs = result.logs.map((log) => ({
-		id: log.id,
-		action: log.action,
-		actor: log.actor,
-		targetId: log.targetId,
-		resourceType: log.resourceType,
-		resourceId: log.resourceId,
-		details: log.details ? (typeof log.details === 'string' ? JSON.parse(log.details) : log.details) : null,
-		timestamp: log.timestamp
-	}));
-
-	return json({
-		logs: formattedLogs,
-		pagination: result.pagination
+	return new Response(csvString, {
+		headers: {
+			'Content-Type': 'text/csv',
+			'Content-Disposition': `attachment; filename="audit-logs-${new Date().toISOString().split('T')[0]}.csv"`
+		}
 	});
 });

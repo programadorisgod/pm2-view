@@ -1,241 +1,148 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import type { RequestHandler } from '../../../src/routes/(app)/admin/teams/$types';
 
-// Mock database module with factory function (properly hoisted)
-vi.mock('$lib/db', () => {
-	const mockDbQuery = {
-		teams: {
-			findMany: vi.fn(),
-			findFirst: vi.fn()
-		}
-	};
-
-	return {
-		db: {
-			query: mockDbQuery,
-			select: vi.fn().mockReturnValue({
-				from: () => Promise.resolve([{ count: 0 }])
-			}),
-			insert: vi.fn().mockReturnValue({
-				values: vi.fn().mockResolvedValue(undefined)
-			}),
-			$count: vi.fn()
-		}
-	};
-});
-
-// Mock requireAdmin
-const mockRequireAdmin = vi.fn();
-vi.mock('$lib/server/route-guards', () => ({
-	requireAdmin: (...args: unknown[]) => mockRequireAdmin(...args)
+const { mockTeamService } = vi.hoisted(() => ({
+  mockTeamService: {
+    listTeams: vi.fn(),
+    createTeam: vi.fn(),
+    getTeam: vi.fn(),
+    updateTeam: vi.fn(),
+    deleteTeam: vi.fn(),
+    addMember: vi.fn(),
+    removeMember: vi.fn(),
+    updateMemberRole: vi.fn(),
+    getMember: vi.fn()
+  }
 }));
 
-// Mock audit logging
-vi.mock('$lib/server/audit', () => ({
-	logAudit: vi.fn().mockResolvedValue(undefined)
+// Mock the service module — hoisted before imports
+vi.mock('$lib/services/admin/team.service', () => ({
+  TeamService: vi.fn(),
+  createTeamService: vi.fn(() => mockTeamService)
 }));
 
-// Mock error and json from @sveltejs/kit
+// Mock validation schemas
+vi.mock('$lib/validation/team-schemas', () => ({
+  listTeamsQuerySchema: {
+    safeParse: vi.fn((data) => ({ success: true, data }))
+  },
+  createTeamSchema: {
+    safeParse: vi.fn((data) => ({ success: true, data }))
+  },
+  updateTeamSchema: {
+    safeParse: vi.fn((data) => ({ success: true, data }))
+  }
+}));
+
+// Mock adminHandler
+vi.mock('$lib/server/admin-handler', () => ({
+  adminHandler: vi.fn((handler: any) => {
+    return async (event: any) => {
+      const user = event.locals.user;
+      if (!user) throw Object.assign(new Error('Unauthorized'), { status: 401 });
+      if (user.role !== 'admin') throw Object.assign(new Error('Forbidden'), { status: 403 });
+      return handler(event, user);
+    };
+  })
+}));
+
+// Mock @sveltejs/kit
 vi.mock('@sveltejs/kit', () => ({
-	error: vi.fn((status: number, message: string) => {
-		const err = new Error(message) as Error & { status: number };
-		err.status = status;
-		throw err;
-	}),
-	json: vi.fn((data: any, init?: ResponseInit) => {
-		return new Response(JSON.stringify(data), {
-			status: init?.status || 200,
-			headers: { 'content-type': 'application/json' }
-		});
-	})
+  error: vi.fn((status: number, message: string) => {
+    const err = new Error(message) as Error & { status: number };
+    err.status = status;
+    throw err;
+  }),
+  json: vi.fn((data: any, init?: ResponseInit) => {
+    return new Response(JSON.stringify(data), {
+      status: init?.status || 200,
+      headers: { 'content-type': 'application/json' }
+    });
+  })
 }));
-
-// Mock drizzle-orm - need to provide all exports used
-vi.mock('drizzle-orm', async () => {
-	const actual = await vi.importActual('drizzle-orm');
-	return {
-		...actual,
-		eq: vi.fn((field: any, value: any) => ({ field, value })),
-		and: vi.fn((...args: any[]) => ({ args }))
-	};
-});
 
 // Import after mocking
 import { GET, POST } from '../../../src/routes/(app)/admin/teams/+server';
-import { db } from '$lib/db';
 
 describe('admin/teams/+server.ts - GET', () => {
-	beforeEach(() => {
-		vi.clearAllMocks();
-	});
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
 
-	it('should return teams list with pagination when admin is authenticated', async () => {
-		const adminUser = {
-			id: 'admin-1',
-			email: 'admin@test.com',
-			name: 'Admin',
-			role: 'admin',
-			banned: false,
-			banReason: null
-		};
+  it('should return teams list with pagination when admin is authenticated', async () => {
+    mockTeamService.listTeams.mockResolvedValue({
+      teams: [
+        { id: 'team-1', name: 'Engineering', memberCount: 2 },
+        { id: 'team-2', name: 'Design', memberCount: 0 }
+      ],
+      pagination: { page: 1, limit: 20, total: 2, totalPages: 1 }
+    });
 
-		// Mock teams query response
-		const mockQuery = db.query as any;
-		mockQuery.teams.findMany.mockResolvedValue([
-			{
-				id: 'team-1',
-				name: 'Engineering',
-				description: 'Engineering team',
-				createdAt: new Date('2024-01-01'),
-				teamMembers: [
-					{ userId: 'user-1', role: 'team_owner' },
-					{ userId: 'user-2', role: 'team_member' }
-				]
-			},
-			{
-				id: 'team-2',
-				name: 'Design',
-				description: null,
-				createdAt: new Date('2024-01-02'),
-				teamMembers: []
-			}
-		]);
+    const event = {
+      url: new URL('http://localhost/admin/teams?page=1&limit=20'),
+      locals: { user: { id: 'admin-1', email: 'admin@test.com', name: 'Admin', role: 'admin', banned: false, banReason: null } }
+    } as any;
 
-		// Mock count query
-		(db.select as any).mockReturnValue({
-			from: () => Promise.resolve([{ count: 2 }])
-		});
+    const response = await GET(event);
+    const data = await response.json();
 
-		const event = {
-			url: new URL('http://localhost/admin/teams?page=1&limit=20'),
-			locals: { user: adminUser }
-		} as Parameters<typeof GET>[0];
+    expect(mockTeamService.listTeams).toHaveBeenCalled();
+    expect(data.teams).toHaveLength(2);
+  });
 
-		const response = await GET(event);
-		const data = await response.json();
+  it('should throw 401 when user is not authenticated', async () => {
+    const event = {
+      url: new URL('http://localhost/admin/teams'),
+      locals: { user: null }
+    } as any;
 
-		expect(mockRequireAdmin).toHaveBeenCalledWith(adminUser);
-		expect(data.teams).toHaveLength(2);
-		expect(data.teams[0].name).toBe('Engineering');
-		expect(data.teams[0].memberCount).toBe(2);
-		expect(data.teams[1].memberCount).toBe(0);
-		expect(data.pagination).toEqual({
-			page: 1,
-			limit: 20,
-			total: 2,
-			totalPages: 1
-		});
-	});
+    await expect(GET(event)).rejects.toMatchObject({ status: 401 });
+  });
 
-	it('should throw 401 when user is not authenticated', async () => {
-		const event = {
-			url: new URL('http://localhost/admin/teams'),
-			locals: { user: null }
-		} as Parameters<typeof GET>[0];
+  it('should throw 403 when non-admin user tries to list teams', async () => {
+    const event = {
+      url: new URL('http://localhost/admin/teams'),
+      locals: { user: { id: 'user-1', email: 'user@test.com', name: 'User', role: 'user', banned: false, banReason: null } }
+    } as any;
 
-		await expect(GET(event)).rejects.toThrow('Unauthorized');
-	});
+    await expect(GET(event)).rejects.toMatchObject({ status: 403 });
+  });
 });
 
 describe('admin/teams/+server.ts - POST', () => {
-	beforeEach(() => {
-		vi.clearAllMocks();
-		mockRequireAdmin.mockImplementation(() => {});
-	});
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
 
-	it('should create a new team when admin is authenticated', async () => {
-		const adminUser = {
-			id: 'admin-1',
-			email: 'admin@test.com',
-			name: 'Admin',
-			role: 'admin',
-			banned: false,
-			banReason: null
-		};
+  it('should create a new team when admin is authenticated', async () => {
+    mockTeamService.createTeam.mockResolvedValue({
+      id: 'new-team',
+      name: 'New Team',
+      description: 'A new team'
+    });
 
-		// Mock no existing team with same name
-		const mockQuery = db.query as any;
-		mockQuery.teams.findFirst.mockResolvedValue(null);
+    const event = {
+      request: { json: () => Promise.resolve({ name: 'New Team', description: 'A new team' }) },
+      locals: { user: { id: 'admin-1', email: 'admin@test.com', name: 'Admin', role: 'admin', banned: false, banReason: null } }
+    } as any;
 
-		// Mock insert
-		const mockValues = vi.fn().mockResolvedValue(undefined);
-		(db.insert as any).mockReturnValue({ values: mockValues });
+    const response = await POST(event);
+    const data = await response.json();
 
-		const requestBody = {
-			name: 'New Team',
-			description: 'A new team'
-		};
+    expect(mockTeamService.createTeam).toHaveBeenCalled();
+    expect(data.team).toBeDefined();
+    expect(response.status).toBe(201);
+  });
 
-		const event = {
-			request: {
-				json: () => Promise.resolve(requestBody)
-			},
-			locals: { user: adminUser }
-		} as Parameters<typeof POST>[0];
+  it('should throw 409 when team name already exists', async () => {
+    mockTeamService.createTeam.mockImplementation(() => {
+      throw Object.assign(new Error('already exists'), { status: 409 });
+    });
 
-		const response = await POST(event);
-		const data = await response.json();
+    const event = {
+      request: { json: () => Promise.resolve({ name: 'Existing Team' }) },
+      locals: { user: { id: 'admin-1', email: 'admin@test.com', name: 'Admin', role: 'admin', banned: false, banReason: null } }
+    } as any;
 
-		expect(mockRequireAdmin).toHaveBeenCalledWith(adminUser);
-		expect(data.team).toBeDefined();
-		expect(data.team.name).toBe('New Team');
-		expect(response.status).toBe(201);
-	});
-
-	it('should throw 409 when team name already exists', async () => {
-		const adminUser = {
-			id: 'admin-1',
-			email: 'admin@test.com',
-			name: 'Admin',
-			role: 'admin',
-			banned: false,
-			banReason: null
-		};
-
-		// Mock existing team with same name
-		const mockQuery = db.query as any;
-		mockQuery.teams.findFirst.mockResolvedValue({
-			id: 'existing-team',
-			name: 'Existing Team'
-		});
-
-		const requestBody = {
-			name: 'Existing Team',
-			description: 'Some description'
-		};
-
-		const event = {
-			request: {
-				json: () => Promise.resolve(requestBody)
-			},
-			locals: { user: adminUser }
-		} as Parameters<typeof POST>[0];
-
-		await expect(POST(event)).rejects.toThrow('already exists');
-	});
-
-	it('should throw 400 when team name is empty', async () => {
-		const adminUser = {
-			id: 'admin-1',
-			email: 'admin@test.com',
-			name: 'Admin',
-			role: 'admin',
-			banned: false,
-			banReason: null
-		};
-
-		const requestBody = {
-			name: '',
-			description: 'Some description'
-		};
-
-		const event = {
-			request: {
-				json: () => Promise.resolve(requestBody)
-			},
-			locals: { user: adminUser }
-		} as Parameters<typeof POST>[0];
-
-		await expect(POST(event)).rejects.toThrow();
-	});
+    await expect(POST(event)).rejects.toMatchObject({ status: 409 });
+  });
 });

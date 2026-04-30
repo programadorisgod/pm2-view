@@ -41,7 +41,7 @@ describe('(app)/+layout.server.ts', () => {
 		}
 	});
 
-	it('should throw 403 when accessing admin route as non-admin user', async () => {
+	it('should allow non-admin to access parent layout (admin check delegated to child layout)', async () => {
 		mockGetSession.mockResolvedValue({
 			user: {
 				id: 'user-1',
@@ -59,13 +59,12 @@ describe('(app)/+layout.server.ts', () => {
 			route: { id: '/(app)/admin/users' }
 		} as Parameters<LayoutServerLoad>[0];
 
-		try {
-			await load(event);
-			expect.fail('Expected error to be thrown');
-		} catch (e: unknown) {
-			const err = e as { status?: number; body?: { message?: string } };
-			expect(err.status).toBe(403);
-		}
+		// Parent layout no longer checks admin routes — child layout handles it
+		const result = await load(event);
+		expect(result).toEqual({
+			user: expect.objectContaining({ role: 'user' }),
+			session: expect.any(Object)
+		});
 	});
 
 	it('should allow access when admin accesses admin route', async () => {
@@ -120,7 +119,7 @@ describe('(app)/+layout.server.ts', () => {
 		});
 	});
 
-	it('should throw 403 when viewer accesses admin route', async () => {
+	it('should allow viewer to access parent layout (admin check delegated to child layout)', async () => {
 		mockGetSession.mockResolvedValue({
 			user: {
 				id: 'viewer-1',
@@ -138,13 +137,12 @@ describe('(app)/+layout.server.ts', () => {
 			route: { id: '/(app)/admin/teams' }
 		} as Parameters<LayoutServerLoad>[0];
 
-		try {
-			await load(event);
-			expect.fail('Expected error to be thrown');
-		} catch (e: unknown) {
-			const err = e as { status?: number };
-			expect(err.status).toBe(403);
-		}
+		// Parent layout no longer checks admin routes — child layout handles it
+		const result = await load(event);
+		expect(result).toEqual({
+			user: expect.objectContaining({ role: 'viewer' }),
+			session: expect.any(Object)
+		});
 	});
 
 	it('should allow access to nested admin routes only for admin', async () => {

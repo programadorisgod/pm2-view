@@ -1,4 +1,4 @@
-import { createPM2Services } from '$lib/pm2';
+import { createServices } from '$lib/services/factory';
 import { ProjectRepository } from '$lib/db/repositories/project-repository.impl';
 import { TeamRepository } from '$lib/db/repositories/team-repository.impl';
 import type { IProjectRepository, Project } from '$lib/projects/project.types';
@@ -82,7 +82,7 @@ export class ProjectListingService {
  * Factory function to create ProjectListingService with default dependencies.
  */
 export function createProjectListingService(): ProjectListingService {
-	const { pm2Service } = createPM2Services();
+	const { pm2Service } = createServices();
 	const projectRepo = new ProjectRepository();
 	const teamRepo = new TeamRepository();
 

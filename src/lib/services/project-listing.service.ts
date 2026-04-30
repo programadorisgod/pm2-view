@@ -1,4 +1,6 @@
-import { PM2Service } from '$lib/pm2/pm2.service';
+import { createPM2Services } from '$lib/pm2';
+import { ProjectRepository } from '$lib/db/repositories/project-repository.impl';
+import { TeamRepository } from '$lib/db/repositories/team-repository.impl';
 import type { IProjectRepository, Project } from '$lib/projects/project.types';
 import type { ITeamRepository, Team } from '$lib/db/repositories/team-repository.interface';
 import type { ProcessWithStatus } from '$lib/pm2/pm2.types';
@@ -80,10 +82,6 @@ export class ProjectListingService {
  * Factory function to create ProjectListingService with default dependencies.
  */
 export function createProjectListingService(): ProjectListingService {
-	const { createPM2Services } = await import('$lib/pm2');
-	const { ProjectRepository } = await import('$lib/db/repositories/project-repository.impl');
-	const { TeamRepository } = await import('$lib/db/repositories/team-repository.impl');
-
 	const { pm2Service } = createPM2Services();
 	const projectRepo = new ProjectRepository();
 	const teamRepo = new TeamRepository();

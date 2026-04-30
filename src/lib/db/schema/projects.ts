@@ -5,11 +5,13 @@ import { sqliteTable, text, integer } from 'drizzle-orm/sqlite-core';
 import { sql } from 'drizzle-orm';
 import { relations } from 'drizzle-orm';
 import { users } from './users';
+import { teams } from './teams';
 import { projectMembers } from './project-members';
 
 export const projects = sqliteTable('projects', {
 	id: text('id').primaryKey(),
 	userId: text('user_id').notNull().references(() => users.id),
+	teamId: text('team_id').references(() => teams.id),
 	name: text('name').notNull(),
 	pm2Name: text('pm2_name').notNull(),
 	description: text('description'),
@@ -18,6 +20,7 @@ export const projects = sqliteTable('projects', {
 
 export const projectsRelations = relations(projects, ({ one, many }) => ({
 	owner: one(users, { fields: [projects.userId], references: [users.id] }),
+	team: one(teams, { fields: [projects.teamId], references: [teams.id] }),
 	projectMembers: many(projectMembers)
 }));
 

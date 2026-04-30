@@ -1,6 +1,8 @@
 import { PM2Repository } from '$lib/pm2/pm2-repository.impl';
 import { PM2Service } from '$lib/pm2/pm2.service';
 import { createServices } from '$lib/services/factory';
+import { createProjectListingService } from '$lib/services/project-listing.service';
+import { auth } from '$lib/auth';
 import { fail } from '@sveltejs/kit';
 import { z } from 'zod';
 import type { PageServerLoad, Actions } from './$types';
@@ -9,11 +11,25 @@ const actionSchema = z.object({
 	pm_id: z.string().min(1, 'Process ID is required')
 });
 
-export const load: PageServerLoad = async () => {
-	const { pm2Service } = createServices();
-	const processes = await pm2Service.getAllProcesses();
+export const load: PageServerLoad = async (event) => {
+	// Get user session for access filtering
+	const session = await auth.api.getSession({
+		headers: event.request.headers
+	});
+
+	if (!session?.user) {
+		return { processes: [] };
+	}
+
+	const listingService = createProjectListingService();
+	const visibleProjects = await listingService.getVisibleProjects(
+		session.user.id,
+		session.user.role
+	);
+
 	return {
-		processes
+		processes: visibleProjects,
+		userRole: session.user.role
 	};
 };
 

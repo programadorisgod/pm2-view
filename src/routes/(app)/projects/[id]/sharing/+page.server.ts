@@ -1,7 +1,7 @@
 import { auth } from '$lib/auth';
 import { getProjectRole } from '$lib/server/project-access';
 import { db } from '$lib/db';
-import { projects, projectMembers, users } from '$lib/db/schema';
+import { projects, projectMembers, users, teams } from '$lib/db/schema';
 import { eq, and } from 'drizzle-orm';
 import { error } from '@sveltejs/kit';
 import type { PageServerLoad } from './$types';
@@ -39,15 +39,29 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 		const memberIds = new Set(members.map(m => m.userId));
 		const availableUsers = allUsers.filter(u => !memberIds.has(u.id));
 
+		// Get team info if project belongs to a team
+		let teamInfo = null;
+		if (project.teamId) {
+			const team = await db.query.teams.findFirst({
+				where: eq(teams.id, project.teamId),
+				columns: { id: true, name: true }
+			});
+			if (team) {
+				teamInfo = team;
+			}
+		}
+
 		return {
-			project: { id: project.id, name: project.name, pm2Name: project.pm2Name },
+			project: { id: project.id, name: project.name, pm2Name: project.pm2Name, teamId: project.teamId },
 			members: members.map(m => ({
 				id: m.id,
 				userId: m.userId,
 				role: m.role,
 				user: m.user
 			})),
-			availableUsers
+			availableUsers,
+			team: teamInfo,
+			userRole: locals.user.role
 		};
 	} catch (e: any) {
 		if (e.status) throw e;

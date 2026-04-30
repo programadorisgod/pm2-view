@@ -87,4 +87,11 @@ export interface ITeamRepository {
    * @returns The team member or null if not found
    */
   findMember(teamId: string, userId: string): Promise<TeamMember | null>;
+
+  /**
+   * Get all teams a user belongs to
+   * @param userId - The user ID
+   * @returns Array of teams the user belongs to
+   */
+  getUserTeams(userId: string): Promise<Team[]>;
 }

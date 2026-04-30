@@ -1,11 +1,23 @@
 import { db } from '$lib/db';
 import { eq, and } from 'drizzle-orm';
-import { projectMembers, projects } from '$lib/db/schema';
+import { projectMembers, projects, teamMembers } from '$lib/db/schema';
 import type { ProjectMember } from '$lib/db/schema';
 
 /**
+ * Maps team roles to project roles.
+ * team_owner → owner (full control)
+ * team_admin → editor (can manage but not delete)
+ * team_member → viewer (read-only)
+ */
+const TEAM_TO_PROJECT_ROLE: Record<string, string> = {
+	team_owner: 'owner',
+	team_admin: 'editor',
+	team_member: 'viewer'
+};
+
+/**
  * Gets the role of a user in a specific project.
- * Checks global role first (admin bypass), then project_members table, then project creator.
+ * Checks in order: admin bypass → project_members → project creator → team membership.
  *
  * @param userId - The user ID to check
  * @param projectId - The project ID to check
@@ -22,7 +34,7 @@ export async function getProjectRole(
 		return 'owner';
 	}
 
-	// First check project_members table
+	// First check project_members table (highest priority)
 	const member = await db.query.projectMembers.findFirst({
 		where: and(eq(projectMembers.projectId, projectId), eq(projectMembers.userId, userId))
 	});
@@ -31,14 +43,28 @@ export async function getProjectRole(
 		return member.role;
 	}
 
-	// If not in project_members, check if user is the project creator (owner)
+	// Check project details (creator + teamId)
 	const project = await db.query.projects.findFirst({
 		where: eq(projects.id, projectId),
-		columns: { userId: true }
+		columns: { userId: true, teamId: true }
 	});
 
-	if (project && project.userId === userId) {
+	if (!project) return null;
+
+	// Project creator
+	if (project.userId === userId) {
 		return 'owner';
+	}
+
+	// Team-based access (NEW)
+	if (project.teamId) {
+		const teamMember = await db.query.teamMembers.findFirst({
+			where: and(eq(teamMembers.teamId, project.teamId), eq(teamMembers.userId, userId))
+		});
+
+		if (teamMember) {
+			return TEAM_TO_PROJECT_ROLE[teamMember.role] ?? null;
+		}
 	}
 
 	return null;

@@ -153,6 +153,17 @@ export class TeamRepository implements ITeamRepository {
 
 		return member ?? null;
 	}
+
+	async getUserTeams(userId: string): Promise<Team[]> {
+		const memberships = await db.query.teamMembers.findMany({
+			where: eq(teamMembers.userId, userId),
+			with: {
+				team: true
+			}
+		});
+
+		return memberships.map(m => m.team);
+	}
 }
 
 /**

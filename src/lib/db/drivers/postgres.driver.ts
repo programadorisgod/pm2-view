@@ -34,8 +34,12 @@ export class PostgresDriver implements DatabaseDriver {
   }
 
   getClient() {
+    // Auto-initialize pool if not already created (Pool constructor is synchronous)
     if (!this.pool) {
-      throw new Error('Database not connected. Call connect() first.');
+      this.pool = new Pool({
+        connectionString: this.connectionString
+      });
+      this.connected = true;
     }
     return drizzle(this.pool, { schema });
   }

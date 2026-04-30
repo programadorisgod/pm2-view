@@ -10,6 +10,9 @@ export interface AuthUser {
   name: string | null;
   emailVerified: boolean;
   createdAt: Date;
+  role: string;
+  banned: boolean;
+  banReason: string | null;
 }
 
 export interface AuthProvider {

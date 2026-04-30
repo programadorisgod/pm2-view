@@ -12,7 +12,10 @@ describe('Auth Types', () => {
 		email: 'test@example.com',
 		name: null,
 		emailVerified: false,
-		createdAt: new Date()
+		createdAt: new Date(),
+		role: 'user',
+		banned: false,
+		banReason: null
 	};
 
 	const mockSession: Session = {

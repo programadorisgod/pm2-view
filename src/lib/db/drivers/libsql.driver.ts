@@ -32,8 +32,13 @@ export class LibsqlDriver implements DatabaseDriver {
   }
 
   getClient() {
+    // Auto-connect if not already connected (createClient is synchronous)
     if (!this.client) {
-      throw new Error('Database not connected. Call connect() first.');
+      this.client = createClient({
+        url: this.url,
+        authToken: this.authToken
+      });
+      this.connected = true;
     }
     return drizzle(this.client, { schema });
   }

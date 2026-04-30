@@ -8,6 +8,13 @@
       "when": 1777324335676,
       "tag": "0000_windy_tag",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1714412400000,
+      "tag": "0001_sturdy_frost",
+      "breakpoints": true
     }
   ]
 }

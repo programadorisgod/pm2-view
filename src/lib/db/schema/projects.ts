@@ -3,7 +3,9 @@
 // No changes needed for multi-dialect support - the driver layer handles dialect translation.
 import { sqliteTable, text, integer } from 'drizzle-orm/sqlite-core';
 import { sql } from 'drizzle-orm';
+import { relations } from 'drizzle-orm';
 import { users } from './users';
+import { projectMembers } from './project-members';
 
 export const projects = sqliteTable('projects', {
 	id: text('id').primaryKey(),
@@ -13,6 +15,11 @@ export const projects = sqliteTable('projects', {
 	description: text('description'),
 	createdAt: integer('created_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`)
 });
+
+export const projectsRelations = relations(projects, ({ one, many }) => ({
+	owner: one(users, { fields: [projects.userId], references: [users.id] }),
+	projectMembers: many(projectMembers)
+}));
 
 export type Project = typeof projects.$inferSelect;
 export type NewProject = typeof projects.$inferInsert;

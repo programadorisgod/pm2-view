@@ -27,5 +27,28 @@ if (!building) {
 }
 
 export const handle: Handle = async ({ event, resolve }) => {
+	// Populate locals.user from session before svelteKitHandler processes
+	// This makes user available to all +layout.server.ts and +page.server.ts via event.locals
+	try {
+		const session = await auth.api.getSession({
+			headers: event.request.headers
+		});
+		if (session) {
+			event.locals.user = {
+				id: session.user.id,
+				email: session.user.email,
+				name: session.user.name ?? null,
+				emailVerified: session.user.emailVerified ?? false,
+				createdAt: session.user.createdAt ?? new Date(),
+				role: session.user.role ?? 'user',
+				banned: session.user.banned ?? false,
+				banReason: session.user.banReason ?? null,
+			};
+			event.locals.session = session.session;
+		}
+	} catch {
+		// No session or error — locals.user remains undefined
+	}
+
 	return svelteKitHandler({ event, resolve, auth, building });
 };

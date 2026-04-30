@@ -68,7 +68,10 @@ export class AuthRepository implements IAuthRepository {
 			email: user.email,
 			name: user.name,
 			emailVerified: user.emailVerified ?? false,
-			createdAt: user.createdAt
+			createdAt: user.createdAt,
+			role: (user as Record<string, unknown>).role as string ?? 'user',
+			banned: Boolean((user as Record<string, unknown>).banned) ?? false,
+			banReason: (user as Record<string, unknown>).banReason as string | null ?? null
 		};
 	}
 
@@ -82,7 +85,10 @@ export class AuthRepository implements IAuthRepository {
 				email: '',
 				name: null,
 				emailVerified: false,
-				createdAt: new Date()
+				createdAt: new Date(),
+				role: 'user',
+				banned: false,
+				banReason: null
 			},
 			token: session.token,
 			expiresAt: session.expiresAt

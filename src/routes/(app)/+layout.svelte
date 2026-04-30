@@ -11,14 +11,30 @@
 	let mobileMenuOpen = $state(false);
 	let userMenuOpen = $state(false);
 
+	let user = $derived(data.user);
+	let isAdmin = $derived(user?.role === 'admin');
+	let initials = $derived(user ? (user.name || user.email).substring(0, 2).toUpperCase() : '');
+	let adminExpanded = $derived(page.url.pathname.startsWith(`${base}/admin`));
+
 	let navItems = $derived([
 		{ label: 'Dashboard', href: `${base}/`, active: page.url.pathname === base || page.url.pathname === base + '/' },
-		{ label: 'Projects', href: `${base}/projects`, active: page.url.pathname.startsWith(`${base}/projects`) },
-		{ label: 'Metrics', href: `${base}/metrics`, active: page.url.pathname === `${base}/metrics` }
+		{ label: 'Projects', href: `${base}/projects`, active: page.url.pathname.startsWith(`${base}/projects`) && !page.url.pathname.includes('/sharing') },
+		{ label: 'Metrics', href: `${base}/metrics`, active: page.url.pathname === `${base}/metrics` },
+		...(isAdmin ? [
+			{
+				label: 'Admin',
+				href: `${base}/admin`,
+				active: page.url.pathname.startsWith(`${base}/admin`),
+				expanded: adminExpanded,
+				children: [
+					{ label: 'Users', href: `${base}/admin/users`, active: page.url.pathname === `${base}/admin/users` },
+					{ label: 'Teams', href: `${base}/admin/teams`, active: page.url.pathname.startsWith(`${base}/admin/teams`) },
+					{ label: 'Audit Logs', href: `${base}/admin/audit`, active: page.url.pathname === `${base}/admin/audit` },
+					{ label: 'Roles', href: `${base}/admin/roles`, active: page.url.pathname === `${base}/admin/roles` }
+				]
+			}
+		] : [])
 	]);
-
-	let user = $derived(data.user);
-	let initials = $derived(user ? (user.name || user.email).substring(0, 2).toUpperCase() : '');
 
 	async function handleLogout() {
 		userMenuOpen = false;
@@ -64,7 +80,6 @@
 						class="w-8 h-8 rounded-md flex items-center justify-center transition-colors"
 						style="color: var(--text-secondary);"
 						onclick={(e) => {
-							// Set CSS vars for circular reveal origin
 							const rect = (e.target as HTMLElement).getBoundingClientRect();
 							document.documentElement.style.setProperty('--x', `${rect.left + rect.width / 2}px`);
 							document.documentElement.style.setProperty('--y', `${rect.top + rect.height / 2}px`);
@@ -121,6 +136,9 @@
 										<p class="text-body-sm font-medium" style="color: var(--text-primary);">{user.name || user.email}</p>
 										{#if user.email}
 											<p class="text-caption" style="color: var(--text-muted);">{user.email}</p>
+										{/if}
+										{#if isAdmin}
+											<p class="text-caption" style="color: #38CDFF;">Admin</p>
 										{/if}
 									</div>
 

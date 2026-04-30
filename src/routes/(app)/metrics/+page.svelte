@@ -8,7 +8,8 @@
 
 	let { data }: { data: PageData } = $props();
 
-	let processes = $state<ProcessWithStatus[]>(data.processes ?? []);
+	const initialProcesses = data.processes ?? [];
+	let processes = $state<ProcessWithStatus[]>(initialProcesses);
 	let summary = $derived(data.summary);
 
 	let sseClient: ReturnType<typeof createSSEClient> | null = null;

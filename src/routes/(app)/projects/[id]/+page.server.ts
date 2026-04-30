@@ -3,6 +3,7 @@ import { PM2Service } from '$lib/pm2/pm2.service';
 import { EnvVarService } from '$lib/env-vars/env-var.service';
 import { createServices } from '$lib/services/factory';
 import { error, fail } from '@sveltejs/kit';
+import { hasPermission } from '$lib/auth/permissions';
 import { z } from 'zod';
 import type { PageServerLoad, Actions } from './$types';
 
@@ -35,9 +36,18 @@ export const load: PageServerLoad = async ({ params }) => {
 };
 
 export const actions: Actions = {
-	saveEnv: async ({ request, params }) => {
+	saveEnv: async ({ request, params, locals }) => {
 		const { envVarService } = createServices();
 		const { id } = params;
+
+		// Check permission - only owner and editor can update
+		const memberRole = (locals as any)?.memberRole;
+		const user = (locals as any)?.user;
+
+		if (memberRole === 'viewer' || (user && user.role === 'viewer')) {
+			throw error(403, 'Access denied: Insufficient permissions to modify project');
+		}
+
 		const formData = await request.formData();
 		const data = Object.fromEntries(formData);
 

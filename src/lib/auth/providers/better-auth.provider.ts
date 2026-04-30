@@ -39,21 +39,24 @@ export class BetterAuthProvider implements AuthProvider {
     return this.normalizeSession(result);
   }
 
-  private normalizeSession(raw: unknown): AuthSession {
-    const result = raw as Record<string, unknown>;
-    const user = result.user as Record<string, unknown>;
-    const session = result.session as Record<string, unknown> | undefined;
+	private normalizeSession(raw: unknown): AuthSession {
+		const result = raw as Record<string, unknown>;
+		const user = result.user as Record<string, unknown>;
+		const session = result.session as Record<string, unknown> | undefined;
 
-    return {
-      user: {
-        id: user.id as string,
-        email: user.email as string,
-        name: (user.name as string) ?? null,
-        emailVerified: Boolean(user.emailVerified),
-        createdAt: new Date(user.createdAt as string)
-      },
-      token: (result.token ?? session?.token ?? '') as string,
-      expiresAt: new Date((session?.expiresAt ?? user.expiresAt) as string)
-    };
-  }
+		return {
+			user: {
+				id: user.id as string,
+				email: user.email as string,
+				name: (user.name as string) ?? null,
+				emailVerified: Boolean(user.emailVerified),
+				createdAt: new Date(user.createdAt as string),
+				role: (user.role as string) ?? 'user',
+				banned: Boolean(user.banned),
+				banReason: (user.banReason as string) ?? null
+			},
+			token: (result.token ?? session?.token ?? '') as string,
+			expiresAt: new Date((session?.expiresAt ?? user.expiresAt) as string)
+		};
+	}
 }

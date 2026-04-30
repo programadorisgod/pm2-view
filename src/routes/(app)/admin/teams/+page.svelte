@@ -249,6 +249,19 @@
 					<div>
 						<h3 class="text-h3 font-semibold" style="color: var(--text-primary);">{team.name}</h3>
 						<p class="text-caption" style="color: var(--text-muted);">{team.description || 'No description'}</p>
+						<div class="flex items-center gap-sm mt-1">
+							<span class="text-caption font-mono" style="color: var(--text-muted);">ID: {team.id.slice(0, 12)}…</span>
+							<button
+								class="text-caption px-1 py-0.5 rounded transition-colors hover:bg-[var(--bg-card)]"
+								style="color: #38CDFF;"
+								onclick={async () => {
+									await navigator.clipboard.writeText(team.id);
+								}}
+								title="Copy full Team ID"
+							>
+								📋 Copy ID
+							</button>
+						</div>
 					</div>
 					<div class="flex items-center gap-sm">
 						<span class="text-caption" style="color: var(--text-muted);">

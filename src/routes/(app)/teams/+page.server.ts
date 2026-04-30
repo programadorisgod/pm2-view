@@ -1,5 +1,4 @@
 import { createTeamRepository } from '$lib/db/repositories/team-repository.impl';
-import { createTeamService } from '$lib/services/admin/team.service';
 import { auth } from '$lib/auth';
 import { error, fail } from '@sveltejs/kit';
 import type { PageServerLoad, Actions } from './$types';
@@ -52,24 +51,26 @@ export const actions: Actions = {
 		}
 
 		const teamRepo = createTeamRepository();
-		const team = await teamRepo.findById(teamId) as any;
 
+		// Check team exists
+		const team = await teamRepo.findById(teamId) as any;
 		if (!team) {
+			console.error(`[joinTeam] Team not found: ${teamId}`);
 			return fail(404, { error: 'Team not found' });
 		}
 
 		// Check if already a member
-		const existingMember = team.teamMembers?.find((m: any) => m.userId === locals.user.id);
+		const existingMember = await teamRepo.findMember(teamId, locals.user.id);
 		if (existingMember) {
 			return fail(409, { error: 'You are already a member of this team' });
 		}
 
 		try {
-			const teamService = createTeamService();
-			await teamService.addMember(teamId, locals.user.id, 'team_member', locals.user.id);
+			await teamRepo.addMember(teamId, locals.user.id, 'team_member');
 			return { success: true, message: 'Joined team successfully' };
 		} catch (e: any) {
-			return fail(e.status ?? 500, { error: e.message ?? 'Failed to join team' });
+			console.error(`[joinTeam] Error joining team ${teamId}:`, e);
+			return fail(500, { error: e.message || 'Failed to join team' });
 		}
 	}
 };

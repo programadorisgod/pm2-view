@@ -28,6 +28,7 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 		// Auto-provision: create project record if it doesn't exist yet
 		if (!project) {
 			const [created] = await db.insert(projects).values({
+				id: crypto.randomUUID(),
 				userId: locals.user.id,
 				name: pm2Process.name,
 				pm2Name: pm2Process.name,

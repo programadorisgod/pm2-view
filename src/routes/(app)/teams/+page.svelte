@@ -21,15 +21,16 @@
 		}
 	}
 
-	function handleJoinResult({ result }: { result: Record<string, any> }) {
-		joinTeamLoading = false;
-		if (result.type === 'success') {
-			feedback = { type: 'success', text: result.data?.message || 'Joined team successfully' };
-			showJoinModal = false;
-			joinTeamId = '';
-		} else {
-			feedback = { type: 'error', text: result.data?.error || 'Failed to join team' };
-		}
+	function handleJoinResult() {
+		return async ({ result }: { result: any }) => {
+			if (result.type === 'success') {
+				feedback = { type: 'success', text: result.data?.message || 'Joined team successfully' };
+				showJoinModal = false;
+				joinTeamId = '';
+			} else {
+				feedback = { type: 'error', text: result.data?.error || 'Failed to join team' };
+			}
+		};
 	}
 </script>
 

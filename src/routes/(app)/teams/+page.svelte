@@ -2,7 +2,7 @@
 	import { Card, Badge, FeedbackBanner } from '$lib/ui/components';
 	import { base } from '$app/paths';
 	import type { PageData } from './$types';
-	import { invalidateAll } from '$app/navigation';
+	import { enhance } from '$app/forms';
 
 	let { data }: { data: PageData } = $props();
 
@@ -21,33 +21,14 @@
 		}
 	}
 
-	async function handleJoinTeam() {
-		if (!joinTeamId.trim()) return;
-		joinTeamLoading = true;
-		feedback = null;
-
-		try {
-			const formData = new FormData();
-			formData.append('teamId', joinTeamId.trim());
-
-			const res = await fetch(`${base}/teams?/joinTeam`, {
-				method: 'POST',
-				body: formData
-			});
-
-			const result = await res.json();
-			if (result.success) {
-				feedback = { type: 'success', text: result.message };
-				showJoinModal = false;
-				joinTeamId = '';
-				await invalidateAll();
-			} else {
-				feedback = { type: 'error', text: result.error || 'Failed to join team' };
-			}
-		} catch {
-			feedback = { type: 'error', text: 'Failed to join team' };
-		} finally {
-			joinTeamLoading = false;
+	function handleJoinResult({ result }: { result: Record<string, any> }) {
+		joinTeamLoading = false;
+		if (result.type === 'success') {
+			feedback = { type: 'success', text: result.data?.message || 'Joined team successfully' };
+			showJoinModal = false;
+			joinTeamId = '';
+		} else {
+			feedback = { type: 'error', text: result.data?.error || 'Failed to join team' };
 		}
 	}
 </script>
@@ -112,7 +93,7 @@
 <!-- Join Team Modal -->
 {#if showJoinModal}
 	<div class="fixed inset-0 z-50 flex items-center justify-center" style="background: rgba(0,0,0,0.5);">
-		<div class="w-full max-w-md p-xl rounded-lg" style="background: var(--bg-surface); border: 1px solid var(--border-color);">
+		<form method="POST" action="?/joinTeam" use:enhance={handleJoinResult} class="w-full max-w-md p-xl rounded-lg" style="background: var(--bg-surface); border: 1px solid var(--border-color);">
 			<h2 class="text-h3 font-semibold mb-lg" style="color: var(--text-primary);">Join Team</h2>
 			<p class="text-body-sm mb-md" style="color: var(--text-secondary);">
 				Enter the Team ID to join. You can get this from a team admin.
@@ -123,6 +104,7 @@
 					<label for="join-team-id" class="block text-caption mb-1" style="color: var(--text-secondary);">Team ID</label>
 					<input
 						id="join-team-id"
+						name="teamId"
 						type="text"
 						bind:value={joinTeamId}
 						class="w-full px-4 py-2 rounded-md border text-body-sm font-mono"
@@ -134,19 +116,20 @@
 
 			<div class="flex gap-md mt-xl justify-end">
 				<button
+					type="button"
 					class="btn-secondary px-4 py-2 text-body-sm"
 					onclick={() => { showJoinModal = false; joinTeamId = ''; }}
 				>
 					Cancel
 				</button>
 				<button
+					type="submit"
 					class="btn-primary px-4 py-2 text-body-sm"
-					onclick={handleJoinTeam}
-					disabled={!joinTeamId.trim() || joinTeamLoading}
+					disabled={!joinTeamId.trim()}
 				>
-					{joinTeamLoading ? 'Joining...' : 'Join'}
+					Join
 				</button>
 			</div>
-		</div>
+		</form>
 	</div>
 {/if}

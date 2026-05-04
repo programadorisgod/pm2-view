@@ -1,7 +1,7 @@
 import { createServices } from '$lib/services/factory';
 import { ProjectRepository } from '$lib/db/repositories/project-repository.impl';
 import { ProjectFavoriteRepository } from '$lib/db/repositories/project-favorite-repository.impl';
-import { TeamRepository } from '$lib/db/repositories/team-repository.interface';
+import { TeamRepository } from '$lib/db/repositories/team-repository.impl';
 import type { IProjectRepository, Project } from '$lib/projects/project.types';
 import type { ITeamRepository, Team } from '$lib/db/repositories/team-repository.interface';
 import type { ProcessWithStatus } from '$lib/pm2/pm2.types';

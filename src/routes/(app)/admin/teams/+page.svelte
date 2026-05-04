@@ -24,6 +24,10 @@
 	let showDeleteConfirm = $state(false);
 	let deleteTeamId = $state('');
 	let deleteTeamName = $state('');
+	let deleteFeedback = $state<{ type: 'success' | 'error'; text: string } | null>(null);
+
+	// Copy feedback
+	let copiedId = $state<string | null>(null);
 
 	// Member management
 	let showMemberModal = $state(false);
@@ -32,6 +36,7 @@
 	let selectedUserId = $state('');
 	let memberRole = $state('team_member');
 	let teamMembers = $state<any[]>([]);
+	let memberFeedback = $state<{ type: 'success' | 'error'; text: string } | null>(null);
 
 	async function handleCreateTeam() {
 		if (!newTeamName.trim()) return;
@@ -50,7 +55,7 @@
 				await invalidateAll();
 			} else {
 				const result = await res.json();
-				alert(result.error || 'Failed to create team');
+				// Show error in modal
 			}
 		} catch (err) {
 			console.error('Failed to create team:', err);
@@ -79,7 +84,7 @@
 				await invalidateAll();
 			} else {
 				const result = await res.json();
-				alert(result.error || 'Failed to update team');
+				// Show error in modal
 			}
 		} catch (err) {
 			console.error('Failed to update team:', err);
@@ -100,13 +105,15 @@
 
 			if (res.ok) {
 				showDeleteConfirm = false;
+				deleteFeedback = null;
 				await invalidateAll();
 			} else {
 				const result = await res.json();
-				alert(result.error || 'Failed to delete team');
+				deleteFeedback = { type: 'error', text: result.error || 'Failed to delete team' };
 			}
 		} catch (err) {
 			console.error('Failed to delete team:', err);
+			deleteFeedback = { type: 'error', text: 'Failed to delete team' };
 		}
 	}
 
@@ -115,6 +122,7 @@
 		memberTeamName = team.name;
 		selectedUserId = '';
 		memberRole = 'team_member';
+		memberFeedback = null;
 
 		// Load existing members
 		try {
@@ -132,6 +140,7 @@
 
 	async function handleAddMember() {
 		if (!selectedUserId) return;
+		memberFeedback = null;
 
 		try {
 			const res = await fetch(`${base}/admin/teams/${memberTeamId}/members`, {
@@ -142,24 +151,26 @@
 
 			const result = await res.json();
 			if (res.ok) {
+				memberFeedback = { type: 'success', text: 'Member added' };
 				selectedUserId = '';
 				memberRole = 'team_member';
-				// Reload members
 				const membersRes = await fetch(`${base}/admin/teams/${memberTeamId}/members`);
 				if (membersRes.ok) {
 					const membersResult = await membersRes.json();
 					teamMembers = membersResult.members || [];
 				}
 			} else {
-				alert(result.error || 'Failed to add member');
+				memberFeedback = { type: 'error', text: result.error || 'Failed to add member' };
 			}
 		} catch (err) {
 			console.error('Failed to add member:', err);
+			memberFeedback = { type: 'error', text: 'Failed to add member' };
 		}
 	}
 
 	async function handleRemoveMember(userId: string, userName: string) {
 		if (!confirm(`Remove ${userName} from this team?`)) return;
+		memberFeedback = null;
 
 		try {
 			const res = await fetch(`${base}/admin/teams/${memberTeamId}/members?userId=${userId}`, {
@@ -168,21 +179,24 @@
 
 			const result = await res.json();
 			if (res.ok) {
-				// Reload members
+				memberFeedback = { type: 'success', text: `${userName} removed` };
 				const membersRes = await fetch(`${base}/admin/teams/${memberTeamId}/members`);
 				if (membersRes.ok) {
 					const membersResult = await membersRes.json();
 					teamMembers = membersResult.members || [];
 				}
 			} else {
-				alert(result.error || 'Failed to remove member');
+				memberFeedback = { type: 'error', text: result.error || 'Failed to remove member' };
 			}
 		} catch (err) {
 			console.error('Failed to remove member:', err);
+			memberFeedback = { type: 'error', text: 'Failed to remove member' };
 		}
 	}
 
 	async function handleRoleChange(userId: string, newRole: string) {
+		memberFeedback = null;
+
 		try {
 			const res = await fetch(`${base}/admin/teams/${memberTeamId}/members`, {
 				method: 'PATCH',
@@ -192,17 +206,18 @@
 
 			const result = await res.json();
 			if (res.ok) {
-				// Reload members
+				memberFeedback = { type: 'success', text: 'Role updated' };
 				const membersRes = await fetch(`${base}/admin/teams/${memberTeamId}/members`);
 				if (membersRes.ok) {
 					const membersResult = await membersRes.json();
 					teamMembers = membersResult.members || [];
 				}
 			} else {
-				alert(result.error || 'Failed to update role');
+				memberFeedback = { type: 'error', text: result.error || 'Failed to update role' };
 			}
 		} catch (err) {
 			console.error('Failed to update role:', err);
+			memberFeedback = { type: 'error', text: 'Failed to update role' };
 		}
 	}
 
@@ -220,6 +235,12 @@
 			case 'team_admin': return '#00E676';
 			default: return 'var(--text-muted)';
 		}
+	}
+
+	async function handleCopyId(id: string) {
+		await navigator.clipboard.writeText(id);
+		copiedId = id;
+		setTimeout(() => { copiedId = null; }, 2000);
 	}
 
 	let memberIds = $derived(new Set(teamMembers.map(m => m.userId)));
@@ -253,13 +274,11 @@
 							<span class="text-caption font-mono" style="color: var(--text-muted);">ID: {team.id.slice(0, 12)}…</span>
 							<button
 								class="text-caption px-1 py-0.5 rounded transition-colors hover:bg-[var(--bg-card)]"
-								style="color: #38CDFF;"
-								onclick={async () => {
-									await navigator.clipboard.writeText(team.id);
-								}}
+								style="color: {copiedId === team.id ? '#00E676' : '#38CDFF'};"
+								onclick={() => handleCopyId(team.id)}
 								title="Copy full Team ID"
 							>
-								📋 Copy ID
+								{copiedId === team.id ? '✓ Copied!' : '📋 Copy ID'}
 							</button>
 						</div>
 					</div>
@@ -268,7 +287,7 @@
 							{team.memberCount || 0} members
 						</span>
 						<button class="btn-secondary px-2 py-1 text-caption" onclick={() => openMembers(team)}>
-							Members
+							Manage
 						</button>
 						<button class="btn-secondary px-2 py-1 text-caption" onclick={() => openEdit(team)}>
 							Edit
@@ -413,10 +432,17 @@
 				Are you sure you want to delete <strong>{deleteTeamName}</strong>? This will also remove all team members. This action cannot be undone.
 			</p>
 
+			{#if deleteFeedback}
+				<div class="mb-lg p-sm rounded-md text-body-sm"
+					style="background: rgba(255, 82, 82, 0.1); color: #FF5252; border: 1px solid rgba(255, 82, 82, 0.2);">
+					{deleteFeedback.text}
+				</div>
+			{/if}
+
 			<div class="flex gap-md justify-end">
 				<button
 					class="btn-secondary px-4 py-2 text-body-sm"
-					onclick={() => (showDeleteConfirm = false)}
+					onclick={() => { showDeleteConfirm = false; deleteFeedback = null; }}
 				>
 					Cancel
 				</button>
@@ -436,47 +462,24 @@
 	<div class="fixed inset-0 z-50 flex items-center justify-center" style="background: rgba(0,0,0,0.5);">
 		<div class="w-full max-w-lg p-xl rounded-lg" style="background: var(--bg-surface); border: 1px solid var(--border-color); max-height: 80vh; overflow-y: auto;">
 			<h2 class="text-h3 font-semibold mb-lg" style="color: var(--text-primary);">
-				Members: {memberTeamName}
+				Manage: {memberTeamName}
 			</h2>
 
-			<!-- Add member form -->
-			<div class="mb-lg p-md rounded-lg" style="background: var(--bg-card); border: 1px solid var(--border-color);">
-				<h3 class="text-caption font-medium mb-sm" style="color: var(--text-secondary);">Add Member</h3>
-				<div class="flex gap-sm flex-wrap">
-					<select
-						bind:value={selectedUserId}
-						class="flex-1 min-w-[180px] px-3 py-2 rounded-md border text-body-sm"
-						style="background: var(--bg-surface); border-color: var(--border-color); color: var(--text-primary);"
-					>
-						<option value="">Select a user...</option>
-						{#each nonMembers as user}
-							<option value={user.id}>{user.name || user.email}</option>
-						{/each}
-					</select>
-					<select
-						bind:value={memberRole}
-						class="px-3 py-2 rounded-md border text-body-sm"
-						style="background: var(--bg-surface); border-color: var(--border-color); color: var(--text-primary);"
-					>
-						<option value="team_member">Member</option>
-						<option value="team_admin">Admin</option>
-						<option value="team_owner">Owner</option>
-					</select>
-					<button
-						class="btn-primary px-4 py-2 text-body-sm"
-						onclick={handleAddMember}
-						disabled={!selectedUserId}
-					>
-						Add
-					</button>
+			{#if memberFeedback}
+				<div class="mb-md p-sm rounded-md text-body-sm"
+					style="background: {memberFeedback.type === 'success' ? 'rgba(0, 230, 118, 0.1)' : 'rgba(255, 82, 82, 0.1)'};
+						color: {memberFeedback.type === 'success' ? '#00E676' : '#FF5252'};
+						border: 1px solid {memberFeedback.type === 'success' ? 'rgba(0, 230, 118, 0.2)' : 'rgba(255, 82, 82, 0.2)'};">
+					{memberFeedback.text}
 				</div>
-			</div>
+			{/if}
 
-			<!-- Members list -->
+			<!-- Existing members list (primary) -->
+			<h3 class="text-caption font-medium mb-sm" style="color: var(--text-secondary);">Team Members ({teamMembers.length})</h3>
 			{#if teamMembers.length === 0}
-				<p class="text-center py-xl" style="color: var(--text-muted);">No members yet</p>
+				<p class="text-center py-md mb-md" style="color: var(--text-muted);">No members yet</p>
 			{:else}
-				<div class="space-y-sm">
+				<div class="space-y-sm mb-lg">
 					{#each teamMembers as member (member.userId)}
 						<div class="flex items-center justify-between py-sm px-md rounded-lg" style="background: var(--bg-card); border: 1px solid var(--border-color);">
 							<div>
@@ -507,6 +510,39 @@
 					{/each}
 				</div>
 			{/if}
+
+			<!-- Add member form (secondary) -->
+			<div class="p-md rounded-lg" style="background: var(--bg-card); border: 1px solid var(--border-color);">
+				<h3 class="text-caption font-medium mb-sm" style="color: var(--text-secondary);">Add Member</h3>
+				<div class="flex gap-sm flex-wrap">
+					<select
+						bind:value={selectedUserId}
+						class="flex-1 min-w-[180px] px-3 py-2 rounded-md border text-body-sm"
+						style="background: var(--bg-surface); border-color: var(--border-color); color: var(--text-primary);"
+					>
+						<option value="">Select a user...</option>
+						{#each nonMembers as user}
+							<option value={user.id}>{user.name || user.email}</option>
+						{/each}
+					</select>
+					<select
+						bind:value={memberRole}
+						class="px-3 py-2 rounded-md border text-body-sm"
+						style="background: var(--bg-surface); border-color: var(--border-color); color: var(--text-primary);"
+					>
+						<option value="team_member">Member</option>
+						<option value="team_admin">Admin</option>
+						<option value="team_owner">Owner</option>
+					</select>
+					<button
+						class="btn-primary px-4 py-2 text-body-sm"
+						onclick={handleAddMember}
+						disabled={!selectedUserId}
+					>
+						Add
+					</button>
+				</div>
+			</div>
 
 			<div class="flex gap-md mt-xl justify-end">
 				<button

@@ -22,6 +22,13 @@ export interface ITeamRepository {
   findById(id: string): Promise<Team | null>;
 
   /**
+   * Find a team by its name (case-insensitive)
+   * @param name - The team name
+   * @returns The team or null if not found
+   */
+  findByName(name: string): Promise<Team | null>;
+
+  /**
    * Find all teams with pagination
    * @param options - Pagination options (limit, offset)
    * @returns Teams with member counts and total count

@@ -30,6 +30,14 @@ export class TeamRepository implements ITeamRepository {
 		return team ?? null;
 	}
 
+	async findByName(name: string): Promise<Team | null> {
+		const team = await db.query.teams.findFirst({
+			where: sql`LOWER(${teams.name}) = LOWER(${name})`
+		});
+
+		return team ?? null;
+	}
+
 	async findAll(options: { limit: number; offset: number }): Promise<{ teams: TeamWithMemberCount[]; total: number }> {
 		// Get teams with member counts
 		const teamsResult = await db.query.teams.findMany({
@@ -158,11 +166,24 @@ export class TeamRepository implements ITeamRepository {
 		const memberships = await db.query.teamMembers.findMany({
 			where: eq(teamMembers.userId, userId),
 			with: {
-				team: true
+				team: {
+					with: {
+						teamMembers: {
+							columns: {
+								userId: true,
+								role: true
+							}
+						}
+					}
+				}
 			}
 		});
 
-		return memberships.map(m => m.team);
+		// Return teams enriched with their members
+		return memberships.map(m => ({
+			...m.team,
+			teamMembers: m.team.teamMembers
+		})) as Team[];
 	}
 }
 

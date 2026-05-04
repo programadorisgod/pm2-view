@@ -52,8 +52,7 @@ export class TeamService {
 
   async createTeam(input: CreateTeamInput, actorId: string): Promise<Team> {
     // Check duplicate name
-    const existingTeams = await this.teamRepo.findAll({ limit: 1000, offset: 0 });
-    const duplicate = existingTeams.teams.find(t => t.name.toLowerCase() === input.name.toLowerCase());
+    const duplicate = await this.teamRepo.findByName(input.name);
     if (duplicate) {
       throw error(409, `Team with name "${input.name}" already exists`);
     }
@@ -93,9 +92,8 @@ export class TeamService {
 
     // Check duplicate name if renaming
     if (updates.name && updates.name !== existing.name) {
-      const allTeams = await this.teamRepo.findAll({ limit: 1000, offset: 0 });
-      const duplicate = allTeams.teams.find(t => t.name.toLowerCase() === updates.name!.toLowerCase() && t.id !== id);
-      if (duplicate) {
+      const duplicate = await this.teamRepo.findByName(updates.name);
+      if (duplicate && duplicate.id !== id) {
         throw error(409, `Team with name "${updates.name}" already exists`);
       }
     }

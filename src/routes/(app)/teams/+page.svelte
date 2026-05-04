@@ -1,8 +1,9 @@
-<script lang="ts">
+	<script lang="ts">
 	import { Card, Badge, FeedbackBanner } from '$lib/ui/components';
 	import { base } from '$app/paths';
 	import type { PageData } from './$types';
 	import { enhance } from '$app/forms';
+	import { invalidateAll } from '$app/navigation';
 
 	let { data }: { data: PageData } = $props();
 
@@ -12,6 +13,13 @@
 	let showJoinModal = $state(false);
 	let joinTeamId = $state('');
 	let joinTeamLoading = $state(false);
+	let feedbackTimer: ReturnType<typeof setTimeout> | null = null;
+
+	function showFeedback(type: 'success' | 'error', text: string) {
+		if (feedbackTimer) clearTimeout(feedbackTimer);
+		feedback = { type, text };
+		feedbackTimer = setTimeout(() => { feedback = null; }, 3000);
+	}
 
 	function roleBadge(role: string): { label: string; variant: 'online' | 'stopped' | 'error' | 'offline' } {
 		switch (role) {
@@ -24,11 +32,12 @@
 	function handleJoinResult() {
 		return async ({ result }: { result: any }) => {
 			if (result.type === 'success') {
-				feedback = { type: 'success', text: result.data?.message || 'Joined team successfully' };
+				showFeedback('success', result.data?.message || 'Joined team successfully');
 				showJoinModal = false;
 				joinTeamId = '';
+				await invalidateAll();
 			} else {
-				feedback = { type: 'error', text: result.data?.error || 'Failed to join team' };
+				showFeedback('error', result.data?.error || 'Failed to join team');
 			}
 		};
 	}
@@ -47,7 +56,9 @@
 	</div>
 
 	{#if feedback}
-		<FeedbackBanner type={feedback.type} message={feedback.text} />
+		<div class="mb-lg">
+			<FeedbackBanner type={feedback.type} message={feedback.text} onDismiss={() => { feedback = null; if (feedbackTimer) clearTimeout(feedbackTimer); }} />
+		</div>
 	{/if}
 
 	{#if teams.length === 0}

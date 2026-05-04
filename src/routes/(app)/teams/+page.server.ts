@@ -15,21 +15,18 @@ export const load: PageServerLoad = async (event) => {
 	const teamRepo = createTeamRepository();
 	const teams = await teamRepo.getUserTeams(session.user.id);
 
-	// Enrich with member counts and user's role
-	const enrichedTeams = await Promise.all(
-		teams.map(async (team) => {
-			const fullTeam = await teamRepo.findById(team.id) as any;
-			const members = fullTeam?.teamMembers ?? [];
-			return {
-				id: team.id,
-				name: team.name,
-				description: team.description,
-				createdAt: team.createdAt,
-				memberCount: members.length,
-				userRole: members.find((m: any) => m.userId === session.user.id)?.role ?? 'team_member'
-			};
-		})
-	);
+	// Teams already include member data from getUserTeams
+	const enrichedTeams = teams.map((team: any) => {
+		const members = team.teamMembers ?? [];
+		return {
+			id: team.id,
+			name: team.name,
+			description: team.description,
+			createdAt: team.createdAt,
+			memberCount: members.length,
+			userRole: members.find((m: any) => m.userId === session.user.id)?.role ?? 'team_member'
+		};
+	});
 
 	return {
 		teams: enrichedTeams,

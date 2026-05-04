@@ -1,9 +1,32 @@
 import { json, error } from '@sveltejs/kit';
 import { adminHandler } from '$lib/server/admin-handler';
 import { createTeamService } from '$lib/services/admin/team.service';
+import { createTeamRepository } from '$lib/db/repositories/team-repository.impl';
 import { addTeamMemberSchema, updateTeamMemberSchema } from '$lib/validation/team-schemas';
 
 const teamService = createTeamService();
+
+export const GET = adminHandler(async ({ params }) => {
+	const teamId = params.id;
+	if (!teamId) {
+		throw new Error('Team ID is required');
+	}
+
+	const teamRepo = createTeamRepository();
+	const team = await teamRepo.findById(teamId) as any;
+	if (!team) {
+		throw error(404, 'Team not found');
+	}
+
+	const members = (team.teamMembers ?? []).map((tm: any) => ({
+		userId: tm.userId,
+		role: tm.role,
+		joinedAt: tm.createdAt,
+		user: tm.user
+	}));
+
+	return json({ members });
+});
 
 export const POST = adminHandler(async ({ params, request }, user) => {
 	const teamId = params.id;

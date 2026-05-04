@@ -1,13 +1,12 @@
 import { exec } from 'child_process';
 import { promisify } from 'util';
-import { readFile, existsSync } from 'fs';
+import { existsSync } from 'fs';
 import type { IPM2Repository, PM2Process, PM2Log } from './pm2.types';
 import { normalizePagination, type PaginationParams, type PaginatedResult } from '$lib/pagination';
 import { escapeShellArg } from '$lib/utils/shell';
 import { logger } from '$lib/logger';
 
 const execAsync = promisify(exec);
-const readFileAsync = promisify(readFile);
 
 export class PM2Repository implements IPM2Repository {
 	async list(params?: PaginationParams): Promise<PM2Process[] | PaginatedResult<PM2Process>> {
@@ -86,8 +85,9 @@ export class PM2Repository implements IPM2Repository {
 
 	private async readLogFile(path: string, lines: number): Promise<string[]> {
 		try {
-			const content = await readFileAsync(path, 'utf-8');
-			return content.split('\n').filter(l => l.trim()).slice(-lines);
+			const safePath = escapeShellArg(path);
+			const { stdout } = await execAsync(`tail -n ${lines} ${safePath}`);
+			return stdout.split('\n').filter(l => l.trim());
 		} catch (error) {
 			logger.warn('Failed to read log file', { path, error: String(error) });
 			return [];

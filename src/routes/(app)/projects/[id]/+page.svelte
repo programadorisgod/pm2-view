@@ -25,12 +25,31 @@
   let logs = $state<
     Array<{ type: "out" | "err"; data: string; timestamp: Date }>
   >([]);
+  let loadedLines = $state(50);
+  let loadingMore = $state(false);
 
   $effect(() => {
     if (initialLogs && initialLogs.length > 0) {
       logs = initialLogs;
     }
   });
+
+  async function loadMoreLogs() {
+    loadingMore = true;
+    const newCount = loadedLines + 200;
+    try {
+      const res = await fetch(`${base}/projects/${process.pm_id}/logs?lines=${newCount}`);
+      const result = await res.json();
+      if (result.success) {
+        logs = result.logs;
+        loadedLines = newCount;
+      }
+    } catch {
+      // Silent fail - SSE will keep providing new logs
+    } finally {
+      loadingMore = false;
+    }
+  }
 
   // Scroll to bottom on initial load (resets when tab changes)
   $effect(() => {
@@ -461,6 +480,18 @@
           </div>
         </Card>
       {:else if activeTab === "logs"}
+        <div class="flex items-center justify-between mb-md">
+          <p class="text-caption" style="color: var(--text-muted);">
+            Showing last {loadedLines} lines · Real-time updates active
+          </p>
+          <button
+            class="btn-secondary px-3 py-1.5 text-caption"
+            onclick={loadMoreLogs}
+            disabled={loadingMore}
+          >
+            {loadingMore ? "Loading..." : "Load more"}
+          </button>
+        </div>
         <div class="grid grid-cols-1 lg:grid-cols-2 gap-md">
           <!-- OUT Panel -->
           <Card>

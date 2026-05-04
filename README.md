@@ -12,10 +12,13 @@ A beautiful, modern visual dashboard for managing PM2 processes. Monitor CPU, RA
 - **Authentication** — Pluggable auth system (Better Auth included, swap with any provider)
 - **Dashboard** — Overview of all PM2 processes with real-time status
 - **Project Cards** — Beautiful cards showing CPU, RAM, uptime, and status
+- **Favorites** — Star projects to quickly find them, filter by favorites in the list
 - **Process Actions** — Restart, stop, and delete processes directly from the UI
 - **Real-time Logs** — Live log streaming via Server-Sent Events (SSE) with auto-scroll
+- **Efficient Log Reading** — Uses `tail -n` for fast log loading, "Load more" button for history
 - **Real-time Metrics** — Push-based CPU/RAM updates every 10s via SSE
 - **Environment Variables** — View, edit, add, and delete env vars with auto-restart on save
+- **Teams** — Manage teams, invite members, assign roles (owner, admin, member), team-based project access
 - **Metrics Dashboard** — Visual CPU/RAM bars, aggregated stats
 - **Dark/Light Mode** — Toggle between themes with smooth transitions
 - **Premium Animations** — Page transitions, staggered lists, smooth tab switching
@@ -49,7 +52,8 @@ src/lib/
 │   ├── drivers/       # DB implementations (libsql, postgres)
 │   ├── dialect-registry.ts  # Extensible dialect detection
 │   ├── factory.ts     # Driver factory
-│   └── schema/        # Drizzle schema definitions
+│   ├── schema/        # Drizzle schema definitions
+│   └── repositories/  # Data access implementations
 ├── sse/               # Real-time communication
 │   ├── sse-manager.ts # Server-side connection manager
 │   ├── client.ts      # Browser EventSource wrapper
@@ -273,6 +277,8 @@ pm2-view/
 │   ├── lib/
 │   │   ├── auth/           # Auth domain (pluggable)
 │   │   ├── db/             # Database (dialect-agnostic)
+│   │   │   ├── schema/     # Drizzle schema (projects, teams, favorites, etc.)
+│   │   │   └── repositories/ # Data access implementations
 │   │   ├── sse/            # Real-time SSE communication
 │   │   ├── services/       # DI factory
 │   │   ├── logger/         # Structured logging
@@ -287,7 +293,7 @@ pm2-view/
 │   │   └── config/         # Configuration
 │   ├── routes/
 │   │   ├── (auth)/         # Login, register
-│   │   ├── (app)/          # Protected routes
+│   │   ├── (app)/          # Protected routes (projects, teams, admin)
 │   │   └── api/            # API endpoints (including /api/sse)
 │   ├── app.css             # Global styles
 │   └── app.html            # HTML shell
@@ -308,6 +314,8 @@ pm2-view/
 - Auth guard on all protected routes
 - Shell commands sanitized with `escapeShellArg()` to prevent command injection
 - Rate limiting on API endpoints (100 req/min per IP)
+- Team-based access control — users only see projects they own or have team access to
+- Team detail pages protected — non-members get 403
 
 See [SECURITY.md](SECURITY.md) for vulnerability reporting.
 

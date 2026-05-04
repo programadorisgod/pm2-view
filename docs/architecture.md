@@ -41,6 +41,9 @@ graph TB
             PM2R[PM2Repository]
             MR[MetricsRepository]
             ER[EnvVarRepository]
+            TFR[TeamRepository]
+            TMR[TeamMemberRepository]
+            PFR[ProjectFavoriteRepository]
         end
     end
 

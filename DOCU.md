@@ -12,9 +12,11 @@
 8. [Rate Limiting](#rate-limiting)
 9. [Pagination](#pagination)
 10. [Logging](#logging)
-11. [Security](#security)
-12. [Development](#development)
-13. [Deployment](#deployment)
+11. [Teams](#teams)
+12. [Favorites](#favorites)
+13. [Security](#security)
+14. [Development](#development)
+15. [Deployment](#deployment)
 
 ---
 
@@ -56,6 +58,8 @@ PM2 View is a SvelteKit-based dashboard for monitoring and managing PM2 processe
 |-----------|---------|
 | `src/lib/auth/` | Authentication domain with pluggable providers |
 | `src/lib/db/` | Database abstraction with dialect-agnostic drivers |
+| `src/lib/db/schema/` | Drizzle schema definitions (projects, teams, favorites, etc.) |
+| `src/lib/db/repositories/` | Data access implementations |
 | `src/lib/sse/` | Server-Sent Events for real-time communication |
 | `src/lib/services/` | Dependency injection factory |
 | `src/lib/logger/` | Structured logging abstraction |
@@ -246,7 +250,7 @@ PM2 View communicates with PM2 via CLI commands:
 | Restart | `pm2 restart '<name>'` |
 | Stop | `pm2 stop '<name>'` |
 | Delete | `pm2 delete '<name>'` |
-| Read logs | Read PM2 log files via `fs.promises.readFile` |
+| Read logs | `tail -n <lines> <logfile>` (efficient, reads only last N lines) |
 
 ### Security
 
@@ -258,9 +262,9 @@ All process names passed to shell commands are sanitized with `escapeShellArg()`
 await execAsync(`pm2 restart ${escapeShellArg(name)}`);
 ```
 
-### Async File Reading
+### Log Reading
 
-Log files are read asynchronously with `fs.promises.readFile` — never blocking the event loop.
+Logs are read efficiently using `tail -n <path>` — only the last N lines are fetched, never the entire file. This prevents loading megabytes of logs into memory. The UI includes a "Load more" button that fetches 200 additional lines per click.
 
 ---
 
@@ -371,6 +375,64 @@ Set `DEBUG=true` in environment to enable debug-level logging.
 ### Environment Variables Masking
 
 Sensitive env var keys (containing PASSWORD, SECRET, TOKEN, KEY, API, AUTH) are masked in the UI as `••••••••••••` with a show/hide toggle.
+
+---
+
+## Teams
+
+### Architecture
+
+Teams provide role-based access control for projects. A user can belong to multiple teams, and each team membership has a role.
+
+```
+users ──< team_members >── teams ──< projects
+```
+
+### Roles
+
+| Role | Permissions |
+|------|-------------|
+| `team_owner` | Full control: manage members, change roles, delete team |
+| `team_admin` | Manage members, invite/remove users |
+| `team_member` | View team projects, no management |
+
+### Team-Based Project Filtering
+
+The `ProjectListingService` filters PM2 processes based on the user's team memberships. Users only see projects that belong to their teams or are personally owned.
+
+### Admin Team Management
+
+Admin users can create, edit, and delete teams, and manage team members from the admin panel. The member management modal shows existing members first (with role change and remove controls), followed by an "Add Member" form.
+
+---
+
+## Favorites
+
+### Architecture
+
+Users can bookmark (favorite) projects for quick access. Favorites are stored per-user and per-process-name.
+
+```
+users ──< project_favorites (user_id, pm2_name)
+```
+
+### Schema
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `id` | text (PK) | UUID |
+| `user_id` | text (FK → users) | Owner of the favorite |
+| `pm2_name` | text | PM2 process name |
+| `created_at` | integer | Unix timestamp |
+
+Unique index on `(user_id, pm2_name)` prevents duplicates.
+
+### UI
+
+- **Star button (★/☆)** on each project card in the list view
+- **Filter button** to show only favorited projects
+- **Star button** in the project detail page header
+- Toggle via `POST /projects/favorites` — returns `{ isFavorite: boolean }`
 
 ---
 

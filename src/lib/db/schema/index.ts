@@ -3,6 +3,7 @@ export { sessions } from './sessions';
 export { accounts } from './accounts';
 export { verifications } from './verifications';
 export { projects, projectsRelations } from './projects';
+export { projectFavorites, projectFavoritesRelations, type ProjectFavorite } from './project-favorites';
 export { envVars } from './env-vars';
 export { metrics } from './metrics';
 export { projectMembers, projectMembersRelations, type ProjectMember } from './project-members';

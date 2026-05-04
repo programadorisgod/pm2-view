@@ -1,6 +1,7 @@
 import { createServices } from '$lib/services/factory';
 import { ProjectRepository } from '$lib/db/repositories/project-repository.impl';
-import { TeamRepository } from '$lib/db/repositories/team-repository.impl';
+import { ProjectFavoriteRepository } from '$lib/db/repositories/project-favorite-repository.impl';
+import { TeamRepository } from '$lib/db/repositories/team-repository.interface';
 import type { IProjectRepository, Project } from '$lib/projects/project.types';
 import type { ITeamRepository, Team } from '$lib/db/repositories/team-repository.interface';
 import type { ProcessWithStatus } from '$lib/pm2/pm2.types';
@@ -10,6 +11,7 @@ export interface VisibleProject extends ProcessWithStatus {
 	accessType: 'personal' | 'team' | 'shared' | 'admin';
 	teamName?: string;
 	dbProject?: Project;
+	isFavorite?: boolean;
 }
 
 /**
@@ -20,7 +22,8 @@ export class ProjectListingService {
 	constructor(
 		private pm2Service: PM2Service,
 		private projectRepo: IProjectRepository,
-		private teamRepo: ITeamRepository
+		private teamRepo: ITeamRepository,
+		private favoriteRepo: ProjectFavoriteRepository
 	) {}
 
 	/**
@@ -29,12 +32,16 @@ export class ProjectListingService {
 	 * Regular users see: personal + team + shared projects.
 	 */
 	async getVisibleProjects(userId: string, userRole: string): Promise<VisibleProject[]> {
+		// Get user's favorites
+		const favoriteNames = new Set(await this.favoriteRepo.getUserFavorites(userId));
+
 		// Admin sees all processes
 		if (userRole === 'admin') {
 			const processes = await this.pm2Service.getAllProcesses();
 			return processes.map(p => ({
 				...p,
-				accessType: 'admin' as const
+				accessType: 'admin' as const,
+				isFavorite: favoriteNames.has(p.name)
 			}));
 		}
 
@@ -61,7 +68,8 @@ export class ProjectListingService {
 					...p,
 					accessType,
 					teamName,
-					dbProject
+					dbProject,
+					isFavorite: favoriteNames.has(p.name)
 				};
 			});
 	}
@@ -85,6 +93,7 @@ export function createProjectListingService(): ProjectListingService {
 	const { pm2Service } = createServices();
 	const projectRepo = new ProjectRepository();
 	const teamRepo = new TeamRepository();
+	const favoriteRepo = new ProjectFavoriteRepository();
 
-	return new ProjectListingService(pm2Service, projectRepo, teamRepo);
+	return new ProjectListingService(pm2Service, projectRepo, teamRepo, favoriteRepo);
 }

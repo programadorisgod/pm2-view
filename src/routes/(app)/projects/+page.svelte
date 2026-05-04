@@ -2,13 +2,19 @@
 	import { Card, Badge, ConfirmDeleteModal, FeedbackBanner } from '$lib/ui/components';
 	import { base } from '$app/paths';
 	import type { PageData } from './$types';
+	import type { VisibleProject } from '$lib/services/project-listing.service';
 	import { invalidateAll } from '$app/navigation';
 
 	let { data }: { data: PageData } = $props();
 
-	let processes = $derived(data.processes ?? []);
+	let processes = $derived(data.processes ?? [] as VisibleProject[]);
 	let feedback = $state<{ type: 'success' | 'error'; text: string } | null>(null);
 	let deleteModal = $state<{ open: boolean; name: string; pm_id: string }>({ open: false, name: '', pm_id: '' });
+	let showFavoritesOnly = $state(false);
+
+	let displayedProcesses = $derived(
+		showFavoritesOnly ? processes.filter(p => p.isFavorite) : processes
+	);
 
 	function getStatusVariant(status: string) {
 		switch (status) {
@@ -36,6 +42,21 @@
 			}
 		} catch {
 			feedback = { type: 'error', text: `Failed to ${action}` };
+		}
+	}
+
+	async function toggleFavorite(pm2Name: string) {
+		try {
+			const res = await fetch(`${base}/projects/favorites`, {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ pm2Name })
+			});
+			if (res.ok) {
+				await invalidateAll();
+			}
+		} catch {
+			// Silent fail
 		}
 	}
 
@@ -76,16 +97,41 @@
 		<FeedbackBanner type={feedback.type} message={feedback.text} />
 	{/if}
 
-	{#if processes.length === 0}
+	<!-- Favorites Filter -->
+	{#if processes.length > 0}
+		<div class="flex items-center gap-sm mb-lg">
+			<button
+				class="px-3 py-1.5 text-caption rounded-pill transition-colors"
+				style="background: {showFavoritesOnly ? 'rgba(56, 205, 255, 0.15)' : 'transparent'};
+					color: {showFavoritesOnly ? '#38CDFF' : 'var(--text-muted)'};
+					border: 1px solid {showFavoritesOnly ? 'rgba(56, 205, 255, 0.3)' : 'var(--border-color)'};"
+				onclick={() => (showFavoritesOnly = !showFavoritesOnly)}
+			>
+				{showFavoritesOnly ? '★ Favorites' : '☆ Favorites'}
+			</button>
+			{#if showFavoritesOnly}
+				<span class="text-caption" style="color: var(--text-muted);">
+					{displayedProcesses.length} of {processes.length} projects
+				</span>
+			{/if}
+		</div>
+	{/if}
+
+	{#if displayedProcesses.length === 0}
 		<Card>
 			<div class="text-center py-2xl">
-				<p class="text-h3 font-semibold mb-xs" style="color: var(--text-secondary);">No Processes Found</p>
-				<p class="text-body-sm" style="color: var(--text-muted);">PM2 is not running or no processes have been started</p>
+				{#if showFavoritesOnly}
+					<p class="text-h3 font-semibold mb-xs" style="color: var(--text-secondary);">No Favorites Yet</p>
+					<p class="text-body-sm" style="color: var(--text-muted);">Star projects from the list to find them quickly</p>
+				{:else}
+					<p class="text-h3 font-semibold mb-xs" style="color: var(--text-secondary);">No Processes Found</p>
+					<p class="text-body-sm" style="color: var(--text-muted);">PM2 is not running or no processes have been started</p>
+				{/if}
 			</div>
 		</Card>
 	{:else}
 		<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-md">
-			{#each processes as process, i (process.pm_id)}
+			{#each displayedProcesses as process, i (process.pm_id)}
 				<div class="stagger-item" style="--stagger-index: {i};">
 					<Card class="group">
 					<!-- Header -->
@@ -96,6 +142,14 @@
 								{process.status}
 							</Badge>
 						</div>
+						<button
+							class="text-h3 transition-colors"
+							style="color: {process.isFavorite ? '#FFD740' : 'var(--text-muted)'};"
+							onclick={() => toggleFavorite(process.name)}
+							title={process.isFavorite ? 'Remove from favorites' : 'Add to favorites'}
+						>
+							{process.isFavorite ? '★' : '☆'}
+						</button>
 					</div>
 
 					<!-- Stats -->

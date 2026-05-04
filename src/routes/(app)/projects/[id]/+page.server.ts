@@ -2,6 +2,7 @@ import { PM2Repository } from '$lib/pm2/pm2-repository.impl';
 import { PM2Service } from '$lib/pm2/pm2.service';
 import { EnvVarService } from '$lib/env-vars/env-var.service';
 import { createServices } from '$lib/services/factory';
+import { auth } from '$lib/auth';
 import { error, fail } from '@sveltejs/kit';
 import { hasPermission } from '$lib/auth/permissions';
 import { z } from 'zod';
@@ -12,7 +13,7 @@ const envVarSchema = z.object({
 	envVars: z.string().min(1, 'Environment variables are required')
 });
 
-export const load: PageServerLoad = async ({ params }) => {
+export const load: PageServerLoad = async ({ params, request }) => {
 	const { pm2Service, envVarService } = createServices();
 	const { id } = params;
 
@@ -28,10 +29,24 @@ export const load: PageServerLoad = async ({ params }) => {
 	// Get environment variables
 	const envVars = await envVarService.getEnvVars(id);
 
+	// Get favorite status
+	let isFavorite = false;
+	try {
+		const session = await auth.api.getSession({ headers: request.headers });
+		if (session?.user) {
+			const { ProjectFavoriteRepository } = await import('$lib/db/repositories/project-favorite-repository.impl');
+			const favRepo = new ProjectFavoriteRepository();
+			isFavorite = await favRepo.isFavorite(session.user.id, process.name);
+		}
+	} catch {
+		// Silent fail - favorite status is non-critical
+	}
+
 	return {
 		process,
 		logs,
-		envVars
+		envVars,
+		isFavorite
 	};
 };
 

@@ -14,13 +14,30 @@
 
   let { data }: { data: PageData } = $props();
 
-  let { process, logs: initialLogs, envVars: initialEnvVars } = $derived(data);
+  let { process, logs: initialLogs, envVars: initialEnvVars, isFavorite: initialIsFavorite } = $derived(data);
 
   let activeTab = $state("overview");
   let feedback = $state<{ type: "success" | "error"; text: string } | null>(
     null,
   );
   let deleteModal = $state({ open: false });
+  let isFavorite = $state(initialIsFavorite ?? false);
+
+  async function toggleFavorite() {
+    try {
+      const res = await fetch(`${base}/projects/favorites`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ pm2Name: process.name })
+      });
+      if (res.ok) {
+        const result = await res.json();
+        isFavorite = result.isFavorite;
+      }
+    } catch {
+      // Silent fail
+    }
+  }
 
   let logs = $state<
     Array<{ type: "out" | "err"; data: string; timestamp: Date }>
@@ -51,31 +68,25 @@
     }
   }
 
-  // Scroll to bottom on initial load (resets when tab changes)
-  $effect(() => {
-    if (activeTab === "logs") {
-      initialScrollDone = false;
-    }
-  });
-
-  $effect(() => {
-    if (!initialScrollDone && logs.length > 0 && outContainer && errContainer) {
-      outContainer.scrollTop = outContainer.scrollHeight;
-      errContainer.scrollTop = errContainer.scrollHeight;
-      initialScrollDone = true;
-    }
-  });
-
   // Derived: split logs by type (repository already sorts chronologically)
   let outLogs = $derived(logs.filter((l) => l.type === "out"));
   let errLogs = $derived(logs.filter((l) => l.type === "err"));
 
-  // Independent scroll state per panel
+  // Scroll containers
   let outContainer: HTMLDivElement | undefined = $state();
   let errContainer: HTMLDivElement | undefined = $state();
-  let autoScrollOut = $state(true);
-  let autoScrollErr = $state(true);
-  let initialScrollDone = $state(false);
+
+  function autoScrollToBottom() {
+    if (outContainer) outContainer.scrollTop = outContainer.scrollHeight;
+    if (errContainer) errContainer.scrollTop = errContainer.scrollHeight;
+  }
+
+  // Auto-scroll when logs change
+  $effect(() => {
+    if (activeTab === "logs" && logs.length > 0) {
+      requestAnimationFrame(() => autoScrollToBottom());
+    }
+  });
 
   let envVars = $state<Array<{ key: string; value: string; isNew?: boolean }>>(
     [],
@@ -187,19 +198,6 @@
           ...logs,
           { type: event.logType, data: event.line, timestamp: new Date() },
         ];
-        // Auto-scroll both panels independently
-        if (autoScrollOut && outContainer) {
-          setTimeout(() => {
-            if (outContainer)
-              outContainer.scrollTop = outContainer.scrollHeight;
-          }, 0);
-        }
-        if (autoScrollErr && errContainer) {
-          setTimeout(() => {
-            if (errContainer)
-              errContainer.scrollTop = errContainer.scrollHeight;
-          }, 0);
-        }
       }
     });
 
@@ -208,20 +206,6 @@
       sseClient = null;
     };
   });
-
-  function handleOutScroll(e: Event) {
-    const target = e.target as HTMLDivElement;
-    const isNearBottom =
-      target.scrollHeight - target.scrollTop - target.clientHeight < 50;
-    autoScrollOut = isNearBottom;
-  }
-
-  function handleErrScroll(e: Event) {
-    const target = e.target as HTMLDivElement;
-    const isNearBottom =
-      target.scrollHeight - target.scrollTop - target.clientHeight < 50;
-    autoScrollErr = isNearBottom;
-  }
 
   function isSensitiveKey(key: string): boolean {
     const sensitivePatterns = [
@@ -349,6 +333,14 @@
         <Badge variant={getStatusVariant(process.status)}
           >{process.status}</Badge
         >
+        <button
+          class="text-h3 transition-colors"
+          style="color: {isFavorite ? '#FFD740' : 'var(--text-muted)'};"
+          onclick={toggleFavorite}
+          title={isFavorite ? 'Remove from favorites' : 'Add to favorites'}
+        >
+          {isFavorite ? '★' : '☆'}
+        </button>
       </div>
       <div
         class="flex items-center gap-md text-caption"
@@ -503,19 +495,6 @@
                 ></span>
                 OUT
               </h2>
-              <label
-                class="flex items-center gap-xs text-caption cursor-pointer"
-                style="color: var(--text-muted);"
-              >
-                <input
-                  type="checkbox"
-                  checked={autoScrollOut}
-                  onchange={(e) =>
-                    (autoScrollOut = (e.target as HTMLInputElement).checked)}
-                  class="rounded"
-                />
-                Auto-scroll
-              </label>
             </div>
             {#if outLogs.length === 0}
               <p class="text-center py-xl" style="color: var(--text-muted);">
@@ -524,7 +503,6 @@
             {:else}
               <div
                 bind:this={outContainer}
-                onscroll={handleOutScroll}
                 class="rounded-lg p-md font-mono text-code overflow-x-auto max-h-[500px] overflow-y-auto scrollbar-thin"
                 style="background: var(--bg-base); border: 1px solid var(--border-color);"
               >
@@ -547,19 +525,6 @@
                 ></span>
                 ERRORS
               </h2>
-              <label
-                class="flex items-center gap-xs text-caption cursor-pointer"
-                style="color: var(--text-muted);"
-              >
-                <input
-                  type="checkbox"
-                  checked={autoScrollErr}
-                  onchange={(e) =>
-                    (autoScrollErr = (e.target as HTMLInputElement).checked)}
-                  class="rounded"
-                />
-                Auto-scroll
-              </label>
             </div>
             {#if errLogs.length === 0}
               <p class="text-center py-xl" style="color: var(--text-muted);">
@@ -568,7 +533,6 @@
             {:else}
               <div
                 bind:this={errContainer}
-                onscroll={handleErrScroll}
                 class="rounded-lg p-md font-mono text-code overflow-x-auto max-h-[500px] overflow-y-auto scrollbar-thin"
                 style="background: var(--bg-base); border: 1px solid var(--border-color);"
               >

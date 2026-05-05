@@ -54,18 +54,18 @@ PM2 View is a SvelteKit-based dashboard for monitoring and managing PM2 processe
 
 ### Directory Structure
 
-| Directory | Purpose |
-|-----------|---------|
-| `src/lib/auth/` | Authentication domain with pluggable providers |
-| `src/lib/db/` | Database abstraction with dialect-agnostic drivers |
-| `src/lib/db/schema/` | Drizzle schema definitions (projects, teams, favorites, etc.) |
-| `src/lib/db/repositories/` | Data access implementations |
-| `src/lib/sse/` | Server-Sent Events for real-time communication |
-| `src/lib/services/` | Dependency injection factory |
-| `src/lib/logger/` | Structured logging abstraction |
-| `src/lib/rate-limiter/` | In-memory rate limiting |
-| `src/lib/pagination/` | Pagination types and helpers |
-| `src/lib/utils/` | Shared utilities (status, format, validation, shell) |
+| Directory                  | Purpose                                                       |
+| -------------------------- | ------------------------------------------------------------- |
+| `src/lib/auth/`            | Authentication domain with pluggable providers                |
+| `src/lib/db/`              | Database abstraction with dialect-agnostic drivers            |
+| `src/lib/db/schema/`       | Drizzle schema definitions (projects, teams, favorites, etc.) |
+| `src/lib/db/repositories/` | Data access implementations                                   |
+| `src/lib/sse/`             | Server-Sent Events for real-time communication                |
+| `src/lib/services/`        | Dependency injection factory                                  |
+| `src/lib/logger/`          | Structured logging abstraction                                |
+| `src/lib/rate-limiter/`    | In-memory rate limiting                                       |
+| `src/lib/pagination/`      | Pagination types and helpers                                  |
+| `src/lib/utils/`           | Shared utilities (status, format, validation, shell)          |
 
 ---
 
@@ -81,11 +81,11 @@ getDatabaseConfig() → detectDialect(url) → createDatabaseDriver() → db pro
 
 ### Supported Dialects
 
-| Dialect | URL Pattern | Driver |
-|---------|-------------|--------|
-| libSQL/Turso | `libsql://...` | `LibsqlDriver` |
-| PostgreSQL | `postgres://...` or `postgresql://...` | `PostgresDriver` |
-| Local SQLite | `file:...` or `:memory:` | `LibsqlDriver` |
+| Dialect      | URL Pattern                            | Driver           |
+| ------------ | -------------------------------------- | ---------------- |
+| libSQL/Turso | `libsql://...`                         | `LibsqlDriver`   |
+| PostgreSQL   | `postgres://...` or `postgresql://...` | `PostgresDriver` |
+| Local SQLite | `file:...` or `:memory:`               | `LibsqlDriver`   |
 
 ### Adding a New Driver
 
@@ -93,8 +93,8 @@ getDatabaseConfig() → detectDialect(url) → createDatabaseDriver() → db pro
 2. Register a dialect rule in `src/lib/db/dialect-registry.ts`:
    ```typescript
    registerDialectRule({
-     match: (url) => url.startsWith('mysql://'),
-     dialect: 'mysql'
+     match: (url) => url.startsWith("mysql://"),
+     dialect: "mysql",
    });
    ```
 3. Add the driver to `DRIVER_MAP` in `src/lib/db/factory.ts`:
@@ -132,7 +132,7 @@ AuthProvider interface → BetterAuthProvider (default) → auth.service.ts → 
    ```
 2. Register in `src/lib/auth/factory.ts`:
    ```typescript
-   registerAuthProvider('my-auth', () => new MyAuthProvider());
+   registerAuthProvider("my-auth", () => new MyAuthProvider());
    ```
 
 ### Auth Types
@@ -145,14 +145,14 @@ The `AuthUser` and `AuthSession` types are **independent of Drizzle schema** —
 
 ### Why SSE over WebSockets?
 
-| Feature | SSE | WebSockets |
-|---------|-----|------------|
-| Direction | Server → Client | Bidirectional |
-| Browser API | Native `EventSource` | Native `WebSocket` |
-| Auto-reconnect | Built-in | Manual |
-| Proxy/CDN support | Works through any proxy | Requires upgrade support |
-| Memory per connection | Low | Higher |
-| Complexity | Simple | More complex |
+| Feature               | SSE                     | WebSockets               |
+| --------------------- | ----------------------- | ------------------------ |
+| Direction             | Server → Client         | Bidirectional            |
+| Browser API           | Native `EventSource`    | Native `WebSocket`       |
+| Auto-reconnect        | Built-in                | Manual                   |
+| Proxy/CDN support     | Works through any proxy | Requires upgrade support |
+| Memory per connection | Low                     | Higher                   |
+| Complexity            | Simple                  | More complex             |
 
 ### Architecture
 
@@ -168,19 +168,19 @@ The `AuthUser` and `AuthSession` types are **independent of Drizzle schema** —
 
 ### Event Types
 
-| Event | Data | Frequency |
-|-------|------|-----------|
-| `log` | `LogEvent` (processId, line, logType) | On new log line |
-| `metrics` | `MetricsEvent` (processId, cpu, memoryMB, status) | Every 10s |
-| `process-status` | `ProcessStatusEvent` (processId, status, previousStatus) | On state change |
-| `ping` | `:ping\n\n` | Every 15s (heartbeat) |
+| Event            | Data                                                     | Frequency                      |
+| ---------------- | -------------------------------------------------------- | ------------------------------ |
+| `log`            | `LogEvent` (processId, line, logType)                    | Not emitted (logs use polling) |
+| `metrics`        | `MetricsEvent` (processId, cpu, memoryMB, status)        | Every 10s                      |
+| `process-status` | `ProcessStatusEvent` (processId, status, previousStatus) | On state change                |
+| `ping`           | `:ping\n\n`                                              | Every 15s (heartbeat)          |
 
 ### Client Usage
 
 ```typescript
-import { createSSEClient } from '$lib/sse';
+import { createSSEClient } from "$lib/sse";
 
-const client = createSSEClient('/api/sse');
+const client = createSSEClient("/api/sse");
 
 client.onLog((event) => {
   console.log(`[${event.processName}] ${event.line}`);
@@ -193,6 +193,14 @@ client.onMetrics((event) => {
 // Cleanup on unmount
 return () => client.close();
 ```
+
+### Logs Polling (Project Detail)
+
+The project detail logs page refreshes via polling while the Logs tab is active:
+
+- Endpoint: `GET /projects/[id]/logs?lines=<count>`
+- Interval: 3s
+- Behavior: replaces the log list with the latest N lines
 
 ### Client/Server Split
 
@@ -208,7 +216,7 @@ This prevents Vite from bundling Node.js modules (`child_process`, `fs`) into cl
 ### Factory Pattern
 
 ```typescript
-import { createServices } from '$lib/services/factory';
+import { createServices } from "$lib/services/factory";
 
 // In route files:
 export const load = async () => {
@@ -220,15 +228,16 @@ export const load = async () => {
 
 ### ServiceContainer
 
-| Service | Dependencies | Purpose |
-|---------|-------------|---------|
-| `PM2Service` | `PM2Repository` | Process management, status mapping |
-| `MetricsService` | `MetricsRepository`, `PM2Service` | Metrics recording, aggregation |
-| `EnvVarService` | `PM2Repository`, `PM2Service` | Environment variable management |
+| Service          | Dependencies                      | Purpose                            |
+| ---------------- | --------------------------------- | ---------------------------------- |
+| `PM2Service`     | `PM2Repository`                   | Process management, status mapping |
+| `MetricsService` | `MetricsRepository`, `PM2Service` | Metrics recording, aggregation     |
+| `EnvVarService`  | `PM2Repository`, `PM2Service`     | Environment variable management    |
 
 ### Why Not Module-Level Singletons?
 
 Module-level singletons (`const pm2Service = new PM2Service()`) are problematic because:
+
 - **Testing**: Hard to mock dependencies
 - **Hot reload**: State persists across HMR cycles
 - **Flexibility**: Can't swap implementations
@@ -243,14 +252,14 @@ The factory pattern solves all three issues.
 
 PM2 View communicates with PM2 via CLI commands:
 
-| Operation | Command |
-|-----------|---------|
-| List processes | `pm2 jlist` |
-| Describe process | `pm2 jlist` (parsed by name/id) |
-| Restart | `pm2 restart '<name>'` |
-| Stop | `pm2 stop '<name>'` |
-| Delete | `pm2 delete '<name>'` |
-| Read logs | `tail -n <lines> <logfile>` (efficient, reads only last N lines) |
+| Operation        | Command                                                          |
+| ---------------- | ---------------------------------------------------------------- |
+| List processes   | `pm2 jlist`                                                      |
+| Describe process | `pm2 jlist` (parsed by name/id)                                  |
+| Restart          | `pm2 restart '<name>'`                                           |
+| Stop             | `pm2 stop '<name>'`                                              |
+| Delete           | `pm2 delete '<name>'`                                            |
+| Read logs        | `tail -n <lines> <logfile>` (efficient, reads only last N lines) |
 
 ### Security
 
@@ -279,24 +288,27 @@ Logs are read efficiently using `tail -n <path>` — only the last N lines are f
 
 ### Protected Endpoints
 
-| Endpoint | Rate Limited |
-|----------|-------------|
-| `/projects/api` | ✅ |
-| `/api/logout` | ✅ |
-| `/api/sse` | ❌ (long-lived connection) |
+| Endpoint        | Rate Limited               |
+| --------------- | -------------------------- |
+| `/projects/api` | ✅                         |
+| `/api/logout`   | ✅                         |
+| `/api/sse`      | ❌ (long-lived connection) |
 
 ### Adding Rate Limiting to New Endpoints
 
 ```typescript
-import { rateLimiter } from '$lib/rate-limiter';
+import { rateLimiter } from "$lib/rate-limiter";
 
 export const POST: RequestHandler = async ({ request, getClientAddress }) => {
   const result = rateLimiter.check(getClientAddress());
   if (!result.allowed) {
-    return json({ error: 'Too many requests' }, {
-      status: 429,
-      headers: { 'Retry-After': String(result.retryAfter ?? 60) }
-    });
+    return json(
+      { error: "Too many requests" },
+      {
+        status: 429,
+        headers: { "Retry-After": String(result.retryAfter ?? 60) },
+      },
+    );
   }
   // ... handle request
 };
@@ -309,7 +321,7 @@ export const POST: RequestHandler = async ({ request, getClientAddress }) => {
 ### API
 
 ```typescript
-import { normalizePagination, paginate } from '$lib/pagination';
+import { normalizePagination, paginate } from "$lib/pagination";
 
 // Normalize params (clamps limit to 1-500, offset to 0+)
 const { limit, offset } = normalizePagination({ limit: 20, offset: 0 });
@@ -321,9 +333,9 @@ const result = paginate(items, total, limit, offset);
 
 ### Paginated Repositories
 
-| Method | Supports Pagination |
-|--------|-------------------|
-| `PM2Repository.list()` | ✅ Optional `PaginationParams` |
+| Method                           | Supports Pagination            |
+| -------------------------------- | ------------------------------ |
+| `PM2Repository.list()`           | ✅ Optional `PaginationParams` |
 | `MetricsRepository.getHistory()` | ✅ Optional `PaginationParams` |
 
 When no params are passed, returns the full array (backward compatible).
@@ -346,11 +358,11 @@ interface Logger {
 ### Usage
 
 ```typescript
-import { logger } from '$lib/logger';
+import { logger } from "$lib/logger";
 
-logger.info('Process started', { name: 'api-server' });
-logger.error('Failed to connect', { error: String(error) });
-logger.debug('Detailed info', { query: 'SELECT * FROM users' });
+logger.info("Process started", { name: "api-server" });
+logger.error("Failed to connect", { error: String(error) });
+logger.debug("Detailed info", { query: "SELECT * FROM users" });
 ```
 
 ### Debug Mode
@@ -363,14 +375,14 @@ Set `DEBUG=true` in environment to enable debug-level logging.
 
 ### Threat Model
 
-| Threat | Mitigation |
-|--------|-----------|
+| Threat            | Mitigation                                  |
+| ----------------- | ------------------------------------------- |
 | Command injection | `escapeShellArg()` on all PM2 process names |
-| SQL injection | Drizzle ORM parameterized queries |
-| Brute force | Rate limiting (100 req/min per IP) |
-| XSS | Svelte auto-escapes output, CSP headers |
-| CSRF | Better Auth built-in protection |
-| Credential theft | HTTP-only session cookies, bcrypt hashing |
+| SQL injection     | Drizzle ORM parameterized queries           |
+| Brute force       | Rate limiting (100 req/min per IP)          |
+| XSS               | Svelte auto-escapes output, CSP headers     |
+| CSRF              | Better Auth built-in protection             |
+| Credential theft  | HTTP-only session cookies, bcrypt hashing   |
 
 ### Environment Variables Masking
 
@@ -390,11 +402,11 @@ users ──< team_members >── teams ──< projects
 
 ### Roles
 
-| Role | Permissions |
-|------|-------------|
-| `team_owner` | Full control: manage members, change roles, delete team |
-| `team_admin` | Manage members, invite/remove users |
-| `team_member` | View team projects, no management |
+| Role          | Permissions                                             |
+| ------------- | ------------------------------------------------------- |
+| `team_owner`  | Full control: manage members, change roles, delete team |
+| `team_admin`  | Manage members, invite/remove users                     |
+| `team_member` | View team projects, no management                       |
 
 ### Team-Based Project Filtering
 
@@ -418,12 +430,12 @@ users ──< project_favorites (user_id, pm2_name)
 
 ### Schema
 
-| Column | Type | Description |
-|--------|------|-------------|
-| `id` | text (PK) | UUID |
-| `user_id` | text (FK → users) | Owner of the favorite |
-| `pm2_name` | text | PM2 process name |
-| `created_at` | integer | Unix timestamp |
+| Column       | Type              | Description           |
+| ------------ | ----------------- | --------------------- |
+| `id`         | text (PK)         | UUID                  |
+| `user_id`    | text (FK → users) | Owner of the favorite |
+| `pm2_name`   | text              | PM2 process name      |
+| `created_at` | integer           | Unix timestamp        |
 
 Unique index on `(user_id, pm2_name)` prevents duplicates.
 
@@ -503,18 +515,20 @@ For production, configure PM2 with an ecosystem file:
 ```javascript
 // ecosystem.config.js
 module.exports = {
-  apps: [{
-    name: 'pm2-view',
-    script: 'build/index.js',
-    instances: 1,
-    exec_mode: 'fork',
-    env: {
-      NODE_ENV: 'production',
-      DATABASE_URL: '...',
-      BETTER_AUTH_URL: 'https://your-domain.com',
-      BETTER_AUTH_SECRET: '...'
-    }
-  }]
+  apps: [
+    {
+      name: "pm2-view",
+      script: "build/index.js",
+      instances: 1,
+      exec_mode: "fork",
+      env: {
+        NODE_ENV: "production",
+        DATABASE_URL: "...",
+        BETTER_AUTH_URL: "https://your-domain.com",
+        BETTER_AUTH_SECRET: "...",
+      },
+    },
+  ],
 };
 ```
 

@@ -9,12 +9,15 @@
   import { base } from "$app/paths";
   import type { PageData } from "./$types";
   import { goto, invalidateAll } from "$app/navigation";
-  import { createSSEClient } from "$lib/sse";
-  import type { LogEvent } from "$lib/sse/types";
 
   let { data }: { data: PageData } = $props();
 
-  let { process, logs: initialLogs, envVars: initialEnvVars, isFavorite: initialIsFavorite } = $derived(data);
+  let {
+    process,
+    logs: initialLogs,
+    envVars: initialEnvVars,
+    isFavorite: initialIsFavorite,
+  } = $derived(data);
 
   let activeTab = $state("overview");
   let feedback = $state<{ type: "success" | "error"; text: string } | null>(
@@ -28,7 +31,7 @@
       const res = await fetch(`${base}/projects/favorites`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ pm2Name: process.name })
+        body: JSON.stringify({ pm2Name: process.name }),
       });
       if (res.ok) {
         const result = await res.json();
@@ -44,6 +47,8 @@
   >([]);
   let loadedLines = $state(50);
   let loadingMore = $state(false);
+  let logPollIntervalMs = 3000;
+  let logPollTimer: ReturnType<typeof setInterval> | null = null;
 
   $effect(() => {
     if (initialLogs && initialLogs.length > 0) {
@@ -55,16 +60,33 @@
     loadingMore = true;
     const newCount = loadedLines + 200;
     try {
-      const res = await fetch(`${base}/projects/${process.pm_id}/logs?lines=${newCount}`);
+      const res = await fetch(
+        `${base}/projects/${process.pm_id}/logs?lines=${newCount}`,
+      );
       const result = await res.json();
       if (result.success) {
         logs = result.logs;
         loadedLines = newCount;
       }
     } catch {
-      // Silent fail - SSE will keep providing new logs
+      // Silent fail
     } finally {
       loadingMore = false;
+    }
+  }
+
+  async function pollLogs() {
+    if (loadingMore) return;
+    try {
+      const res = await fetch(
+        `${base}/projects/${process.pm_id}/logs?lines=${loadedLines}`,
+      );
+      const result = await res.json();
+      if (result.success) {
+        logs = result.logs;
+      }
+    } catch {
+      // Silent fail
     }
   }
 
@@ -180,30 +202,20 @@
     }
   }
 
-  // Real-time logs via SSE
-  let sseClient: ReturnType<typeof createSSEClient> | null = null;
-
+  // Real-time logs via polling while Logs tab is active
   $effect(() => {
     if (activeTab !== "logs") {
-      sseClient?.close();
-      sseClient = null;
+      if (logPollTimer) clearInterval(logPollTimer);
+      logPollTimer = null;
       return;
     }
 
-    sseClient = createSSEClient(`${base}/api/sse`);
-
-    sseClient.onLog((event: LogEvent) => {
-      if (event.processId === process.pm_id.toString()) {
-        logs = [
-          ...logs,
-          { type: event.logType, data: event.line, timestamp: new Date() },
-        ];
-      }
-    });
+    pollLogs();
+    logPollTimer = setInterval(pollLogs, logPollIntervalMs);
 
     return () => {
-      sseClient?.close();
-      sseClient = null;
+      if (logPollTimer) clearInterval(logPollTimer);
+      logPollTimer = null;
     };
   });
 
@@ -337,9 +349,9 @@
           class="text-h3 transition-colors"
           style="color: {isFavorite ? '#FFD740' : 'var(--text-muted)'};"
           onclick={toggleFavorite}
-          title={isFavorite ? 'Remove from favorites' : 'Add to favorites'}
+          title={isFavorite ? "Remove from favorites" : "Add to favorites"}
         >
-          {isFavorite ? '★' : '☆'}
+          {isFavorite ? "★" : "☆"}
         </button>
       </div>
       <div
@@ -393,8 +405,8 @@
         {tab === "env"
           ? "Environment"
           : tab === "sharing"
-          ? "Sharing"
-          : tab.charAt(0).toUpperCase() + tab.slice(1)}
+            ? "Sharing"
+            : tab.charAt(0).toUpperCase() + tab.slice(1)}
       </button>
     {/each}
   </div>
@@ -674,18 +686,32 @@
         </Card>
       {:else if activeTab === "sharing"}
         <Card>
-          <h2 class="text-h3 font-semibold mb-md" style="color: var(--text-primary);">
+          <h2
+            class="text-h3 font-semibold mb-md"
+            style="color: var(--text-primary);"
+          >
             Project Sharing
           </h2>
           <p class="text-body-sm mb-lg" style="color: var(--text-secondary);">
-            Manage who has access to this project. Invite users or assign the project to a team.
+            Manage who has access to this project. Invite users or assign the
+            project to a team.
           </p>
           <a
             href="{base}/projects/{data?.process?.pm_id}/sharing"
             class="btn-primary px-4 py-2 text-body-sm inline-flex items-center gap-2"
           >
-            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5-9a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0z" />
+            <svg
+              class="w-4 h-4"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5-9a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0z"
+              />
             </svg>
             Manage Collaborators
           </a>

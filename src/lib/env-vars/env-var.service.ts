@@ -3,6 +3,7 @@ import { promisify } from 'util';
 import { PM2Repository } from '$lib/pm2/pm2-repository.impl';
 import { PM2Service } from '$lib/pm2/pm2.service';
 import type { PM2Process } from '$lib/pm2/pm2.types';
+import { escapeShellArg } from '$lib/utils/shell';
 
 const execAsync = promisify(exec);
 
@@ -33,36 +34,22 @@ export class EnvVarService {
 				return { success: false, message: `Process with ID ${processId} not found` };
 			}
 
-			// Get the process name (needed for pm2 commands)
-			const processName = rawProcess.name;
+			const processName = escapeShellArg(rawProcess.name);
 
-			// Build env vars flags for PM2
-			// PM2 doesn't have a direct way to update env vars on a running process
-			// The approach is to use `pm2 restart <name> --update-env` which will
-			// re-read env vars from the process environment
-			// For env vars to persist, they should be stored in PM2's ecosystem file
-			// or set in the environment before restart
-
-			// For this implementation, we'll store env vars and restart
-			// In a production scenario, you'd want to use an ecosystem file
-			// or a .env file that the process reads on startup
-
-			// Build the command to restart with env vars
-			// Note: This approach uses --env flag which works for some PM2 versions
+			// Build --env flags for each variable.
+			// PM2 supports: pm2 restart <name> --env KEY=VALUE --env KEY2=VALUE2
+			// This injects env vars into the restarted process.
 			const envFlags = Object.entries(envVars)
-				.map(([key, value]) => `--env ${key}=${value}`)
+				.map(([key, value]) => `--env ${escapeShellArg(`${key}=${value}`)}`)
 				.join(' ');
 
-			// Restart the process with updated env vars
-			// First, let's try using pm2 restart with --update-env
-			// If the env vars were originally set via CLI, they need to be re-passed
-			if (envFlags) {
-				await execAsync(`pm2 restart ${processName} --update-env ${envFlags}`);
-			} else {
-				await this.pm2Service.restartProcess(processId);
-			}
+			const command = envFlags
+				? `pm2 restart ${processName} ${envFlags}`
+				: `pm2 restart ${processName}`;
 
-			return { success: true, message: 'Environment variables saved and process restarted' };
+			await execAsync(command);
+
+			return { success: true, message: 'Process restarted with updated environment variables' };
 		} catch (error) {
 			return {
 				success: false,

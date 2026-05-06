@@ -40,19 +40,19 @@ export const POST: RequestHandler = async ({ request, url, getClientAddress }) =
 	const { pm_id } = validationResult.data;
 
 	let response;
-	switch (action) {
-		case 'restart':
-			response = await pm2Service.restartProcess(pm_id);
-			break;
-		case 'stop':
-			response = await pm2Service.stopProcess(pm_id);
-			break;
-		case 'delete':
-			response = await pm2Service.deleteProcess(pm_id);
-			break;
-		default:
-			return json({ error: 'Unknown action' }, { status: 400 });
-	}
+  switch (action) {
+    case 'restart':
+      response = await pm2Service.restartProcess(pm_id);
+      break;
+    case 'stop':
+      response = await pm2Service.stopProcess(pm_id);
+      break;
+    case 'start':
+      response = await pm2Service.startProcess(pm_id);
+      break;
+    default:
+      return json({ error: 'Invalid action' }, { status: 400 });
+  }
 
 	if (!response.success) {
 		return json({ error: response.message }, { status: 500 });

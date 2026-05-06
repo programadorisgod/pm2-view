@@ -37,4 +37,5 @@ export interface IPM2Repository {
 	stop(name: string): Promise<void>;
 	delete(name: string): Promise<void>;
 	getLogs(name: string, lines?: number): Promise<PM2Log[]>;
+	start(name: string): Promise<void>;
 }

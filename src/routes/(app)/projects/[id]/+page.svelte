@@ -130,6 +130,11 @@
     null,
   );
 
+  // Bulk paste state
+  let bulkPasteText = $state("");
+  let parsedVars = $state<Array<{ key: string; value: string }>>([]);
+  let showBulkPaste = $state(false);
+
   function getStatusVariant(status: string) {
     switch (status) {
       case "online":
@@ -151,7 +156,7 @@
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i];
   }
 
-  async function handleAction(action: "restart" | "stop") {
+  async function handleAction(action: "restart" | "stop" | "start") {
     feedback = null;
     try {
       const res = await fetch(`${base}/projects/api?action=${action}`, {
@@ -303,6 +308,68 @@
       saving = false;
     }
   }
+
+  function parseBulkEnvVars(text: string): Array<{ key: string; value: string }> {
+    const lines = text.split('\n');
+    const result: Array<{ key: string; value: string }> = [];
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (!trimmed || trimmed.startsWith('#') || trimmed.startsWith(';')) continue;
+      const match = trimmed.match(/^([^=]+)=(.*)$/);
+      if (match) {
+        result.push({ key: match[1].trim(), value: match[2].trim() });
+      }
+    }
+    return result;
+  }
+
+  function addBulkPasteVars() {
+    for (const v of parsedVars) {
+      if (!envVars.find(e => e.key === v.key)) {
+        envVars = [...envVars, { key: v.key, value: v.value, isNew: true }];
+      }
+    }
+    bulkPasteText = "";
+    parsedVars = [];
+    showBulkPaste = false;
+  }
+
+  function cancelBulkPaste() {
+    bulkPasteText = "";
+    parsedVars = [];
+    showBulkPaste = false;
+  }
+
+  async function restartOnly() {
+    saving = true;
+    saveMessage = null;
+    try {
+      const res = await fetch(`${base}/projects/api?action=restart`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ pm_id: process.pm_id.toString() }),
+      });
+      const result = await res.json();
+      if (res.ok) {
+        saveMessage = { type: "success", text: result.message || "Process restarted" };
+        await invalidateAll();
+      } else {
+        saveMessage = { type: "error", text: result.error || "Restart failed" };
+      }
+    } catch {
+      saveMessage = { type: "error", text: "Failed to restart" };
+    } finally {
+      saving = false;
+    }
+  }
+
+  function cancelEnvChanges() {
+    envVars = Object.entries(initialEnvVars).map(([key, value]) => ({
+      key,
+      value: value as string,
+    }));
+    saveMessage = null;
+  }
 </script>
 
 <div class="max-w-5xl mx-auto">
@@ -376,8 +443,8 @@
         >
       {:else if process.status === "stopped"}
         <button
-          class="btn-secondary px-3 py-1.5 text-caption"
-          onclick={() => handleAction("restart")}>Start</button
+          class="btn-success px-3 py-1.5 text-caption"
+          onclick={() => handleAction("start")}>Start</button
         >
       {/if}
       <button
@@ -573,7 +640,71 @@
             />
           {/if}
 
-          <!-- Add new -->
+          <!-- Bulk Paste -->
+          <div class="mb-md">
+            <button
+              class="btn-secondary px-3 py-1.5 text-caption"
+              onclick={() => showBulkPaste = !showBulkPaste}
+            >
+              {showBulkPaste ? "Hide" : "Paste .env Content"}
+            </button>
+
+            {#if showBulkPaste}
+              <div
+                class="mt-sm p-md rounded-lg"
+                style="background: var(--bg-surface); border: 1px solid var(--border-color);"
+              >
+                <textarea
+                  bind:value={bulkPasteText}
+                  placeholder="KEY1=value1&#10;KEY2=value2&#10;# comment"
+                  class="input-base w-full p-md text-code text-body-sm mb-sm"
+                  style="field-sizing: contain; min-height: 4.5rem; max-height: 16rem;"
+                  oninput={() => {
+                    parsedVars = parseBulkEnvVars(bulkPasteText);
+                  }}
+                ></textarea>
+
+                {#if parsedVars.length > 0}
+                  <div class="mb-md">
+                    <p
+                      class="text-caption font-medium mb-xs"
+                      style="color: var(--text-secondary);"
+                    >
+                      Preview ({parsedVars.length} vars):
+                    </p>
+                    <div
+                      class="space-y-xs max-h-32 overflow-y-auto scrollbar-thin p-sm rounded"
+                      style="background: var(--bg-base); border: 1px solid var(--border-color);"
+                    >
+                      {#each parsedVars as v}
+                        <div class="flex gap-sm text-code text-body-sm">
+                          <span class="font-medium" style="color: var(--text-primary);">{v.key}</span>
+                          <span style="color: var(--text-muted);">=</span>
+                          <span style="color: var(--text-secondary);">{v.value}</span>
+                        </div>
+                      {/each}
+                    </div>
+                  </div>
+                  <div class="flex gap-sm">
+                    <button
+                      class="btn-primary px-3 py-1.5 text-caption"
+                      onclick={addBulkPasteVars}
+                    >
+                      Add {parsedVars.length} vars to list
+                    </button>
+                    <button
+                      class="btn-secondary px-3 py-1.5 text-caption"
+                      onclick={cancelBulkPaste}
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                {/if}
+              </div>
+            {/if}
+          </div>
+
+          <!-- Add single variable -->
           <div
             class="mb-md p-md rounded-lg"
             style="background: var(--bg-surface); border: 1px solid var(--border-color);"
@@ -582,7 +713,7 @@
               class="text-caption font-medium mb-sm"
               style="color: var(--text-secondary);"
             >
-              Add New Variable
+              Add Single Variable
             </h3>
             <div class="flex gap-sm flex-wrap">
               <input
@@ -671,13 +802,27 @@
             </div>
           {/if}
 
-          <div class="flex items-center gap-md">
+          <div class="flex items-center gap-md flex-wrap">
             <button
               class="btn-primary px-4 py-2 text-body-sm"
               onclick={saveEnvVars}
               disabled={saving || envVars.length === 0}
             >
               {saving ? "Saving..." : "Save & Restart"}
+            </button>
+            <button
+              class="btn-secondary px-4 py-2 text-body-sm"
+              onclick={restartOnly}
+              disabled={saving}
+            >
+              Restart Only
+            </button>
+            <button
+              class="btn-secondary px-4 py-2 text-body-sm"
+              onclick={cancelEnvChanges}
+              disabled={saving}
+            >
+              Cancel
             </button>
             <p class="text-caption" style="color: var(--text-muted);">
               Saving will restart the process
@@ -729,3 +874,22 @@
     deleteModal.open = false;
   }}
 />
+
+<style>
+  /* Custom scrollbar for bulk paste textarea */
+  textarea::-webkit-scrollbar {
+    width: 6px;
+  }
+  textarea::-webkit-scrollbar-track {
+    background: var(--bg-base);
+    border-radius: 3px;
+  }
+  textarea::-webkit-scrollbar-thumb {
+    background: var(--text-muted);
+    border-radius: 3px;
+  }
+  textarea {
+    scrollbar-width: thin;
+    scrollbar-color: var(--text-muted) var(--bg-base);
+  }
+</style>

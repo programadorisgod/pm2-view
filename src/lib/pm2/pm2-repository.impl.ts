@@ -42,10 +42,15 @@ export class PM2Repository implements IPM2Repository {
 		}
 	}
 
-	async restart(name: string): Promise<void> {
-		const safeName = escapeShellArg(name);
-		await execAsync(`pm2 restart ${safeName}`);
-	}
+  async restart(name: string): Promise<void> {
+    const safeName = escapeShellArg(name);
+    await execAsync(`pm2 restart ${safeName}`);
+  }
+
+  async start(name: string): Promise<void> {
+    const safeName = escapeShellArg(name);
+    await execAsync(`pm2 start ${safeName}`);
+  }
 
 	async stop(name: string): Promise<void> {
 		const safeName = escapeShellArg(name);

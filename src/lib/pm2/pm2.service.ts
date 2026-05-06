@@ -38,17 +38,29 @@ export class PM2Service {
 		}
 	}
 
-	async restartProcess(id: string): Promise<{ success: boolean; message: string }> {
-		try {
-			await this.repository.restart(id);
-			return { success: true, message: `Process ${id} restarted successfully` };
-		} catch (error) {
-			return {
-				success: false,
-				message: error instanceof Error ? error.message : 'Failed to restart process'
-			};
-		}
-	}
+  async restartProcess(id: string): Promise<{ success: boolean; message: string }> {
+    try {
+      await this.repository.restart(id);
+      return { success: true, message: `Process ${id} restarted successfully` };
+    } catch (error) {
+      return {
+        success: false,
+        message: error instanceof Error ? error.message : 'Failed to restart process'
+      };
+    }
+  }
+
+  async startProcess(id: string): Promise<{ success: boolean; message: string }> {
+    try {
+      await this.repository.start(id);
+      return { success: true, message: `Process ${id} started successfully` };
+    } catch (error) {
+      return {
+        success: false,
+        message: error instanceof Error ? error.message : 'Failed to start process'
+      };
+    }
+  }
 
 	async stopProcess(id: string): Promise<{ success: boolean; message: string }> {
 		try {

@@ -3,15 +3,8 @@ import { PM2Service } from '$lib/pm2/pm2.service';
 import { EnvVarService } from '$lib/env-vars/env-var.service';
 import { createServices } from '$lib/services/factory';
 import { auth } from '$lib/auth';
-import { error, fail } from '@sveltejs/kit';
-import { hasPermission } from '$lib/auth/permissions';
-import { z } from 'zod';
-import type { PageServerLoad, Actions } from './$types';
-
-// Schema for environment variables save action
-const envVarSchema = z.object({
-	envVars: z.string().min(1, 'Environment variables are required')
-});
+import { error } from '@sveltejs/kit';
+import type { PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async ({ params, request }) => {
 	const { pm2Service, envVarService } = createServices();
@@ -48,47 +41,4 @@ export const load: PageServerLoad = async ({ params, request }) => {
 		envVars,
 		isFavorite
 	};
-};
-
-export const actions: Actions = {
-	saveEnv: async ({ request, params, locals }) => {
-		const { envVarService } = createServices();
-		const { id } = params;
-
-		// Check permission - only owner and editor can update
-		const memberRole = (locals as any)?.memberRole;
-		const user = (locals as any)?.user;
-
-		if (user && !hasPermission(user.role, 'project', 'update')) {
-			throw error(403, 'Access denied: Insufficient permissions to modify project');
-		}
-
-		const formData = await request.formData();
-		const data = Object.fromEntries(formData);
-
-		const result = envVarSchema.safeParse(data);
-		if (!result.success) {
-			return fail(400, {
-				error: 'Invalid environment variables format'
-			});
-		}
-
-		try {
-			// Parse the JSON string of env vars
-			const envVars = JSON.parse(result.data.envVars) as Record<string, string>;
-
-			// Save and restart
-			const response = await envVarService.saveAndRestart(id, envVars);
-
-			if (!response.success) {
-				return fail(500, { error: response.message });
-			}
-
-			return { success: true, message: response.message };
-		} catch (error) {
-			return fail(400, {
-				error: error instanceof Error ? error.message : 'Failed to parse environment variables'
-			});
-		}
-	}
 };

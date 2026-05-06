@@ -110,9 +110,7 @@
     }
   });
 
-  let envVars = $state<Array<{ key: string; value: string; isNew?: boolean }>>(
-    [],
-  );
+  let envVars = $state<Array<{ key: string; value: string }>>([]);
 
   $effect(() => {
     if (initialEnvVars && Object.keys(initialEnvVars).length > 0) {
@@ -122,18 +120,7 @@
       }));
     }
   });
-  let newKey = $state("");
-  let newValue = $state("");
   let showSecrets = $state<Record<string, boolean>>({});
-  let saving = $state(false);
-  let saveMessage = $state<{ type: "success" | "error"; text: string } | null>(
-    null,
-  );
-
-  // Bulk paste state
-  let bulkPasteText = $state("");
-  let parsedVars = $state<Array<{ key: string; value: string }>>([]);
-  let showBulkPaste = $state(false);
 
   function getStatusVariant(status: string) {
     switch (status) {
@@ -240,135 +227,6 @@
 
   function toggleSecret(key: string) {
     showSecrets = { ...showSecrets, [key]: !showSecrets[key] };
-  }
-
-  function addEnvVar() {
-    if (!newKey.trim()) return;
-    envVars = [
-      ...envVars,
-      { key: newKey.trim(), value: newValue, isNew: true },
-    ];
-    newKey = "";
-    newValue = "";
-  }
-
-  function removeEnvVar(index: number) {
-    envVars = envVars.filter((_, i) => i !== index);
-  }
-
-  function updateEnvVar(
-    index: number,
-    field: "key" | "value",
-    newValue: string,
-  ) {
-    envVars = envVars.map((env, i) =>
-      i === index ? { ...env, [field]: newValue } : env,
-    );
-  }
-
-  async function saveEnvVars() {
-    saving = true;
-    saveMessage = null;
-
-    try {
-      const envVarsObj = Object.fromEntries(
-        envVars.map(({ key, value }) => [key, value]),
-      );
-
-      const formData = new FormData();
-      formData.append("envVars", JSON.stringify(envVarsObj));
-
-      const res = await fetch(`?/saveEnv`, {
-        method: "POST",
-        body: formData,
-      });
-
-      const result = await res.json();
-
-      if (result.success) {
-        saveMessage = {
-          type: "success",
-          text: result.message || "Environment variables saved successfully",
-        };
-      } else {
-        saveMessage = {
-          type: "error",
-          text: result.error || "Failed to save environment variables",
-        };
-      }
-    } catch (error) {
-      saveMessage = {
-        type: "error",
-        text:
-          error instanceof Error
-            ? error.message
-            : "Failed to save environment variables",
-      };
-    } finally {
-      saving = false;
-    }
-  }
-
-  function parseBulkEnvVars(text: string): Array<{ key: string; value: string }> {
-    const lines = text.split('\n');
-    const result: Array<{ key: string; value: string }> = [];
-    for (const line of lines) {
-      const trimmed = line.trim();
-      if (!trimmed || trimmed.startsWith('#') || trimmed.startsWith(';')) continue;
-      const match = trimmed.match(/^([^=]+)=(.*)$/);
-      if (match) {
-        result.push({ key: match[1].trim(), value: match[2].trim() });
-      }
-    }
-    return result;
-  }
-
-  function addBulkPasteVars() {
-    for (const v of parsedVars) {
-      if (!envVars.find(e => e.key === v.key)) {
-        envVars = [...envVars, { key: v.key, value: v.value, isNew: true }];
-      }
-    }
-    bulkPasteText = "";
-    parsedVars = [];
-    showBulkPaste = false;
-  }
-
-  function cancelBulkPaste() {
-    bulkPasteText = "";
-    parsedVars = [];
-    showBulkPaste = false;
-  }
-
-  async function restartOnly() {
-    saving = true;
-    saveMessage = null;
-    try {
-      const res = await fetch(`${base}/projects/api?action=restart`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ pm_id: process.pm_id.toString() }),
-      });
-      const result = await res.json();
-      if (res.ok) {
-        saveMessage = { type: "success", text: result.message || "Process restarted" };
-        await invalidateAll();
-      } else {
-        saveMessage = { type: "error", text: result.error || "Restart failed" };
-      }
-    } catch {
-      saveMessage = { type: "error", text: "Failed to restart" };
-    } finally {
-      saving = false;
-    }
-  }
-
-  function cancelEnvChanges() {
-    envVars = Object.entries(initialEnvVars).map(([key, value]) => ({
-      key,
-      value: value as string,
-    }));
-    saveMessage = null;
   }
 </script>
 
@@ -633,117 +491,13 @@
             Environment Variables
           </h2>
 
-          {#if saveMessage}
-            <FeedbackBanner
-              type={saveMessage.type}
-              message={saveMessage.text}
-            />
-          {/if}
-
-          <!-- Bulk Paste -->
-          <div class="mb-md">
-            <button
-              class="btn-secondary px-3 py-1.5 text-caption"
-              onclick={() => showBulkPaste = !showBulkPaste}
-            >
-              {showBulkPaste ? "Hide" : "Paste .env Content"}
-            </button>
-
-            {#if showBulkPaste}
-              <div
-                class="mt-sm p-md rounded-lg"
-                style="background: var(--bg-surface); border: 1px solid var(--border-color);"
-              >
-                <textarea
-                  bind:value={bulkPasteText}
-                  placeholder="KEY1=value1&#10;KEY2=value2&#10;# comment"
-                  class="input-base w-full p-md text-code text-body-sm mb-sm"
-                  style="field-sizing: contain; min-height: 4.5rem; max-height: 16rem;"
-                  oninput={() => {
-                    parsedVars = parseBulkEnvVars(bulkPasteText);
-                  }}
-                ></textarea>
-
-                {#if parsedVars.length > 0}
-                  <div class="mb-md">
-                    <p
-                      class="text-caption font-medium mb-xs"
-                      style="color: var(--text-secondary);"
-                    >
-                      Preview ({parsedVars.length} vars):
-                    </p>
-                    <div
-                      class="space-y-xs max-h-32 overflow-y-auto scrollbar-thin p-sm rounded"
-                      style="background: var(--bg-base); border: 1px solid var(--border-color);"
-                    >
-                      {#each parsedVars as v}
-                        <div class="flex gap-sm text-code text-body-sm">
-                          <span class="font-medium" style="color: var(--text-primary);">{v.key}</span>
-                          <span style="color: var(--text-muted);">=</span>
-                          <span style="color: var(--text-secondary);">{v.value}</span>
-                        </div>
-                      {/each}
-                    </div>
-                  </div>
-                  <div class="flex gap-sm">
-                    <button
-                      class="btn-primary px-3 py-1.5 text-caption"
-                      onclick={addBulkPasteVars}
-                    >
-                      Add {parsedVars.length} vars to list
-                    </button>
-                    <button
-                      class="btn-secondary px-3 py-1.5 text-caption"
-                      onclick={cancelBulkPaste}
-                    >
-                      Cancel
-                    </button>
-                  </div>
-                {/if}
-              </div>
-            {/if}
-          </div>
-
-          <!-- Add single variable -->
-          <div
-            class="mb-md p-md rounded-lg"
-            style="background: var(--bg-surface); border: 1px solid var(--border-color);"
-          >
-            <h3
-              class="text-caption font-medium mb-sm"
-              style="color: var(--text-secondary);"
-            >
-              Add Single Variable
-            </h3>
-            <div class="flex gap-sm flex-wrap">
-              <input
-                type="text"
-                bind:value={newKey}
-                placeholder="Key (e.g., API_KEY)"
-                class="input-base flex-1 min-w-[180px] h-9 px-md text-code text-body-sm"
-              />
-              <input
-                type="text"
-                bind:value={newValue}
-                placeholder="Value"
-                class="input-base flex-1 min-w-[180px] h-9 px-md text-code text-body-sm"
-              />
-              <button
-                class="btn-secondary px-3 py-1.5 text-caption"
-                onclick={addEnvVar}
-                disabled={!newKey.trim()}>Add</button
-              >
-            </div>
-          </div>
-
-          <!-- List -->
           {#if envVars.length === 0}
             <p class="text-center py-xl" style="color: var(--text-muted);">
               No environment variables configured
             </p>
           {:else}
-            <div class="space-y-xs mb-lg">
-              {#each envVars as env, index (env.key)}
+            <div class="space-y-xs">
+              {#each envVars as env (env.key)}
                 <div
                   class="flex items-center gap-sm py-sm px-md rounded-md"
                   style="background: var(--bg-surface);"
@@ -752,82 +506,26 @@
                     class="text-body-sm font-medium min-w-[160px] font-mono"
                     style="color: var(--text-primary);">{env.key}</span
                   >
-                  <div class="flex-1 font-mono text-body-sm">
+                  <div class="flex-1 min-w-0 font-mono text-body-sm">
                     {#if isSensitiveKey(env.key)}
-                      <span style="color: var(--text-muted);">
+                      <span style="color: var(--text-muted); word-break: break-all;">
                         {showSecrets[env.key] ? env.value : "••••••••••••"}
                       </span>
                       <button
                         onclick={() => toggleSecret(env.key)}
-                        class="ml-sm text-caption font-medium"
+                        class="ml-sm text-caption font-medium shrink-0"
                         style="color: #38CDFF;"
                       >
                         {showSecrets[env.key] ? "Hide" : "Show"}
                       </button>
                     {:else}
-                      <input
-                        type="text"
-                        value={env.value}
-                        oninput={(e) =>
-                          updateEnvVar(
-                            index,
-                            "value",
-                            (e.target as HTMLInputElement).value,
-                          )}
-                        class="input-base w-full h-8 px-sm text-code text-body-sm"
-                      />
+                      <span style="color: var(--text-secondary); word-break: break-all;">{env.value}</span>
                     {/if}
                   </div>
-                  <button
-                    onclick={() => removeEnvVar(index)}
-                    class="w-6 h-6 rounded flex items-center justify-center transition-colors"
-                    style="color: #FF5252;"
-                    title="Remove"
-                  >
-                    <svg
-                      class="w-3.5 h-3.5"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                      ><path
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                        stroke-width="2"
-                        d="M6 18L18 6M6 6l12 12"
-                      /></svg
-                    >
-                  </button>
                 </div>
               {/each}
             </div>
           {/if}
-
-          <div class="flex items-center gap-md flex-wrap">
-            <button
-              class="btn-primary px-4 py-2 text-body-sm"
-              onclick={saveEnvVars}
-              disabled={saving || envVars.length === 0}
-            >
-              {saving ? "Saving..." : "Save & Restart"}
-            </button>
-            <button
-              class="btn-secondary px-4 py-2 text-body-sm"
-              onclick={restartOnly}
-              disabled={saving}
-            >
-              Restart Only
-            </button>
-            <button
-              class="btn-secondary px-4 py-2 text-body-sm"
-              onclick={cancelEnvChanges}
-              disabled={saving}
-            >
-              Cancel
-            </button>
-            <p class="text-caption" style="color: var(--text-muted);">
-              Saving will restart the process
-            </p>
-          </div>
         </Card>
       {:else if activeTab === "sharing"}
         <Card>
@@ -874,22 +572,3 @@
     deleteModal.open = false;
   }}
 />
-
-<style>
-  /* Custom scrollbar for bulk paste textarea */
-  textarea::-webkit-scrollbar {
-    width: 6px;
-  }
-  textarea::-webkit-scrollbar-track {
-    background: var(--bg-base);
-    border-radius: 3px;
-  }
-  textarea::-webkit-scrollbar-thumb {
-    background: var(--text-muted);
-    border-radius: 3px;
-  }
-  textarea {
-    scrollbar-width: thin;
-    scrollbar-color: var(--text-muted) var(--bg-base);
-  }
-</style>

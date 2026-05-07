@@ -1,4 +1,4 @@
-export type SSEEventType = 'log' | 'metrics' | 'process-status' | 'ping';
+export type SSEEventType = 'log' | 'metrics' | 'process-status' | 'deploy-log' | 'ping';
 
 export interface SSEEvent<T = unknown> {
 	type: SSEEventType;
@@ -26,4 +26,13 @@ export interface ProcessStatusEvent {
 	processName: string;
 	status: 'online' | 'stopped' | 'error' | 'offline';
 	previousStatus?: string;
+}
+
+export interface DeployLogEvent {
+	step: string;
+	line: string;
+	isError: boolean;
+	isComplete: boolean;
+	success?: boolean;
+	sessionId?: string;
 }

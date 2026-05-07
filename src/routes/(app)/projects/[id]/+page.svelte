@@ -5,6 +5,7 @@
     StatusIndicator,
     ConfirmDeleteModal,
     FeedbackBanner,
+    DeployModal,
   } from "$lib/ui/components";
   import { base } from "$app/paths";
   import type { PageData } from "./$types";
@@ -24,6 +25,8 @@
     null,
   );
   let deleteModal = $state({ open: false });
+  let deployModal = $state({ open: false });
+  let isDeploying = $state(false);
   let isFavorite = $state(initialIsFavorite ?? false);
 
   async function toggleFavorite() {
@@ -290,6 +293,26 @@
     </div>
 
     <div class="flex gap-xs">
+      <button
+        class="btn-primary px-3 py-1.5 text-caption inline-flex items-center gap-1.5"
+        onclick={() => { deployModal.open = true; }}
+        disabled={isDeploying}
+        class:opacity-40={isDeploying}
+        class:cursor-not-allowed={isDeploying}
+        title="Deploy: git pull, install, build, restart"
+      >
+        {#if isDeploying}
+          <svg class="w-3.5 h-3.5 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+          </svg>
+          Deploying...
+        {:else}
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m9-13V1a1 1 0 00-1 1v2.582a5.009 5.009 0 00-3.412 1.918m7.422 2.476V4a1 1 0 00-2 0v1.582"/>
+          </svg>
+          Deploy
+        {/if}
+      </button>
       {#if process.status === "online"}
         <button
           class="btn-secondary px-3 py-1.5 text-caption"
@@ -571,4 +594,12 @@
   onCancel={() => {
     deleteModal.open = false;
   }}
+/>
+
+<DeployModal
+  open={deployModal.open}
+  pmId={process.pm_id.toString()}
+  processName={process.name}
+  onDeploying={(deploying) => { isDeploying = deploying; }}
+  onClose={() => { deployModal.open = false; }}
 />

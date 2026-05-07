@@ -1,4 +1,4 @@
-import type { SSEEventType, LogEvent, MetricsEvent, ProcessStatusEvent } from './types';
+import type { SSEEventType, LogEvent, MetricsEvent, ProcessStatusEvent, DeployLogEvent } from './types';
 
 type EventCallback<T> = (data: T) => void;
 
@@ -6,6 +6,7 @@ export interface SSEClient {
 	onLog: (cb: EventCallback<LogEvent>) => void;
 	onMetrics: (cb: EventCallback<MetricsEvent>) => void;
 	onStatus: (cb: EventCallback<ProcessStatusEvent>) => void;
+	onDeployLog: (cb: EventCallback<DeployLogEvent>) => void;
 	close: () => void;
 }
 
@@ -37,6 +38,12 @@ export function createSSEClient(url: string): SSEClient {
 		onStatus: (cb: EventCallback<ProcessStatusEvent>) => {
 			es.addEventListener('process-status', (e) => {
 				const data = parseEvent<ProcessStatusEvent>(e);
+				if (data) cb(data);
+			});
+		},
+		onDeployLog: (cb: EventCallback<DeployLogEvent>) => {
+			es.addEventListener('deploy-log', (e) => {
+				const data = parseEvent<DeployLogEvent>(e);
 				if (data) cb(data);
 			});
 		},

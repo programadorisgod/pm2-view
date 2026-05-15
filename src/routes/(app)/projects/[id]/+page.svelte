@@ -101,6 +101,23 @@
   let outContainer: HTMLDivElement | undefined = $state();
   let errContainer: HTMLDivElement | undefined = $state();
 
+  // Track if user has scrolled up (for showing scroll-to-bottom buttons)
+  let outIsScrolledUp = $state(false);
+  let errIsScrolledUp = $state(false);
+
+  function checkScrollPosition(container: HTMLDivElement) {
+    const isScrolledUp = container.scrollTop + container.clientHeight < container.scrollHeight - 20;
+    return isScrolledUp;
+  }
+
+  function onOutScroll() {
+    if (outContainer) outIsScrolledUp = checkScrollPosition(outContainer);
+  }
+
+  function onErrScroll() {
+    if (errContainer) errIsScrolledUp = checkScrollPosition(errContainer);
+  }
+
   function autoScrollToBottom() {
     if (outContainer) {
       const shouldScroll = outContainer.scrollTop + outContainer.clientHeight >= outContainer.scrollHeight - 20;
@@ -110,6 +127,11 @@
       const shouldScroll = errContainer.scrollTop + errContainer.clientHeight >= errContainer.scrollHeight - 20;
       if (shouldScroll) errContainer.scrollTop = errContainer.scrollHeight;
     }
+  }
+
+  function forceScrollToBottom() {
+    if (outContainer) outContainer.scrollTop = outContainer.scrollHeight;
+    if (errContainer) errContainer.scrollTop = errContainer.scrollHeight;
   }
 
   // Auto-scroll when logs change
@@ -461,6 +483,18 @@
                 ></span>
                 OUT
               </h2>
+              {#if outIsScrolledUp}
+                <button
+                  class="btn-secondary px-2 py-1 text-xs flex items-center gap-1"
+                  onclick={forceScrollToBottom}
+                  title="Scroll to bottom"
+                >
+                  <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                  </svg>
+                  Scroll to bottom
+                </button>
+              {/if}
             </div>
             {#if outLogs.length === 0}
               <p class="text-center py-xl" style="color: var(--text-muted);">
@@ -469,6 +503,7 @@
             {:else}
               <div
                 bind:this={outContainer}
+                onscroll={onOutScroll}
                 class="rounded-lg p-md font-mono text-code overflow-x-auto max-h-[500px] overflow-y-auto scrollbar-thin"
                 style="background: var(--bg-base); border: 1px solid var(--border-color);"
               >
@@ -491,6 +526,18 @@
                 ></span>
                 ERRORS
               </h2>
+              {#if errIsScrolledUp}
+                <button
+                  class="btn-secondary px-2 py-1 text-xs flex items-center gap-1"
+                  onclick={forceScrollToBottom}
+                  title="Scroll to bottom"
+                >
+                  <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                  </svg>
+                  Scroll to bottom
+                </button>
+              {/if}
             </div>
             {#if errLogs.length === 0}
               <p class="text-center py-xl" style="color: var(--text-muted);">
@@ -499,6 +546,7 @@
             {:else}
               <div
                 bind:this={errContainer}
+                onscroll={onErrScroll}
                 class="rounded-lg p-md font-mono text-code overflow-x-auto max-h-[500px] overflow-y-auto scrollbar-thin"
                 style="background: var(--bg-base); border: 1px solid var(--border-color);"
               >

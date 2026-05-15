@@ -26,12 +26,16 @@
 		isError: boolean;
 		isComplete: boolean;
 		success?: boolean;
+		needsApproval?: boolean;
+		pendingPackages?: string[];
 	}
 
 	let lines = $state<LogLine[]>([]);
 	let isDeploying = $state(false);
 	let isRestarting = $state(false);
 	let deploySuccess = $state<boolean | null>(null);
+	let approvalPending = $state(false);
+	let approvalPackages = $state<string[]>([]);
 
 	$effect(() => {
 		if (open) {
@@ -39,6 +43,8 @@
 			isDeploying = true;
 			isRestarting = false;
 			deploySuccess = null;
+			approvalPending = false;
+			approvalPackages = [];
 			dialogRef?.showModal();
 			onDeploying?.(true);
 			startDeploy();
@@ -61,7 +67,6 @@
 
 	async function startDeploy() {
 		let lastStep = '';
-		let streamDisconnected = false;
 
 		try {
 			const res = await fetch(`${base}/api/deploy`, {
@@ -135,9 +140,16 @@
 						lines = [...lines, data];
 
 						if (data.isComplete) {
-							isDeploying = false;
-							deploySuccess = data.success ?? false;
-							onDeploying?.(false);
+							if (data.needsApproval) {
+								approvalPending = true;
+								approvalPackages = data.pendingPackages ?? [];
+								isDeploying = false;
+								onDeploying?.(false);
+							} else {
+								isDeploying = false;
+								deploySuccess = data.success ?? false;
+								onDeploying?.(false);
+							}
 						}
 					} catch {
 						// Ignore parse errors
@@ -146,9 +158,6 @@
 			}
 		} catch (err) {
 			// Stream disconnected — likely server restarting
-			streamDisconnected = true;
-
-			// If we were at the restart step, the server is coming back
 			if (lastStep === 'restart') {
 				lines = [...lines, {
 					step: 'restart',
@@ -158,9 +167,7 @@
 				}];
 				isRestarting = true;
 
-				// Poll until the server is back
 				const backOnline = await waitForServer();
-
 				isRestarting = false;
 
 				if (backOnline) {
@@ -170,8 +177,6 @@
 						isError: false,
 						isComplete: false,
 					}];
-
-					// Mark deploy as successful (restart was the last step)
 					lines = [...lines, {
 						step: 'complete',
 						line: 'Deploy completed successfully',
@@ -180,8 +185,6 @@
 						success: true,
 					}];
 					deploySuccess = true;
-
-					// Refresh page data
 					await invalidateAll();
 				} else {
 					lines = [...lines, {
@@ -194,7 +197,127 @@
 					deploySuccess = false;
 				}
 			} else {
-				// Disconnect at an earlier step = actual error
+				lines = [...lines, {
+					step: 'error',
+					line: `Connection lost: ${err instanceof Error ? err.message : 'Unknown error'}`,
+					isError: true,
+					isComplete: true,
+					success: false,
+				}];
+				deploySuccess = false;
+			}
+
+			isDeploying = false;
+			onDeploying?.(false);
+		}
+	}
+
+	async function handleApproveAndContinue() {
+		approvalPending = false;
+		isDeploying = true;
+		onDeploying?.(true);
+
+		let lastStep = '';
+
+		try {
+			const res = await fetch(`${base}/api/deploy/${pmId}/approve-builds`, {
+				method: 'POST',
+			});
+
+			if (!res.ok) {
+				const error = await res.json();
+				lines = [...lines, {
+					step: 'error',
+					line: `Approval failed: ${error.error || 'Unknown error'}`,
+					isError: true,
+					isComplete: true,
+					success: false,
+				}];
+				isDeploying = false;
+				deploySuccess = false;
+				onDeploying?.(false);
+				return;
+			}
+
+			const reader = res.body?.getReader();
+			if (!reader) {
+				lines = [...lines, {
+					step: 'error',
+					line: 'Streaming not supported',
+					isError: true,
+					isComplete: true,
+					success: false,
+				}];
+				isDeploying = false;
+				onDeploying?.(false);
+				return;
+			}
+
+			const decoder = new TextDecoder();
+			let buffer = '';
+
+			while (true) {
+				const { done, value } = await reader.read();
+				if (done) break;
+
+				buffer += decoder.decode(value, { stream: true });
+				const lineEnd = buffer.lastIndexOf('\n');
+				if (lineEnd === -1) continue;
+
+				const chunk = buffer.slice(0, lineEnd);
+				buffer = buffer.slice(lineEnd + 1);
+
+				for (const rawLine of chunk.split('\n')) {
+					if (!rawLine.trim()) continue;
+					try {
+						const data = JSON.parse(rawLine) as LogLine;
+						lastStep = data.step;
+						lines = [...lines, data];
+
+						if (data.isComplete) {
+							isDeploying = false;
+							deploySuccess = data.success ?? false;
+							onDeploying?.(false);
+						}
+					} catch {
+						// Ignore parse errors
+					}
+				}
+			}
+		} catch (err) {
+			if (lastStep === 'restart') {
+				lines = [...lines, {
+					step: 'restart',
+					line: '─── Server restarting, please wait... ───',
+					isError: false,
+					isComplete: false,
+				}];
+				isRestarting = true;
+
+				const backOnline = await waitForServer();
+				isRestarting = false;
+
+				if (backOnline) {
+					lines = [...lines, {
+						step: 'complete',
+						line: 'Deploy completed successfully',
+						isError: false,
+						isComplete: true,
+						success: true,
+					}];
+					deploySuccess = true;
+					await invalidateAll();
+				} else {
+					lines = [...lines, {
+						step: 'complete',
+						line: 'Server did not come back online. Check PM2 logs.',
+						isError: true,
+						isComplete: true,
+						success: false,
+					}];
+					deploySuccess = false;
+				}
+			} else {
 				lines = [...lines, {
 					step: 'error',
 					line: `Connection lost: ${err instanceof Error ? err.message : 'Unknown error'}`,
@@ -242,6 +365,7 @@
 			'install': 'Install Dependencies',
 			'build': 'Build',
 			'restart': 'PM2 Restart',
+			'approve': 'Approve Builds',
 			'complete': 'Complete',
 			'error': 'Error',
 		};
@@ -254,7 +378,6 @@
 		}
 		if (step === 'error') return '✗';
 
-		// Check if this step has completed
 		const stepLines = lines.filter((l) => l.step === step);
 		const hasCompletion = stepLines.some((l) => l.line.includes('Completed') || l.line.includes('Failed') || l.line.includes('Skipped') || l.line.includes('back online'));
 		const hasError = stepLines.some((l) => l.isError && l.line.includes('Failed'));
@@ -315,13 +438,13 @@
 							Deploy: {processName}
 						</h3>
 						<p class="text-caption" style="color: var(--text-muted);">
-							{isRestarting ? 'Server restarting...' : isDeploying ? 'Running deployment pipeline...' : deploySuccess ? 'Deploy completed' : 'Deploy failed'}
+							{isRestarting ? 'Server restarting...' : isDeploying ? 'Running deployment pipeline...' : approvalPending ? 'Approval required' : deploySuccess ? 'Deploy completed' : 'Deploy failed'}
 						</p>
 					</div>
 				</div>
 
 				<!-- Close button (only when done) -->
-				{#if !isDeploying && !isRestarting}
+				{#if !isDeploying && !isRestarting && !approvalPending}
 					<button
 						type="button"
 						class="btn-secondary px-3 py-1.5 text-caption"
@@ -331,6 +454,37 @@
 					</button>
 				{/if}
 			</div>
+
+			<!-- Approval prompt (shown when pnpm needs native build approval) -->
+			{#if approvalPending}
+				<div class="px-lg pt-md">
+					<div
+						class="rounded-lg p-md"
+						style="background: rgba(255, 215, 64, 0.1); border: 1px solid rgba(255, 215, 64, 0.3);"
+					>
+						<p class="text-caption font-semibold" style="color: #FFD740; margin-bottom: 8px;">
+							⚠ Native builds require approval
+						</p>
+						<p class="text-caption" style="color: var(--text-secondary); margin-bottom: 12px;">
+							These packages need to compile native code. Approve to continue:
+						</p>
+						<ul class="pl-lg list-disc" style="color: var(--text-primary); margin-bottom: 16px;">
+							{#each approvalPackages as pkg}
+								<li class="font-mono text-code">{pkg}</li>
+							{/each}
+						</ul>
+						<div class="flex gap-sm">
+							<button
+								class="btn-primary px-4 py-2 text-caption font-semibold"
+								style="background: #FFD740; color: #1a1a2e;"
+								onclick={handleApproveAndContinue}
+							>
+								Approve & Continue
+							</button>
+						</div>
+					</div>
+				</div>
+			{/if}
 
 			<!-- Step indicators -->
 			<div class="flex gap-sm px-lg pt-md">
@@ -380,7 +534,8 @@
 								log.line.includes('Skipped') ? 'color: #FFD740; font-weight: 600;' : '',
 								log.line.includes('restarting') ? 'color: #FFD740; font-weight: 600;' : '',
 								log.line.includes('back online') ? 'color: #00E676; font-weight: 600;' : '',
-								log.line.includes('Failed') ? 'color: #FF5252; font-weight: 600;' : ''
+								log.line.includes('Failed') ? 'color: #FF5252; font-weight: 600;' : '',
+								log.line.includes('Pending approval') ? 'color: #FFD740; font-weight: 600;' : ''
 							)}
 						>
 							{log.line}

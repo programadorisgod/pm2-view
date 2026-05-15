@@ -63,17 +63,36 @@ export const POST: RequestHandler = async ({ request, getClientAddress }) => {
 			};
 
 			try {
-				await deployService.deploy(pm_id, (step: DeployStep, line: string, isError: boolean) => {
+				const result = await deployService.deploy(pm_id, (step: DeployStep, line: string, isError: boolean) => {
 					safeEnqueue(JSON.stringify({ step, line, isError, isComplete: false }));
 				});
 
-				safeEnqueue(JSON.stringify({
-					step: 'complete',
-					line: 'Deploy completed successfully',
-					isError: false,
-					isComplete: true,
-					success: true,
-				}));
+				if (result.needsApproval) {
+					safeEnqueue(JSON.stringify({
+						step: 'install',
+						line: result.error || 'Approval needed for native builds',
+						isError: false,
+						isComplete: true,
+						needsApproval: true,
+						pendingPackages: result.pendingPackages ?? [],
+					}));
+				} else if (result.success) {
+					safeEnqueue(JSON.stringify({
+						step: 'complete',
+						line: 'Deploy completed successfully',
+						isError: false,
+						isComplete: true,
+						success: true,
+					}));
+				} else {
+					safeEnqueue(JSON.stringify({
+						step: 'complete',
+						line: `Deploy failed: ${result.error}`,
+						isError: true,
+						isComplete: true,
+						success: false,
+					}));
+				}
 			} catch (err) {
 				safeEnqueue(JSON.stringify({
 					step: 'complete',

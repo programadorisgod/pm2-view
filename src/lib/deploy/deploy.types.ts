@@ -11,6 +11,7 @@ export const DEPLOY_STEPS = [
 	'install',
 	'build',
 	'restart',
+	'approve',
 ] as const;
 
 export type DeployStep = (typeof DEPLOY_STEPS)[number];
@@ -23,6 +24,7 @@ export interface DeployStepResult {
 	step: DeployStep;
 	success: boolean;
 	exitCode: number | null;
+	pendingPackages?: string[];
 }
 
 /** Full deploy result */
@@ -34,6 +36,8 @@ export interface DeployResult {
 	steps: DeployStepResult[];
 	success: boolean;
 	error?: string;
+	needsApproval?: boolean;
+	pendingPackages?: string[];
 }
 
 /** Callback signature for streaming deploy output line by line */

@@ -135,9 +135,20 @@
   }
 
   // Auto-scroll when logs change
+  let logsTabFirstRender = $state(true);
   $effect(() => {
     if (activeTab === "logs" && logs.length > 0) {
-      requestAnimationFrame(() => autoScrollToBottom());
+      requestAnimationFrame(() => {
+        if (logsTabFirstRender) {
+          forceScrollToBottom();
+          logsTabFirstRender = false;
+        } else {
+          autoScrollToBottom();
+        }
+      });
+    }
+    if (activeTab !== "logs") {
+      logsTabFirstRender = true;
     }
   });
 

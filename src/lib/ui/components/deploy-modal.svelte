@@ -49,12 +49,13 @@
 
 	// Auto-scroll while deploying or receiving new lines
 	$effect(() => {
-		if (lines.length > 0) {
-			requestAnimationFrame(() => {
-				if (logContainer) {
-					logContainer.scrollTop = logContainer.scrollHeight;
-				}
-			});
+		if (lines.length > 0 && logContainer) {
+			const shouldScroll = logContainer.scrollTop + logContainer.clientHeight >= logContainer.scrollHeight - 20;
+			if (shouldScroll) {
+				requestAnimationFrame(() => {
+					if (logContainer) logContainer.scrollTop = logContainer.scrollHeight;
+				});
+			}
 		}
 	});
 

@@ -102,8 +102,14 @@
   let errContainer: HTMLDivElement | undefined = $state();
 
   function autoScrollToBottom() {
-    if (outContainer) outContainer.scrollTop = outContainer.scrollHeight;
-    if (errContainer) errContainer.scrollTop = errContainer.scrollHeight;
+    if (outContainer) {
+      const shouldScroll = outContainer.scrollTop + outContainer.clientHeight >= outContainer.scrollHeight - 20;
+      if (shouldScroll) outContainer.scrollTop = outContainer.scrollHeight;
+    }
+    if (errContainer) {
+      const shouldScroll = errContainer.scrollTop + errContainer.clientHeight >= errContainer.scrollHeight - 20;
+      if (shouldScroll) errContainer.scrollTop = errContainer.scrollHeight;
+    }
   }
 
   // Auto-scroll when logs change

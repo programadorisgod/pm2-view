@@ -1,9 +1,7 @@
 import { spawn } from 'child_process';
 import { existsSync, readFileSync } from 'fs';
-import { dirname } from 'path';
-import { join } from 'path';
+import { dirname, join } from 'path';
 import type { IPM2Repository } from '$lib/pm2/pm2.types';
-import { logger } from '$lib/logger';
 import type {
 	DeployLogCallback,
 	DeployResult,
@@ -11,34 +9,40 @@ import type {
 	DeployStepResult,
 	PackageManager,
 } from './deploy.types';
-import { DEPLOY_STEPS } from './deploy.types';
 
-/**
- * Detects the package manager used in a directory.
- * Priority: bun > pnpm > npm (default).
- */
+const LOCK_FILES: Record<string, PackageManager> = {
+	'pnpm-lock.yaml': 'pnpm',
+	'bun.lockb': 'bun',
+	'bun.lock': 'bun',
+} as const;
+
 function detectPackageManager(dir: string): PackageManager {
-	if (existsSync(join(dir, 'bun.lockb')) || existsSync(join(dir, 'bun.lock'))) {
-		return 'bun';
+	const pkgPath = join(dir, 'package.json');
+	if (existsSync(pkgPath)) {
+		try {
+			const pkg = JSON.parse(readFileSync(pkgPath, 'utf-8'));
+			if (pkg.packageManager) {
+				const [pm] = pkg.packageManager.split('@');
+				if (pm === 'pnpm' || pm === 'bun') return pm;
+			}
+		} catch {
+			// ignore parse errors
+		}
 	}
-	if (existsSync(join(dir, 'pnpm-lock.yaml'))) {
-		return 'pnpm';
+
+	for (const [file, pm] of Object.entries(LOCK_FILES)) {
+		if (existsSync(join(dir, file))) return pm;
 	}
-	// package-lock.json or nothing → npm
-	return 'npm';
+
+	throw new Error(
+		`No pnpm or bun lockfile found in ${dir}. Cannot determine package manager.`,
+	);
 }
 
-/**
- * Checks if the directory is a git repository.
- */
 function isGitRepo(dir: string): boolean {
 	return existsSync(join(dir, '.git'));
 }
 
-/**
- * Reads package.json scripts from a directory.
- * Returns null if package.json doesn't exist or is invalid.
- */
 function readPackageScripts(dir: string): Record<string, string> | null {
 	const pkgPath = join(dir, 'package.json');
 	if (!existsSync(pkgPath)) return null;
@@ -50,10 +54,17 @@ function readPackageScripts(dir: string): Record<string, string> | null {
 	}
 }
 
-/**
- * Runs a shell command via spawn and streams output line by line.
- * Returns the exit code.
- */
+function resolveProjectRoot(execPath: string, maxUpward = 10): string | null {
+	let dir = dirname(execPath);
+	for (let i = 0; i < maxUpward; i++) {
+		if (existsSync(join(dir, 'package.json'))) return dir;
+		const parent = dirname(dir);
+		if (parent === dir) break;
+		dir = parent;
+	}
+	return null;
+}
+
 function runCommand(
 	cwd: string,
 	command: string,
@@ -67,27 +78,22 @@ function runCommand(
 			env: { ...process.env },
 		});
 
-		const bufferStdout: string[] = [];
-		const bufferStderr: string[] = [];
+		const bufferOut: string[] = [];
+		const bufferErr: string[] = [];
 
-		// Buffer incomplete lines from stdout
 		proc.stdout.on('data', (chunk: Buffer) => {
-			const text = chunk.toString();
-			bufferStdout.push(text);
-			flushBuffer(bufferStdout, (line) => onLine(line, false));
+			bufferOut.push(chunk.toString());
+			flushBuffer(bufferOut, (l) => onLine(l, false));
 		});
 
-		// Buffer incomplete lines from stderr
 		proc.stderr.on('data', (chunk: Buffer) => {
-			const text = chunk.toString();
-			bufferStderr.push(text);
-			flushBuffer(bufferStderr, (line) => onLine(line, true));
+			bufferErr.push(chunk.toString());
+			flushBuffer(bufferErr, (l) => onLine(l, true));
 		});
 
 		proc.on('close', (code) => {
-			// Flush any remaining buffered content
-			flushBuffer(bufferStdout, (line) => onLine(line, false), true);
-			flushBuffer(bufferStderr, (line) => onLine(line, true), true);
+			flushBuffer(bufferOut, (l) => onLine(l, false), true);
+			flushBuffer(bufferErr, (l) => onLine(l, true), true);
 			resolve(code ?? 1);
 		});
 
@@ -98,10 +104,6 @@ function runCommand(
 	});
 }
 
-/**
- * Flushes complete lines from a buffer array.
- * Keeps incomplete trailing content in the buffer.
- */
 function flushBuffer(
 	buffer: string[],
 	onLine: (line: string) => void,
@@ -109,26 +111,15 @@ function flushBuffer(
 ): void {
 	const full = buffer.join('');
 	buffer.length = 0;
-
 	if (!full) return;
 
 	const lines = full.split('\n');
-
-	// If the last chunk doesn't end with newline, it's incomplete
 	if (full.endsWith('\n')) {
-		for (const line of lines) {
-			if (line) onLine(line);
-		}
+		lines.forEach((l) => l && onLine(l));
 	} else if (flushAll) {
-		// Force flush everything including incomplete line
-		for (const line of lines) {
-			if (line) onLine(line);
-		}
+		lines.forEach((l) => l && onLine(l));
 	} else {
-		// Keep the last incomplete chunk in the buffer
-		for (let i = 0; i < lines.length - 1; i++) {
-			if (lines[i]) onLine(lines[i]);
-		}
+		lines.slice(0, -1).forEach((l) => l && onLine(l));
 		buffer.push(lines[lines.length - 1]);
 	}
 }
@@ -165,7 +156,7 @@ export class DeployService {
 			return {
 				pmId,
 				processName: 'unknown',
-				packageManager: 'npm',
+				packageManager: 'pnpm',
 				workingDir: '',
 				steps: [],
 				success: false,
@@ -173,15 +164,19 @@ export class DeployService {
 			};
 		}
 
+		const pmCwd = process.pm2_env.pm_cwd;
+		const execPath = process.pm2_env.pm_exec_path;
 		const workingDir =
+			pmCwd ||
+			(execPath ? resolveProjectRoot(execPath) : null) ||
 			process.pm2_env.cwd ||
-			process.pm2_env.env?.PWD ||
-			(process.pm2_env.pm_exec_path ? dirname(process.pm2_env.pm_exec_path) : '');
+			'';
+
 		if (!workingDir || !existsSync(workingDir)) {
 			return {
 				pmId,
 				processName: process.name,
-				packageManager: 'npm',
+				packageManager: 'pnpm',
 				workingDir,
 				steps: [],
 				success: false,
@@ -189,7 +184,21 @@ export class DeployService {
 			};
 		}
 
-		const packageManager = detectPackageManager(workingDir);
+		let packageManager: PackageManager;
+		try {
+			packageManager = detectPackageManager(workingDir);
+		} catch (err) {
+			return {
+				pmId,
+				processName: process.name,
+				packageManager: 'pnpm',
+				workingDir,
+				steps: [],
+				success: false,
+				error: err instanceof Error ? err.message : 'Failed to detect package manager',
+			};
+		}
+
 		const scripts = readPackageScripts(workingDir);
 		const hasGit = isGitRepo(workingDir);
 		const hasBuild = !!scripts?.build;
@@ -199,7 +208,6 @@ export class DeployService {
 			onLog(step, line, isError);
 		};
 
-		// Step 1: git pull (only if git repo)
 		if (hasGit) {
 			const gitResult = await this.runStep('git-pull', workingDir, log, () =>
 				runCommand(workingDir, 'git', ['pull'], (line, isError) =>
@@ -215,7 +223,6 @@ export class DeployService {
 			steps.push({ step: 'git-pull', success: true, exitCode: 0 });
 		}
 
-		// Step 2: package manager install
 		const installResult = await this.runStep('install', workingDir, log, () =>
 			this.runInstall(workingDir, packageManager, (line, isError) =>
 				log('install', line, isError),
@@ -226,7 +233,6 @@ export class DeployService {
 			return this.buildResult(process.name, pmId, workingDir, packageManager, steps);
 		}
 
-		// Step 3: build (only if build script exists)
 		if (hasBuild) {
 			const buildResult = await this.runStep('build', workingDir, log, () =>
 				this.runBuild(workingDir, packageManager, (line, isError) =>
@@ -242,8 +248,6 @@ export class DeployService {
 			steps.push({ step: 'build', success: true, exitCode: 0 });
 		}
 
-		// Step 4: pm2 restart --update-env
-		// spawn passes args as array (safe), no shell escaping needed
 		const restartResult = await this.runStep('restart', workingDir, log, () =>
 			runCommand(
 				workingDir,

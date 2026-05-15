@@ -9,6 +9,7 @@ export interface PM2Process {
 		status: string;
 		pm_uptime: number;
 		restart_time: number;
+		pm_cwd?: string;
 		env?: Record<string, string>;
 		pm_out_log_path?: string;
 		pm_err_log_path?: string;

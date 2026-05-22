@@ -676,6 +676,7 @@
   open={deployModal.open}
   pmId={process.pm_id.toString()}
   processName={process.name}
+  projectId={data.projectInternalId ?? ''}
   onDeploying={(deploying) => { isDeploying = deploying; }}
   onClose={() => { deployModal.open = false; }}
 />

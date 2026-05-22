@@ -9,12 +9,14 @@
 		open = false,
 		pmId,
 		processName,
+		projectId,
 		onClose,
 		onDeploying,
 	}: {
 		open: boolean;
 		pmId: string;
 		processName: string;
+		projectId?: string;
 		onClose: () => void;
 		onDeploying?: (deploying: boolean) => void;
 	} = $props();
@@ -82,8 +84,15 @@
 	});
 
 	async function loadDeployConfig() {
+		// If no project ID, proceed with default deploy
+		if (!projectId) {
+			view = 'deploying';
+			startDeploy();
+			return;
+		}
+
 		try {
-			const res = await fetch(`${base}/api/deploy-config/${pmId}`);
+			const res = await fetch(`${base}/api/deploy-config/${projectId}`);
 			if (!res.ok) {
 				// No config or error - proceed with default deploy
 				view = 'deploying';
@@ -102,13 +111,19 @@
 				buildCommand = config.build[0].command;
 			}
 
-			// If 2+ restart commands, show selection step
-			if (config.restart && config.restart.length >= 2) {
+			// Show selection step if there are any custom commands
+			const hasCustomCommands = installCommand || buildCommand || (config.restart && config.restart.length > 0);
+			
+			if (hasCustomCommands) {
+				// Pre-select all restart commands by default
+				if (config.restart && config.restart.length > 0) {
+					selectedCommandIds = config.restart.map(cmd => cmd.id);
+				}
 				view = 'selecting';
 				isDeploying = false;
 				onDeploying?.(false);
 			} else {
-				// 0-1 restart commands: skip selection, deploy immediately
+				// No custom commands: deploy immediately with defaults
 				view = 'deploying';
 				startDeploy();
 			}
@@ -535,7 +550,7 @@
 			{#if view === 'selecting'}
 				<div class="p-lg">
 					<CommandSelector
-						commands={deployConfig?.restart ?? []}
+						config={deployConfig}
 						onSelect={handleCommandSelect}
 						onCancel={handleCommandCancel}
 					/>

@@ -4,16 +4,12 @@ import type {
 	DeployCommand,
 	CommandType
 } from './deploy-config.types';
-import type { IPM2Repository } from '$lib/pm2/pm2.types';
-import { asc, eq } from 'drizzle-orm';
-import { deployCommands } from '$lib/db/schema';
 
 const SHELL_METACHAR_REGEX = /[;|&$()`<>]|^&|>>?|<<?|\|\|/;
 
 export class DeployConfigService {
 	constructor(
-		private repo: IDeployConfigRepository,
-		private pm2Repo: IPM2Repository
+		private repo: IDeployConfigRepository
 	) {}
 
 	async getConfig(projectId: string): Promise<DeployConfig> {
@@ -43,12 +39,6 @@ export class DeployConfigService {
 		label: string;
 		command: string;
 	}): Promise<DeployCommand> {
-		// Validate project exists
-		const pm2Process = await this.pm2Repo.describe(payload.project_id);
-		if (!pm2Process) {
-			throw new Error('Project not found');
-		}
-
 		// Trim and validate label
 		const label = payload.label.trim();
 		if (!label) {

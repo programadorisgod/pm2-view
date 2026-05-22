@@ -3,7 +3,6 @@ import { z } from 'zod';
 import { auth } from '$lib/auth';
 import { DeployConfigRepository } from '$lib/db/repositories/deploy-config-repository.impl';
 import { DeployConfigService } from '$lib/deploy-config/deploy-config.service';
-import { PM2Repository } from '$lib/pm2/pm2-repository.impl';
 import { getProjectRole } from '$lib/server/project-access';
 import type { RequestHandler } from './$types';
 
@@ -37,8 +36,7 @@ export const POST: RequestHandler = async ({ request }) => {
 	}
 
 	const repo = new DeployConfigRepository();
-	const pm2Repo = new PM2Repository();
-	const service = new DeployConfigService(repo, pm2Repo);
+	const service = new DeployConfigService(repo);
 
 	try {
 		const saved = await service.saveCommand({
@@ -140,7 +138,7 @@ export const DELETE: RequestHandler = async ({ request }) => {
 		return json({ error: 'Access denied' }, { status: 403 });
 	}
 
-	const service = new DeployConfigService(repo, new PM2Repository());
+	const service = new DeployConfigService(repo);
 
 	try {
 		await service.deleteCommand(id);

@@ -26,7 +26,7 @@ export function createServices(): ServiceContainer {
     const metricsService = new MetricsService(metricsRepo, pm2Service);
     const envVarService = new EnvVarService(pm2Repo, pm2Service);
     const deployConfigRepo = new DeployConfigRepository();
-    const deployConfigService = new DeployConfigService(deployConfigRepo, pm2Repo);
+    const deployConfigService = new DeployConfigService(deployConfigRepo);
 
     container = {
       pm2Service,

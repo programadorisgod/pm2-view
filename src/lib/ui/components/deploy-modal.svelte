@@ -134,8 +134,8 @@
 		}
 	}
 
-	async function handleCommandSelect(ids: string[]) {
-		selectedCommandIds = ids;
+	async function handleCommandSelect(id: string) {
+		selectedCommandIds = [id];
 		view = 'deploying';
 		isDeploying = true;
 		onDeploying?.(true);
@@ -151,6 +151,7 @@
 
 		// Build request body
 		const body: Record<string, unknown> = { pm_id: pmId };
+		if (projectId) body.projectId = projectId;
 		if (installCommand) body.installCommand = installCommand;
 		if (buildCommand) body.buildCommand = buildCommand;
 		if (selectedCommandIds.length > 0) body.restartCommandIds = selectedCommandIds;

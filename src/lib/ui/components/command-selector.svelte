@@ -7,38 +7,22 @@
 		onCancel,
 	}: {
 		config: DeployConfig;
-		onSelect: (selectedRestartIds: string[]) => void;
+		onSelect: (selectedRestartId: string) => void;
 		onCancel: () => void;
 	} = $props();
 
-	// All restart commands checked by default - use $effect to sync with prop changes
-	let selectedRestartIds = $state<string[]>([]);
+	// Single restart command selected - use $effect to sync with prop changes
+	let selectedRestartId = $state<string>('');
 
 	$effect(() => {
-		selectedRestartIds = config.restart.map((c) => c.id);
+		// Default to first restart command if available
+		selectedRestartId = config.restart.length > 0 ? config.restart[0].id : '';
 	});
 
-	const allRestartSelected = $derived(selectedRestartIds.length === config.restart.length);
-	const noneRestartSelected = $derived(selectedRestartIds.length === 0);
-
-	function toggleRestart(id: string) {
-		if (selectedRestartIds.includes(id)) {
-			selectedRestartIds = selectedRestartIds.filter((i) => i !== id);
-		} else {
-			selectedRestartIds = [...selectedRestartIds, id];
-		}
-	}
-
-	function toggleAllRestart() {
-		if (allRestartSelected) {
-			selectedRestartIds = [];
-		} else {
-			selectedRestartIds = config.restart.map((c) => c.id);
-		}
-	}
-
 	function handleDeploy() {
-		onSelect(selectedRestartIds);
+		if (selectedRestartId) {
+			onSelect(selectedRestartId);
+		}
 	}
 
 	function truncateCommand(cmd: string, maxLen = 80): string {
@@ -111,43 +95,26 @@
 	{#if config.restart.length > 0}
 		<div class="space-y-xs">
 			<h4 class="text-body-sm font-semibold" style="color: var(--text-primary);">
-				Restart Commands
+				Restart Command
 			</h4>
 			<p class="text-caption" style="color: var(--text-muted);">
-				Choose which processes to restart during this deploy
+				Choose which restart command to run during this deploy
 			</p>
 
 			<div class="space-y-xs">
-				<!-- Select all checkbox -->
-				<div
-					class="flex items-center gap-sm p-sm rounded-md"
-					style="background: var(--bg-surface); border: 1px solid var(--border-color);"
-				>
-					<input
-						type="checkbox"
-						id="select-all-restart"
-						checked={allRestartSelected}
-						onchange={toggleAllRestart}
-						class="w-4 h-4 rounded"
-						style="accent-color: #38CDFF;"
-					/>
-					<label for="select-all-restart" class="text-body-sm font-medium" style="color: var(--text-primary);">
-						Select all ({selectedRestartIds.length} of {config.restart.length} selected)
-					</label>
-				</div>
-
-				<!-- Individual command checkboxes -->
+				<!-- Individual command radio buttons -->
 				{#each config.restart as cmd (cmd.id)}
 					<div
 						class="flex items-center gap-sm p-sm rounded-md"
 						style="background: var(--bg-surface); border: 1px solid var(--border-color);"
 					>
 						<input
-							type="checkbox"
+							type="radio"
 							id="restart-{cmd.id}"
-							checked={selectedRestartIds.includes(cmd.id)}
-							onchange={() => toggleRestart(cmd.id)}
-							class="w-4 h-4 rounded"
+							name="restart-command"
+							value={cmd.id}
+							bind:group={selectedRestartId}
+							class="w-4 h-4"
 							style="accent-color: #38CDFF;"
 						/>
 						<label for="restart-{cmd.id}" class="flex-1 min-w-0 cursor-pointer">
@@ -174,6 +141,7 @@
 		<button
 			type="button"
 			class="btn-primary px-4 py-2 text-body-sm font-semibold"
+			disabled={!selectedRestartId}
 			onclick={handleDeploy}
 		>
 			Deploy

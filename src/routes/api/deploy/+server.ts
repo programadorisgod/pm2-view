@@ -9,6 +9,7 @@ import type { DeployStep, DeployOptions } from '$lib/deploy/deploy.types';
 
 const deploySchema = z.object({
 	pm_id: z.string().min(1, 'Process ID is required'),
+	projectId: z.string().optional(),
 	restartCommandIds: z.array(z.string()).optional(),
 	installCommand: z.string().optional(),
 	buildCommand: z.string().optional(),
@@ -41,13 +42,13 @@ export const POST: RequestHandler = async ({ request, getClientAddress }) => {
 		return json({ error: getZodErrorMessage(validationResult) }, { status: 400 });
 	}
 
-	const { pm_id, restartCommandIds, installCommand, buildCommand } = validationResult.data;
+	const { pm_id, projectId, restartCommandIds, installCommand, buildCommand } = validationResult.data;
 
 	// Resolve restart command IDs to actual commands
 	let resolvedRestartCommands: string[] | undefined;
-	if (restartCommandIds && restartCommandIds.length > 0) {
+	if (restartCommandIds && restartCommandIds.length > 0 && projectId) {
 		const deployConfigRepo = new DeployConfigRepository();
-		const commands = await deployConfigRepo.getByProjectId(pm_id);
+		const commands = await deployConfigRepo.getByProjectId(projectId);
 		const selectedCommands = commands.filter((c) => restartCommandIds.includes(c.id));
 		if (selectedCommands.length !== restartCommandIds.length) {
 			activeDeploys.delete(pm_id);

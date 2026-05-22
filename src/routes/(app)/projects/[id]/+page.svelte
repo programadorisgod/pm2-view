@@ -655,8 +655,8 @@
         </Card>
       {:else if activeTab === "config"}
         <DeployConfigForm
-          projectId={process.pm_id.toString()}
-          initialConfig={deployConfig}
+          projectId={data.projectInternalId ?? ''}
+          initialConfig={data.deployConfig}
         />
       {/if}
     </div>

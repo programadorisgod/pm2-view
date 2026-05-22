@@ -481,7 +481,7 @@
 		{/if}
 
 		{#if config.restart.length > 0}
-			<div class="space-y-xs">
+			<div class="space-y-xs mb-md">
 				{#each config.restart as cmd, i (cmd.id)}
 					<div
 						class="flex items-center gap-sm p-sm rounded-md"
@@ -543,7 +543,9 @@
 					</div>
 				{/each}
 			</div>
-		{:else if !restartAdding}
+		{/if}
+
+		{#if !restartAdding}
 			<button
 				type="button"
 				class="btn-secondary px-3 py-1.5 text-caption"

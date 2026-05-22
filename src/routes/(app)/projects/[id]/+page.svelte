@@ -6,6 +6,7 @@
     ConfirmDeleteModal,
     FeedbackBanner,
     DeployModal,
+    DeployConfigForm,
   } from "$lib/ui/components";
   import { base } from "$app/paths";
   import type { PageData } from "./$types";
@@ -18,7 +19,16 @@
     logs: initialLogs,
     envVars: initialEnvVars,
     isFavorite: initialIsFavorite,
+    deployConfig,
   } = $derived(data);
+
+  const TABS = [
+    { id: 'overview', label: 'Overview' },
+    { id: 'logs', label: 'Logs' },
+    { id: 'env', label: 'Environment' },
+    { id: 'sharing', label: 'Sharing' },
+    { id: 'config', label: 'Configuration' },
+  ] as const;
 
   let activeTab = $state("overview");
   let feedback = $state<{ type: "success" | "error"; text: string } | null>(
@@ -379,21 +389,17 @@
     class="flex gap-xs mb-lg"
     style="border-bottom: 1px solid var(--border-color);"
   >
-    {#each ["overview", "logs", "env", "sharing"] as tab}
+    {#each TABS as tab}
       <button
         class="px-md py-sm text-caption font-medium transition-colors border-b-2"
-        style="border-color: {activeTab === tab
+        style="border-color: {activeTab === tab.id
           ? '#38CDFF'
-          : 'transparent'}; color: {activeTab === tab
+          : 'transparent'}; color: {activeTab === tab.id
           ? '#38CDFF'
           : 'var(--text-muted)'};"
-        onclick={() => (activeTab = tab)}
+        onclick={() => (activeTab = tab.id)}
       >
-        {tab === "env"
-          ? "Environment"
-          : tab === "sharing"
-            ? "Sharing"
-            : tab.charAt(0).toUpperCase() + tab.slice(1)}
+        {tab.label}
       </button>
     {/each}
   </div>
@@ -647,6 +653,11 @@
             Manage Collaborators
           </a>
         </Card>
+      {:else if activeTab === "config"}
+        <DeployConfigForm
+          projectId={process.pm_id.toString()}
+          initialConfig={deployConfig}
+        />
       {/if}
     </div>
   {/key}

@@ -2,6 +2,8 @@
 	import { base } from '$app/paths';
 	import { cn } from '$lib/motion-core/utils/cn';
 	import { invalidateAll } from '$app/navigation';
+	import { CommandSelector } from '$lib/ui/components';
+	import type { DeployConfig } from '$lib/deploy-config/deploy-config.types';
 
 	let {
 		open = false,
@@ -30,6 +32,13 @@
 		pendingPackages?: string[];
 	}
 
+	// View states: loading → selecting → deploying
+	let view = $state<'loading' | 'selecting' | 'deploying'>('deploying');
+	let deployConfig = $state<DeployConfig | null>(null);
+	let selectedCommandIds = $state<string[]>([]);
+	let installCommand = $state<string | undefined>(undefined);
+	let buildCommand = $state<string | undefined>(undefined);
+
 	let lines = $state<LogLine[]>([]);
 	let isDeploying = $state(false);
 	let isRestarting = $state(false);
@@ -45,11 +54,18 @@
 			deploySuccess = null;
 			approvalPending = false;
 			approvalPackages = [];
+			view = 'loading';
 			dialogRef?.showModal();
 			onDeploying?.(true);
-			startDeploy();
+			loadDeployConfig();
 		} else {
 			dialogRef?.close();
+			// Reset state when modal closes
+			view = 'deploying';
+			deployConfig = null;
+			selectedCommandIds = [];
+			installCommand = undefined;
+			buildCommand = undefined;
 		}
 	});
 
@@ -65,14 +81,70 @@
 		}
 	});
 
+	async function loadDeployConfig() {
+		try {
+			const res = await fetch(`${base}/api/deploy-config/${pmId}`);
+			if (!res.ok) {
+				// No config or error - proceed with default deploy
+				view = 'deploying';
+				startDeploy();
+				return;
+			}
+
+			const config = await res.json() as DeployConfig;
+			deployConfig = config;
+
+			// Store install/build commands if they exist
+			if (config.install && config.install.length > 0) {
+				installCommand = config.install[0].command;
+			}
+			if (config.build && config.build.length > 0) {
+				buildCommand = config.build[0].command;
+			}
+
+			// If 2+ restart commands, show selection step
+			if (config.restart && config.restart.length >= 2) {
+				view = 'selecting';
+				isDeploying = false;
+				onDeploying?.(false);
+			} else {
+				// 0-1 restart commands: skip selection, deploy immediately
+				view = 'deploying';
+				startDeploy();
+			}
+		} catch {
+			// Failed to load config - proceed with default deploy
+			view = 'deploying';
+			startDeploy();
+		}
+	}
+
+	async function handleCommandSelect(ids: string[]) {
+		selectedCommandIds = ids;
+		view = 'deploying';
+		isDeploying = true;
+		onDeploying?.(true);
+		startDeploy();
+	}
+
+	function handleCommandCancel() {
+		onClose();
+	}
+
 	async function startDeploy() {
 		let lastStep = '';
+
+		// Build request body
+		const body: Record<string, unknown> = { pm_id: pmId };
+		if (installCommand) body.installCommand = installCommand;
+		if (buildCommand) body.buildCommand = buildCommand;
+		if (selectedCommandIds.length > 0) body.restartCommandIds = selectedCommandIds;
 
 		try {
 			const res = await fetch(`${base}/api/deploy`, {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ pm_id: pmId }),
+				body: JSON.stringify(body),
 			});
 
 			if (res.status === 409) {
@@ -427,6 +499,10 @@
 							<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="color: #FF5252;">
 								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
 							</svg>
+						{:else if view === 'loading'}
+							<svg class="w-5 h-5 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="color: #38CDFF;">
+								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+							</svg>
 						{:else}
 							<svg class="w-5 h-5 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="color: #38CDFF;">
 								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
@@ -438,13 +514,13 @@
 							Deploy: {processName}
 						</h3>
 						<p class="text-caption" style="color: var(--text-muted);">
-							{isRestarting ? 'Server restarting...' : isDeploying ? 'Running deployment pipeline...' : approvalPending ? 'Approval required' : deploySuccess ? 'Deploy completed' : 'Deploy failed'}
+							{isRestarting ? 'Server restarting...' : view === 'loading' ? 'Loading deploy configuration...' : view === 'selecting' ? 'Select restart commands' : isDeploying ? 'Running deployment pipeline...' : approvalPending ? 'Approval required' : deploySuccess ? 'Deploy completed' : 'Deploy failed'}
 						</p>
 					</div>
 				</div>
 
 				<!-- Close button (only when done) -->
-				{#if !isDeploying && !isRestarting && !approvalPending}
+				{#if view !== 'loading' && view !== 'selecting' && !isDeploying && !isRestarting && !approvalPending}
 					<button
 						type="button"
 						class="btn-secondary px-3 py-1.5 text-caption"
@@ -455,94 +531,117 @@
 				{/if}
 			</div>
 
-			<!-- Approval prompt (shown when pnpm needs native build approval) -->
-			{#if approvalPending}
-				<div class="px-lg pt-md">
-					<div
-						class="rounded-lg p-md"
-						style="background: rgba(255, 215, 64, 0.1); border: 1px solid rgba(255, 215, 64, 0.3);"
-					>
-						<p class="text-caption font-semibold" style="color: #FFD740; margin-bottom: 8px;">
-							⚠ Native builds require approval
-						</p>
-						<p class="text-caption" style="color: var(--text-secondary); margin-bottom: 12px;">
-							These packages need to compile native code. Approve to continue:
-						</p>
-						<ul class="pl-lg list-disc" style="color: var(--text-primary); margin-bottom: 16px;">
-							{#each approvalPackages as pkg}
-								<li class="font-mono text-code">{pkg}</li>
-							{/each}
-						</ul>
-						<div class="flex gap-sm">
-							<button
-								class="btn-primary px-4 py-2 text-caption font-semibold"
-								style="background: #FFD740; color: #1a1a2e;"
-								onclick={handleApproveAndContinue}
-							>
-								Approve & Continue
-							</button>
-						</div>
+			<!-- Command selection step -->
+			{#if view === 'selecting'}
+				<div class="p-lg">
+					<CommandSelector
+						commands={deployConfig?.restart ?? []}
+						onSelect={handleCommandSelect}
+						onCancel={handleCommandCancel}
+					/>
+				</div>
+			{:else if view === 'loading'}
+				<!-- Loading state -->
+				<div class="p-lg">
+					<div class="flex items-center justify-center py-xl">
+						<svg class="w-6 h-6 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="color: #38CDFF;">
+							<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+						</svg>
+						<span class="ml-md text-body-sm" style="color: var(--text-muted);">
+							Loading deploy configuration...
+						</span>
 					</div>
 				</div>
-			{/if}
-
-			<!-- Step indicators -->
-			<div class="flex gap-sm px-lg pt-md">
-				{#each ['git-pull', 'install', 'build', 'restart'] as step}
-					<div
-						class="flex items-center gap-xs px-sm py-2xs rounded-md text-caption font-medium"
-						style={cn(
-							'background: var(--bg-base); border: 1px solid var(--border-color);',
-							lines.some((l) => l.step === step) ? 'border-color: #38CDFF;' : ''
-						)}
-					>
-						<span
-							class="w-4 h-4 rounded-full flex items-center justify-center text-xs font-bold"
-							style={cn(
-								'background: var(--bg-surface); color: var(--text-muted);',
-								stepIcon(step) === '✓' ? 'background: rgba(0, 230, 118, 0.2); color: #00E676;' : '',
-								stepIcon(step) === '✗' ? 'background: rgba(255, 82, 82, 0.2); color: #FF5252;' : '',
-								stepIcon(step) === '…' ? 'background: rgba(56, 205, 255, 0.2); color: #38CDFF;' : ''
-							)}
-						>
-							{stepIcon(step)}
-						</span>
-						<span style="color: var(--text-secondary);">{stepLabel(step)}</span>
-					</div>
-				{/each}
-			</div>
-
-			<!-- Log output -->
-			<div
-				bind:this={logContainer}
-				class="rounded-lg m-lg mt-sm p-md font-mono text-code overflow-x-auto max-h-[400px] overflow-y-auto scrollbar-thin"
-				style="background: var(--bg-base); border: 1px solid var(--border-color);"
-			>
-				{#if lines.length === 0}
-					<p class="text-center py-xl" style="color: var(--text-muted);">
-						Starting deploy...
-					</p>
-				{:else}
-					{#each lines as log}
+			{:else}
+				<!-- Approval prompt (shown when pnpm needs native build approval) -->
+				{#if approvalPending}
+					<div class="px-lg pt-md">
 						<div
-							class="py-2xs"
+							class="rounded-lg p-md"
+							style="background: rgba(255, 215, 64, 0.1); border: 1px solid rgba(255, 215, 64, 0.3);"
+						>
+							<p class="text-caption font-semibold" style="color: #FFD740; margin-bottom: 8px;">
+								⚠ Native builds require approval
+							</p>
+							<p class="text-caption" style="color: var(--text-secondary); margin-bottom: 12px;">
+								These packages need to compile native code. Approve to continue:
+							</p>
+							<ul class="pl-lg list-disc" style="color: var(--text-primary); margin-bottom: 16px;">
+								{#each approvalPackages as pkg}
+									<li class="font-mono text-code">{pkg}</li>
+								{/each}
+							</ul>
+							<div class="flex gap-sm">
+								<button
+									class="btn-primary px-4 py-2 text-caption font-semibold"
+									style="background: #FFD740; color: #1a1a2e;"
+									onclick={handleApproveAndContinue}
+								>
+									Approve & Continue
+								</button>
+							</div>
+						</div>
+					</div>
+				{/if}
+
+				<!-- Step indicators -->
+				<div class="flex gap-sm px-lg pt-md">
+					{#each ['git-pull', 'install', 'build', 'restart'] as step}
+						<div
+							class="flex items-center gap-xs px-sm py-2xs rounded-md text-caption font-medium"
 							style={cn(
-								'color: var(--text-secondary);',
-								log.isError ? 'color: #FF5252;' : '',
-								log.line.includes('Starting') ? 'color: #38CDFF; font-weight: 600;' : '',
-								log.line.includes('Completed') ? 'color: #00E676; font-weight: 600;' : '',
-								log.line.includes('Skipped') ? 'color: #FFD740; font-weight: 600;' : '',
-								log.line.includes('restarting') ? 'color: #FFD740; font-weight: 600;' : '',
-								log.line.includes('back online') ? 'color: #00E676; font-weight: 600;' : '',
-								log.line.includes('Failed') ? 'color: #FF5252; font-weight: 600;' : '',
-								log.line.includes('Pending approval') ? 'color: #FFD740; font-weight: 600;' : ''
+								'background: var(--bg-base); border: 1px solid var(--border-color);',
+								lines.some((l) => l.step === step) ? 'border-color: #38CDFF;' : ''
 							)}
 						>
-							{log.line}
+							<span
+								class="w-4 h-4 rounded-full flex items-center justify-center text-xs font-bold"
+								style={cn(
+									'background: var(--bg-surface); color: var(--text-muted);',
+									stepIcon(step) === '✓' ? 'background: rgba(0, 230, 118, 0.2); color: #00E676;' : '',
+									stepIcon(step) === '✗' ? 'background: rgba(255, 82, 82, 0.2); color: #FF5252;' : '',
+									stepIcon(step) === '…' ? 'background: rgba(56, 205, 255, 0.2); color: #38CDFF;' : ''
+								)}
+							>
+								{stepIcon(step)}
+							</span>
+							<span style="color: var(--text-secondary);">{stepLabel(step)}</span>
 						</div>
 					{/each}
-				{/if}
-			</div>
+				</div>
+
+				<!-- Log output -->
+				<div
+					bind:this={logContainer}
+					class="rounded-lg m-lg mt-sm p-md font-mono text-code overflow-x-auto max-h-[400px] overflow-y-auto scrollbar-thin"
+					style="background: var(--bg-base); border: 1px solid var(--border-color);"
+				>
+					{#if lines.length === 0}
+						<p class="text-center py-xl" style="color: var(--text-muted);">
+							Starting deploy...
+						</p>
+					{:else}
+						{#each lines as log}
+							<div
+								class="py-2xs"
+								style={cn(
+									'color: var(--text-secondary);',
+									log.isError ? 'color: #FF5252;' : '',
+									log.line.includes('Starting') ? 'color: #38CDFF; font-weight: 600;' : '',
+									log.line.includes('Completed') ? 'color: #00E676; font-weight: 600;' : '',
+									log.line.includes('Skipped') ? 'color: #FFD740; font-weight: 600;' : '',
+									log.line.includes('restarting') ? 'color: #FFD740; font-weight: 600;' : '',
+									log.line.includes('back online') ? 'color: #00E676; font-weight: 600;' : '',
+									log.line.includes('Failed') ? 'color: #FF5252; font-weight: 600;' : '',
+									log.line.includes('Pending approval') ? 'color: #FFD740; font-weight: 600;' : ''
+								)}
+							>
+								{log.line}
+							</div>
+						{/each}
+					{/if}
+				</div>
+			{/if}
 		</div>
 	</dialog>
 {/if}

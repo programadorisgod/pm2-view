@@ -110,8 +110,10 @@
 
 	async function deleteCommand(cmd: DeployCommand) {
 		try {
-			const res = await fetch(`${base}/api/deploy-config/${cmd.id}`, {
+			const res = await fetch(`${base}/api/deploy-config`, {
 				method: 'DELETE',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ id: cmd.id }),
 			});
 			if (!res.ok) {
 				const data = await res.json();
@@ -155,15 +157,15 @@
 			// Swap sort_order values via PUT
 			const cmd1 = newList[idx];
 			const cmd2 = newList[targetIdx];
-			const res1 = await fetch(`${base}/api/deploy-config/${cmd1.id}`, {
+			const res1 = await fetch(`${base}/api/deploy-config`, {
 				method: 'PUT',
 				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ sort_order: cmd1.sortOrder }),
+				body: JSON.stringify({ id: cmd1.id, sort_order: cmd1.sortOrder }),
 			});
-			const res2 = await fetch(`${base}/api/deploy-config/${cmd2.id}`, {
+			const res2 = await fetch(`${base}/api/deploy-config`, {
 				method: 'PUT',
 				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ sort_order: cmd2.sortOrder }),
+				body: JSON.stringify({ id: cmd2.id, sort_order: cmd2.sortOrder }),
 			});
 			if (!res1.ok || !res2.ok) throw new Error('Reorder failed');
 		} catch {

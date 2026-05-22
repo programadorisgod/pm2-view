@@ -12,10 +12,10 @@ export const GET: RequestHandler = async ({ params, request }) => {
 		return json({ error: 'Unauthorized' }, { status: 401 });
 	}
 
-	const { projectId } = params;
+	const { pmId } = params;
 
 	// Check project access
-	const role = await getProjectRole(session.user.id, projectId);
+	const role = await getProjectRole(session.user.id, pmId);
 	if (!role) {
 		return json({ error: 'Access denied' }, { status: 403 });
 	}
@@ -24,7 +24,7 @@ export const GET: RequestHandler = async ({ params, request }) => {
 	const pm2Repo = new PM2Repository();
 	const service = new DeployConfigService(repo, pm2Repo);
 
-	const config = await service.getConfig(projectId);
+	const config = await service.getConfig(pmId);
 
 	return json(config);
 };

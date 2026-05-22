@@ -81,9 +81,8 @@ export const PUT: RequestHandler = async ({ request }) => {
 
 	const repo = new DeployConfigRepository();
 
-	// Find command to check project access
-	const allCommands = await repo.getByProjectId(id);
-	const cmd = allCommands.find((c) => c.id === id);
+	// Find command by ID to check project access
+	const cmd = await repo.getById(id);
 
 	if (!cmd) {
 		return json({ error: 'Command not found' }, { status: 404 });
@@ -123,10 +122,8 @@ export const DELETE: RequestHandler = async ({ request }) => {
 
 	const repo = new DeployConfigRepository();
 
-	// Find command to check project access - we need to search all projects the user has access to
-	// Since we don't know the project, we try to find the command by ID
-	const allCommands = await repo.getByProjectId(id);
-	const cmd = allCommands.find((c) => c.id === id);
+	// Find command by ID to check project access
+	const cmd = await repo.getById(id);
 
 	if (!cmd) {
 		return json({ error: 'Command not found' }, { status: 404 });

@@ -4,6 +4,13 @@ import { eq, and, asc } from 'drizzle-orm';
 import type { IDeployConfigRepository, DeployCommand, CommandType } from '$lib/deploy-config/deploy-config.types';
 
 export class DeployConfigRepository implements IDeployConfigRepository {
+	async getById(id: string): Promise<DeployCommand | null> {
+		const command = await db.query.deployCommands.findFirst({
+			where: eq(deployCommands.id, id)
+		});
+		return command ?? null;
+	}
+
 	async getByProjectId(projectId: string): Promise<DeployCommand[]> {
 		const commands = await db.query.deployCommands.findMany({
 			where: eq(deployCommands.projectId, projectId),

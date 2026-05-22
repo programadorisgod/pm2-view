@@ -14,11 +14,19 @@
 	// Check if project is registered in the database
 	let isProjectRegistered = $derived(projectId !== '');
 
-	// Local state mirroring initialConfig
+	// Local state mirroring initialConfig - use $effect to sync with prop changes
 	let config = $state<DeployConfig>({
-		install: initialConfig.install ? [...initialConfig.install] : [],
-		build: initialConfig.build ? [...initialConfig.build] : [],
-		restart: initialConfig.restart ? [...initialConfig.restart] : [],
+		install: [],
+		build: [],
+		restart: [],
+	});
+
+	$effect(() => {
+		config = {
+			install: initialConfig.install ? [...initialConfig.install] : [],
+			build: initialConfig.build ? [...initialConfig.build] : [],
+			restart: initialConfig.restart ? [...initialConfig.restart] : [],
+		};
 	});
 
 	// UI state per section

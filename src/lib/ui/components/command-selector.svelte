@@ -11,8 +11,12 @@
 		onCancel: () => void;
 	} = $props();
 
-	// All restart commands checked by default
-	let selectedRestartIds = $state<string[]>(config.restart.map((c) => c.id));
+	// All restart commands checked by default - use $effect to sync with prop changes
+	let selectedRestartIds = $state<string[]>([]);
+
+	$effect(() => {
+		selectedRestartIds = config.restart.map((c) => c.id);
+	});
 
 	const allRestartSelected = $derived(selectedRestartIds.length === config.restart.length);
 	const noneRestartSelected = $derived(selectedRestartIds.length === 0);

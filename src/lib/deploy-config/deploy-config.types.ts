@@ -17,6 +17,7 @@ export interface DeployConfig {
 }
 
 export interface IDeployConfigRepository {
+	getById(id: string): Promise<DeployCommand | null>;
 	getByProjectId(projectId: string): Promise<DeployCommand[]>;
 	getByType(projectId: string, commandType: CommandType): Promise<DeployCommand[]>;
 	create(cmd: Omit<DeployCommand, 'id' | 'createdAt'>): Promise<DeployCommand>;

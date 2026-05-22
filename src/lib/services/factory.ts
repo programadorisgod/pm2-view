@@ -3,6 +3,8 @@ import { PM2Service } from '$lib/pm2/pm2.service';
 import { MetricsRepository } from '$lib/db/repositories/metrics-repository.impl';
 import { MetricsService } from '$lib/metrics/metrics.service';
 import { EnvVarService } from '$lib/env-vars/env-var.service';
+import { DeployConfigRepository } from '$lib/db/repositories/deploy-config-repository.impl';
+import { DeployConfigService } from '$lib/deploy-config/deploy-config.service';
 import { logger } from '$lib/logger';
 
 export interface ServiceContainer {
@@ -11,6 +13,7 @@ export interface ServiceContainer {
   metricsService: MetricsService;
   metricsRepo: MetricsRepository;
   envVarService: EnvVarService;
+  deployConfigService: DeployConfigService;
 }
 
 let container: ServiceContainer | null = null;
@@ -22,6 +25,8 @@ export function createServices(): ServiceContainer {
     const metricsRepo = new MetricsRepository();
     const metricsService = new MetricsService(metricsRepo, pm2Service);
     const envVarService = new EnvVarService(pm2Repo, pm2Service);
+    const deployConfigRepo = new DeployConfigRepository();
+    const deployConfigService = new DeployConfigService(deployConfigRepo, pm2Repo);
 
     container = {
       pm2Service,
@@ -29,6 +34,7 @@ export function createServices(): ServiceContainer {
       metricsService,
       metricsRepo,
       envVarService,
+      deployConfigService,
     };
   }
   return container;

@@ -11,6 +11,9 @@
 		initialConfig: DeployConfig;
 	} = $props();
 
+	// Check if project is registered in the database
+	let isProjectRegistered = $derived(projectId !== '');
+
 	// Local state mirroring initialConfig
 	let config = $state<DeployConfig>({
 		install: initialConfig.install ? [...initialConfig.install] : [],
@@ -230,6 +233,32 @@
 	}
 </script>
 
+{#if !isProjectRegistered}
+	<Card padding>
+		<div class="text-center py-lg">
+			<svg
+				class="mx-auto mb-md h-12 w-12"
+				style="color: var(--text-muted);"
+				fill="none"
+				stroke="currentColor"
+				viewBox="0 0 24 24"
+			>
+				<path
+					stroke-linecap="round"
+					stroke-linejoin="round"
+					stroke-width="2"
+					d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+				/>
+			</svg>
+			<h3 class="text-h3 font-semibold mb-sm" style="color: var(--text-primary);">
+				Project Not Registered
+			</h3>
+			<p class="text-body-sm" style="color: var(--text-muted);">
+				This PM2 process is not registered as a project. Deploy configuration is only available for registered projects.
+			</p>
+		</div>
+	</Card>
+{:else}
 <div class="space-y-lg">
 	{#if serverError}
 		<div
@@ -583,4 +612,5 @@
 			</div>
 		</div>
 	</dialog>
+{/if}
 {/if}

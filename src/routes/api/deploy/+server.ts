@@ -2,12 +2,17 @@ import { json, type RequestHandler } from '@sveltejs/kit';
 import { z } from 'zod';
 import { PM2Repository } from '$lib/pm2/pm2-repository.impl';
 import { DeployService } from '$lib/deploy/deploy.service';
+import { DeployConfigRepository } from '$lib/db/repositories/deploy-config-repository.impl';
 import { rateLimiter } from '$lib/rate-limiter';
 import { logger } from '$lib/logger';
-import type { DeployStep } from '$lib/deploy/deploy.types';
+import type { DeployStep, DeployOptions } from '$lib/deploy/deploy.types';
 
 const deploySchema = z.object({
 	pm_id: z.string().min(1, 'Process ID is required'),
+	projectId: z.string().optional(),
+	restartCommandIds: z.array(z.string()).optional(),
+	installCommand: z.string().optional(),
+	buildCommand: z.string().optional(),
 });
 
 function getZodErrorMessage(result: any): string {
@@ -37,7 +42,27 @@ export const POST: RequestHandler = async ({ request, getClientAddress }) => {
 		return json({ error: getZodErrorMessage(validationResult) }, { status: 400 });
 	}
 
-	const { pm_id } = validationResult.data;
+	const { pm_id, projectId, restartCommandIds, installCommand, buildCommand } = validationResult.data;
+
+	// Resolve restart command IDs to actual commands
+	let resolvedRestartCommands: string[] | undefined;
+	if (restartCommandIds && restartCommandIds.length > 0 && projectId) {
+		const deployConfigRepo = new DeployConfigRepository();
+		const commands = await deployConfigRepo.getByProjectId(projectId);
+		const selectedCommands = commands.filter((c) => restartCommandIds.includes(c.id));
+		if (selectedCommands.length !== restartCommandIds.length) {
+			activeDeploys.delete(pm_id);
+			return json({ error: 'One or more restart command IDs are invalid' }, { status: 400 });
+		}
+		resolvedRestartCommands = selectedCommands
+			.sort((a, b) => a.sortOrder - b.sortOrder)
+			.map((c) => c.command);
+	}
+
+	const deployOptions: DeployOptions | undefined =
+		installCommand || buildCommand || resolvedRestartCommands
+			? { installCommand, buildCommand, restartCommands: resolvedRestartCommands }
+			: undefined;
 
 	// Check if a deploy is already running for this process
 	if (activeDeploys.has(pm_id)) {
@@ -65,7 +90,7 @@ export const POST: RequestHandler = async ({ request, getClientAddress }) => {
 			try {
 				const result = await deployService.deploy(pm_id, (step: DeployStep, line: string, isError: boolean) => {
 					safeEnqueue(JSON.stringify({ step, line, isError, isComplete: false }));
-				});
+				}, deployOptions);
 
 				if (result.needsApproval) {
 					safeEnqueue(JSON.stringify({

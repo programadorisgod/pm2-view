@@ -42,3 +42,10 @@ export interface DeployResult {
 
 /** Callback signature for streaming deploy output line by line */
 export type DeployLogCallback = (step: DeployStep, line: string, isError: boolean) => void;
+
+/** Optional command overrides for deploy */
+export interface DeployOptions {
+	installCommand?: string;
+	buildCommand?: string;
+	restartCommands?: string[];
+}

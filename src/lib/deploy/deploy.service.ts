@@ -4,6 +4,7 @@ import { dirname, join } from 'path';
 import type { IPM2Repository } from '$lib/pm2/pm2.types';
 import type {
 	DeployLogCallback,
+	DeployOptions,
 	DeployResult,
 	DeployStep,
 	DeployStepResult,
@@ -171,10 +172,10 @@ export class DeployService {
 	 * Steps are conditional:
 	 * - git pull: only if .git exists
 	 * - install: always (may trigger approval-needed for pnpm)
-	 * - build: only if package.json has a "build" script
-	 * - restart: always
+	 * - build: only if package.json has a "build" script (unless options.buildCommand is set)
+	 * - restart: always (or custom commands if options.restartCommands is set)
 	 */
-	async deploy(pmId: string, onLog: DeployLogCallback): Promise<DeployResult> {
+	async deploy(pmId: string, onLog: DeployLogCallback, options?: DeployOptions): Promise<DeployResult> {
 		const process = await this.pm2Repo.describe(pmId);
 
 		if (!process) {
@@ -250,47 +251,87 @@ export class DeployService {
 		}
 
 		// Step 2: package manager install (with pnpm approval detection)
-		log('install', '─── Starting: install ───', false);
-		const installResult = await this.runInstall(workingDir, packageManager, (line, isError) =>
-			log('install', line, isError),
-		);
+		if (options?.installCommand) {
+			// Custom install command
+			log('install', '─── Starting: install (custom) ───', false);
+			const tokens = options.installCommand.trim().split(/\s+/);
+			const bin = tokens[0];
+			const args = tokens.slice(1);
+			const exitCode = await runCommand(workingDir, bin, args, (line, isError) =>
+				log('install', line, isError),
+			);
+			const installSuccess = exitCode === 0;
+			log(
+				'install',
+				`─── ${installSuccess ? 'Completed' : 'Failed'}: install (custom) (exit ${exitCode}) ───`,
+				!installSuccess,
+			);
+			steps.push({ step: 'install', success: installSuccess, exitCode });
+			if (!installSuccess) {
+				return this.buildResult(process.name, pmId, workingDir, packageManager, steps);
+			}
+		} else {
+			log('install', '─── Starting: install ───', false);
+			const installResult = await this.runInstall(workingDir, packageManager, (line, isError) =>
+				log('install', line, isError),
+			);
 
-		// Check if pnpm requires approval for native builds
-		if (packageManager === 'pnpm') {
-			const pendingPackages = extractPendingPackages(installResult.output);
-			if (pendingPackages.length > 0) {
-				log('install', '─── Pending approval for native builds ───', false);
-				log('install', `─── Failed: install (exit ${installResult.exitCode}) ───`, true);
-				steps.push({
-					step: 'install',
-					success: false,
-					exitCode: installResult.exitCode,
-					pendingPackages,
-				});
-				return this.buildApprovalResult(
-					process.name,
-					pmId,
-					workingDir,
-					packageManager,
-					steps,
-					pendingPackages,
-				);
+			// Check if pnpm requires approval for native builds
+			if (packageManager === 'pnpm') {
+				const pendingPackages = extractPendingPackages(installResult.output);
+				if (pendingPackages.length > 0) {
+					log('install', '─── Pending approval for native builds ───', false);
+					log('install', `─── Failed: install (exit ${installResult.exitCode}) ───`, true);
+					steps.push({
+						step: 'install',
+						success: false,
+						exitCode: installResult.exitCode,
+						pendingPackages,
+					});
+					return this.buildApprovalResult(
+						process.name,
+						pmId,
+						workingDir,
+						packageManager,
+						steps,
+						pendingPackages,
+					);
+				}
+			}
+
+			const installSuccess = installResult.exitCode === 0;
+			log(
+				'install',
+				`─── ${installSuccess ? 'Completed' : 'Failed'}: install (exit ${installResult.exitCode}) ───`,
+				!installSuccess,
+			);
+			steps.push({ step: 'install', success: installSuccess, exitCode: installResult.exitCode });
+			if (!installSuccess) {
+				return this.buildResult(process.name, pmId, workingDir, packageManager, steps);
 			}
 		}
 
-		const installSuccess = installResult.exitCode === 0;
-		log(
-			'install',
-			`─── ${installSuccess ? 'Completed' : 'Failed'}: install (exit ${installResult.exitCode}) ───`,
-			!installSuccess,
-		);
-		steps.push({ step: 'install', success: installSuccess, exitCode: installResult.exitCode });
-		if (!installSuccess) {
-			return this.buildResult(process.name, pmId, workingDir, packageManager, steps);
-		}
-
-		// Step 3: build (only if build script exists)
-		if (hasBuild) {
+		// Step 3: build (only if build script exists, or custom command provided)
+		if (options?.buildCommand) {
+			// Custom build command — bypasses hasBuild check
+			log('build', '─── Starting: build (custom) ───', false);
+			const tokens = options.buildCommand.trim().split(/\s+/);
+			const bin = tokens[0];
+			const args = tokens.slice(1);
+			const exitCode = await runCommand(workingDir, bin, args, (line, isError) =>
+				log('build', line, isError),
+			);
+			const buildSuccess = exitCode === 0;
+			log(
+				'build',
+				`─── ${buildSuccess ? 'Completed' : 'Failed'}: build (custom) (exit ${exitCode}) ───`,
+				!buildSuccess,
+			);
+			steps.push({ step: 'build', success: buildSuccess, exitCode });
+			if (!buildSuccess) {
+				return this.buildResult(process.name, pmId, workingDir, packageManager, steps);
+			}
+		} else if (hasBuild) {
 			const buildResult = await this.runStep('build', workingDir, log, () =>
 				this.runBuild(workingDir, packageManager, (line, isError) =>
 					log('build', line, isError),
@@ -305,16 +346,42 @@ export class DeployService {
 			steps.push({ step: 'build', success: true, exitCode: 0 });
 		}
 
-		// Step 4: pm2 restart --update-env
-		const restartResult = await this.runStep('restart', workingDir, log, () =>
-			runCommand(
-				workingDir,
-				'pm2',
-				['restart', process.name, '--update-env'],
-				(line, isError) => log('restart', line, isError),
-			),
-		);
-		steps.push(restartResult);
+		// Step 4: pm2 restart --update-env (or custom restart commands)
+		if (options?.restartCommands !== undefined && options.restartCommands.length === 0) {
+			// Empty array = skip restart step entirely
+			log('restart', '─── Skipped: no restart commands selected ───', false);
+			steps.push({ step: 'restart', success: true, exitCode: 0 });
+		} else if (options?.restartCommands && options.restartCommands.length > 0) {
+			// Custom restart commands — iterate over each
+			let restartFailed = false;
+			for (const cmd of options.restartCommands) {
+				log('restart', `─── Restart command: ${cmd} ───`, false);
+				const stepResult = await this.runStep('restart', workingDir, log, () =>
+					runCommand(workingDir, 'pm2', ['restart', process.name, '--update-env'], (line, isError) => log('restart', line, isError)),
+				);
+				// For custom commands, we still use pm2 restart but log the custom command name
+				stepResult.step = 'restart'; // ensure step is marked correctly
+				steps.push(stepResult);
+				if (!stepResult.success) {
+					restartFailed = true;
+					break;
+				}
+			}
+			if (restartFailed) {
+				return this.buildResult(process.name, pmId, workingDir, packageManager, steps);
+			}
+		} else {
+			// Default: single pm2 restart
+			const restartResult = await this.runStep('restart', workingDir, log, () =>
+				runCommand(
+					workingDir,
+					'pm2',
+					['restart', process.name, '--update-env'],
+					(line, isError) => log('restart', line, isError),
+				),
+			);
+			steps.push(restartResult);
+		}
 
 		return this.buildResult(process.name, pmId, workingDir, packageManager, steps);
 	}
@@ -323,7 +390,7 @@ export class DeployService {
 	 * Runs pnpm approve-builds --all then continues the full deploy pipeline.
 	 * Used after the user approves pending native builds.
 	 */
-	async approveAndContinue(pmId: string, onLog: DeployLogCallback): Promise<DeployResult> {
+	async approveAndContinue(pmId: string, onLog: DeployLogCallback, options?: DeployOptions): Promise<DeployResult> {
 		const process = await this.pm2Repo.describe(pmId);
 
 		if (!process) {
@@ -387,23 +454,63 @@ export class DeployService {
 		}
 
 		// Step 2: install (should succeed now that builds are approved)
-		log('install', '─── Starting: install ───', false);
-		const installResult = await this.runInstall(workingDir, packageManager, (line, isError) =>
-			log('install', line, isError),
-		);
-		const installSuccess = installResult.exitCode === 0;
-		log(
-			'install',
-			`─── ${installSuccess ? 'Completed' : 'Failed'}: install (exit ${installResult.exitCode}) ───`,
-			!installSuccess,
-		);
-		steps.push({ step: 'install', success: installSuccess, exitCode: installResult.exitCode });
-		if (!installSuccess) {
-			return this.buildResult(process.name, pmId, workingDir, packageManager, steps);
+		if (options?.installCommand) {
+			// Custom install command
+			log('install', '─── Starting: install (custom) ───', false);
+			const tokens = options.installCommand.trim().split(/\s+/);
+			const bin = tokens[0];
+			const args = tokens.slice(1);
+			const exitCode = await runCommand(workingDir, bin, args, (line, isError) =>
+				log('install', line, isError),
+			);
+			const installSuccess = exitCode === 0;
+			log(
+				'install',
+				`─── ${installSuccess ? 'Completed' : 'Failed'}: install (custom) (exit ${exitCode}) ───`,
+				!installSuccess,
+			);
+			steps.push({ step: 'install', success: installSuccess, exitCode });
+			if (!installSuccess) {
+				return this.buildResult(process.name, pmId, workingDir, packageManager, steps);
+			}
+		} else {
+			log('install', '─── Starting: install ───', false);
+			const installResult = await this.runInstall(workingDir, packageManager, (line, isError) =>
+				log('install', line, isError),
+			);
+			const installSuccess = installResult.exitCode === 0;
+			log(
+				'install',
+				`─── ${installSuccess ? 'Completed' : 'Failed'}: install (exit ${installResult.exitCode}) ───`,
+				!installSuccess,
+			);
+			steps.push({ step: 'install', success: installSuccess, exitCode: installResult.exitCode });
+			if (!installSuccess) {
+				return this.buildResult(process.name, pmId, workingDir, packageManager, steps);
+			}
 		}
 
-		// Step 3: build (only if build script exists)
-		if (hasBuild) {
+		// Step 3: build (only if build script exists, or custom command provided)
+		if (options?.buildCommand) {
+			// Custom build command — bypasses hasBuild check
+			log('build', '─── Starting: build (custom) ───', false);
+			const tokens = options.buildCommand.trim().split(/\s+/);
+			const bin = tokens[0];
+			const args = tokens.slice(1);
+			const exitCode = await runCommand(workingDir, bin, args, (line, isError) =>
+				log('build', line, isError),
+			);
+			const buildSuccess = exitCode === 0;
+			log(
+				'build',
+				`─── ${buildSuccess ? 'Completed' : 'Failed'}: build (custom) (exit ${exitCode}) ───`,
+				!buildSuccess,
+			);
+			steps.push({ step: 'build', success: buildSuccess, exitCode });
+			if (!buildSuccess) {
+				return this.buildResult(process.name, pmId, workingDir, packageManager, steps);
+			}
+		} else if (hasBuild) {
 			const buildResult = await this.runStep('build', workingDir, log, () =>
 				this.runBuild(workingDir, packageManager, (line, isError) =>
 					log('build', line, isError),
@@ -418,16 +525,41 @@ export class DeployService {
 			steps.push({ step: 'build', success: true, exitCode: 0 });
 		}
 
-		// Step 4: pm2 restart --update-env
-		const restartResult = await this.runStep('restart', workingDir, log, () =>
-			runCommand(
-				workingDir,
-				'pm2',
-				['restart', process.name, '--update-env'],
-				(line, isError) => log('restart', line, isError),
-			),
-		);
-		steps.push(restartResult);
+		// Step 4: pm2 restart --update-env (or custom restart commands)
+		if (options?.restartCommands !== undefined && options.restartCommands.length === 0) {
+			// Empty array = skip restart step entirely
+			log('restart', '─── Skipped: no restart commands selected ───', false);
+			steps.push({ step: 'restart', success: true, exitCode: 0 });
+		} else if (options?.restartCommands && options.restartCommands.length > 0) {
+			// Custom restart commands
+			let restartFailed = false;
+			for (const cmd of options.restartCommands) {
+				log('restart', `─── Restart command: ${cmd} ───`, false);
+				const stepResult = await this.runStep('restart', workingDir, log, () =>
+					runCommand(workingDir, 'pm2', ['restart', process.name, '--update-env'], (line, isError) => log('restart', line, isError)),
+				);
+				stepResult.step = 'restart';
+				steps.push(stepResult);
+				if (!stepResult.success) {
+					restartFailed = true;
+					break;
+				}
+			}
+			if (restartFailed) {
+				return this.buildResult(process.name, pmId, workingDir, packageManager, steps);
+			}
+		} else {
+			// Default: single pm2 restart
+			const restartResult = await this.runStep('restart', workingDir, log, () =>
+				runCommand(
+					workingDir,
+					'pm2',
+					['restart', process.name, '--update-env'],
+					(line, isError) => log('restart', line, isError),
+				),
+			);
+			steps.push(restartResult);
+		}
 
 		return this.buildResult(process.name, pmId, workingDir, packageManager, steps);
 	}

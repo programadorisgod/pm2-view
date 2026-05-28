@@ -26,10 +26,12 @@ export const load: PageServerLoad = async ({ params, request }) => {
 	// Get environment variables
 	const envVars = await envVarService.getEnvVars(id);
 
+	// Get session for user-dependent operations
+	const session = await auth.api.getSession({ headers: request.headers }).catch(() => null);
+
 	// Get favorite status
 	let isFavorite = false;
 	try {
-		const session = await auth.api.getSession({ headers: request.headers });
 		if (session?.user) {
 			const { ProjectFavoriteRepository } = await import('$lib/db/repositories/project-favorite-repository.impl');
 			const favRepo = new ProjectFavoriteRepository();
@@ -39,16 +41,28 @@ export const load: PageServerLoad = async ({ params, request }) => {
 		// Silent fail - favorite status is non-critical
 	}
 
-	// Get deploy configuration
+	// Get deploy configuration (auto-provisions project if not registered)
 	let deployConfig = { install: [], build: [], restart: [] };
 	let projectInternalId: string | null = null;
 	try {
 		// Find project by pm2_name to get internal ID
-		const project = await db.query.projects.findFirst({
+		let project = await db.query.projects.findFirst({
 			where: eq(projects.pm2Name, process.name),
 			columns: { id: true }
 		});
-		
+
+		// Auto-provision: register project if it doesn't exist yet
+		if (!project && session?.user) {
+			const [created] = await db.insert(projects).values({
+				id: crypto.randomUUID(),
+				userId: session.user.id,
+				name: process.name,
+				pm2Name: process.name,
+				description: `PM2 process: ${process.name}`
+			}).returning();
+			project = created;
+		}
+
 		if (project) {
 			projectInternalId = project.id;
 			const deployConfigRepo = new DeployConfigRepository();

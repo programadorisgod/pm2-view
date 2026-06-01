@@ -126,49 +126,50 @@
     <FeedbackBanner type={feedback.type} message={feedback.text} />
   {/if}
 
-  <!-- Favorites / Others collapsible headers -->
-  {#if processes.length > 0}
-    <div class="flex flex-col gap-sm mb-lg">
-      {#if favoriteProcesses.length > 0}
-        <button
-          class="flex items-center gap-sm px-3 py-2 rounded-lg transition-colors w-fit"
-          style="background: var(--bg-surface); border: 1px solid var(--border-color);"
-          onclick={() => { favoritesExpanded = !favoritesExpanded; }}
+  <!-- Favorites collapsible header -->
+  {#if processes.length > 0 && favoriteProcesses.length > 0}
+    <div class="mb-lg">
+      <button
+        class="flex items-center gap-sm px-3 py-2 rounded-lg transition-colors w-fit"
+        style="background: var(--bg-surface); border: 1px solid var(--border-color);"
+        onclick={() => { favoritesExpanded = !favoritesExpanded; }}
+      >
+        <svg
+          class="w-4 h-4 transition-transform"
+          style="color: #FFD740; transform: {favoritesExpanded ? 'rotate(90deg)' : 'rotate(0deg)'};"
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
         >
-          <svg
-            class="w-4 h-4 transition-transform"
-            style="color: #FFD740; transform: {favoritesExpanded ? 'rotate(90deg)' : 'rotate(0deg)'};"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
-          </svg>
-          <span class="text-body-sm font-semibold" style="color: #FFD740;">
-            ★ Favorites ({favoriteProcesses.length})
-          </span>
-        </button>
-      {/if}
-      {#if displayedNonFavorites.length > 0}
-        <button
-          class="flex items-center gap-sm px-3 py-2 rounded-lg transition-colors w-fit"
-          style="background: var(--bg-surface); border: 1px solid var(--border-color);"
-          onclick={() => { othersExpanded = !othersExpanded; }}
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+        </svg>
+        <span class="text-body-sm font-semibold" style="color: #FFD740;">
+          ★ Favorites ({favoriteProcesses.length})
+        </span>
+      </button>
+    </div>
+  {/if}
+
+  {#if processes.length > 0 && favoriteProcesses.length === 0 && displayedNonFavorites.length > 0}
+    <div class="mb-lg">
+      <button
+        class="flex items-center gap-sm px-3 py-2 rounded-lg transition-colors w-fit"
+        style="background: var(--bg-surface); border: 1px solid var(--border-color);"
+        onclick={() => { othersExpanded = !othersExpanded; }}
+      >
+        <svg
+          class="w-4 h-4 transition-transform"
+          style="color: var(--text-secondary); transform: {othersExpanded ? 'rotate(90deg)' : 'rotate(0deg)'};"
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
         >
-          <svg
-            class="w-4 h-4 transition-transform"
-            style="color: var(--text-secondary); transform: {othersExpanded ? 'rotate(90deg)' : 'rotate(0deg)'};"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
-          </svg>
-          <span class="text-body-sm font-semibold" style="color: var(--text-secondary);">
-            Others ({displayedNonFavorites.length})
-          </span>
-        </button>
-      {/if}
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+        </svg>
+        <span class="text-body-sm font-semibold" style="color: var(--text-secondary);">
+          Others ({displayedNonFavorites.length})
+        </span>
+      </button>
     </div>
   {/if}
 
@@ -305,6 +306,28 @@
         class="my-lg"
         style="border-top: 1px solid var(--border-color);"
       ></div>
+
+      <!-- Others collapsible header -->
+      <div class="mb-md">
+        <button
+          class="flex items-center gap-sm px-3 py-2 rounded-lg transition-colors w-fit"
+          style="background: var(--bg-surface); border: 1px solid var(--border-color);"
+          onclick={() => { othersExpanded = !othersExpanded; }}
+        >
+          <svg
+            class="w-4 h-4 transition-transform"
+            style="color: var(--text-secondary); transform: {othersExpanded ? 'rotate(90deg)' : 'rotate(0deg)'};"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+          </svg>
+          <span class="text-body-sm font-semibold" style="color: var(--text-secondary);">
+            Others ({displayedNonFavorites.length})
+          </span>
+        </button>
+      </div>
     {/if}
 
     {#if displayedNonFavorites.length > 0 && othersExpanded}

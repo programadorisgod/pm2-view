@@ -50,6 +50,9 @@ export const POST: RequestHandler = async ({ request, url, getClientAddress }) =
     case 'start':
       response = await pm2Service.startProcess(pm_id);
       break;
+    case 'delete':
+      response = await pm2Service.deleteProcess(pm_id);
+      break;
     default:
       return json({ error: 'Invalid action' }, { status: 400 });
   }

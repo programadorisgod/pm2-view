@@ -35,6 +35,8 @@
     null,
   );
   let deleteModal = $state({ open: false });
+  let restartModal = $state({ open: false });
+  let stopModal = $state({ open: false });
   let deployModal = $state({ open: false });
   let isDeploying = $state(false);
   let isFavorite = $state(initialIsFavorite ?? false);
@@ -222,6 +224,14 @@
     deleteModal.open = true;
   }
 
+  function requestRestart() {
+    restartModal.open = true;
+  }
+
+  function requestStop() {
+    stopModal.open = true;
+  }
+
   async function confirmDelete() {
     deleteModal.open = false;
     feedback = null;
@@ -282,7 +292,7 @@
   }
 </script>
 
-<div class="max-w-5xl mx-auto">
+<div class="w-full">
   <!-- Back Button -->
   <div class="mb-lg">
     <a
@@ -306,7 +316,9 @@
   </div>
 
   {#if feedback}
-    <FeedbackBanner type={feedback.type} message={feedback.text} />
+    <div class="mb-md">
+      <FeedbackBanner type={feedback.type} message={feedback.text} />
+    </div>
   {/if}
 
   <!-- Project Header -->
@@ -323,8 +335,8 @@
           >{process.status}</Badge
         >
         <button
-          class="text-h3 transition-colors"
-          style="color: {isFavorite ? '#FFD740' : 'var(--text-muted)'};"
+          class="transition-colors self-center"
+          style="font-size: 1.25rem; line-height: 1; color: {isFavorite ? '#FFD740' : 'var(--text-muted)'};"
           onclick={toggleFavorite}
           title={isFavorite ? "Remove from favorites" : "Add to favorites"}
         >
@@ -365,11 +377,11 @@
       {#if process.status === "online"}
         <button
           class="btn-secondary px-3 py-1.5 text-caption"
-          onclick={() => handleAction("restart")}>Restart</button
+          onclick={requestRestart}>Restart</button
         >
         <button
           class="btn-secondary px-3 py-1.5 text-caption"
-          onclick={() => handleAction("stop")}>Stop</button
+          onclick={requestStop}>Stop</button
         >
       {:else if process.status === "stopped"}
         <button
@@ -671,6 +683,88 @@
     deleteModal.open = false;
   }}
 />
+
+<!-- Restart Confirmation Modal -->
+{#if restartModal.open}
+  <dialog
+    open
+    class="fixed inset-0 z-50 flex items-center justify-center p-4"
+    style="background: transparent; border: none;"
+    onclose={() => { restartModal.open = false; }}
+  >
+    <button
+      type="button"
+      class="fixed inset-0"
+      style="background: rgba(0,0,0,0.6); border: none; cursor: pointer;"
+      onclick={() => { restartModal.open = false; }}
+      aria-label="Close modal"
+    ></button>
+    <div
+      class="relative w-full max-w-md rounded-xl shadow-2xl p-lg"
+      style="background: var(--bg-surface); border: 1px solid var(--border-color);"
+    >
+      <div class="flex items-center gap-md mb-lg">
+        <div class="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0" style="background: rgba(255, 183, 77, 0.15);">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="color: #FFB74D;">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+          </svg>
+        </div>
+        <div>
+          <h3 class="text-h3 font-semibold" style="color: var(--text-primary);">Restart Process</h3>
+          <p class="text-caption" style="color: var(--text-muted);">This will cause a brief downtime</p>
+        </div>
+      </div>
+      <p class="text-body-sm mb-lg" style="color: var(--text-secondary);">
+        Are you sure you want to restart <strong class="font-mono" style="color: var(--text-primary);">{process.name}</strong>?
+      </p>
+      <div class="flex gap-sm justify-end">
+        <button type="button" class="btn-secondary px-4 py-2 text-body-sm" onclick={() => { restartModal.open = false; }}>Cancel</button>
+        <button type="button" class="btn-primary px-4 py-2 text-body-sm" onclick={() => { restartModal.open = false; handleAction("restart"); }}>Restart</button>
+      </div>
+    </div>
+  </dialog>
+{/if}
+
+<!-- Stop Confirmation Modal -->
+{#if stopModal.open}
+  <dialog
+    open
+    class="fixed inset-0 z-50 flex items-center justify-center p-4"
+    style="background: transparent; border: none;"
+    onclose={() => { stopModal.open = false; }}
+  >
+    <button
+      type="button"
+      class="fixed inset-0"
+      style="background: rgba(0,0,0,0.6); border: none; cursor: pointer;"
+      onclick={() => { stopModal.open = false; }}
+      aria-label="Close modal"
+    ></button>
+    <div
+      class="relative w-full max-w-md rounded-xl shadow-2xl p-lg"
+      style="background: var(--bg-surface); border: 1px solid var(--border-color);"
+    >
+      <div class="flex items-center gap-md mb-lg">
+        <div class="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0" style="background: rgba(255, 82, 82, 0.15);">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="color: #FF5252;">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 10a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1v-4z"/>
+          </svg>
+        </div>
+        <div>
+          <h3 class="text-h3 font-semibold" style="color: var(--text-primary);">Stop Process</h3>
+          <p class="text-caption" style="color: var(--text-muted);">The process will be unavailable</p>
+        </div>
+      </div>
+      <p class="text-body-sm mb-lg" style="color: var(--text-secondary);">
+        Are you sure you want to stop <strong class="font-mono" style="color: var(--text-primary);">{process.name}</strong>?
+      </p>
+      <div class="flex gap-sm justify-end">
+        <button type="button" class="btn-secondary px-4 py-2 text-body-sm" onclick={() => { stopModal.open = false; }}>Cancel</button>
+        <button type="button" class="btn-danger px-4 py-2 text-body-sm" onclick={() => { stopModal.open = false; handleAction("stop"); }}>Stop</button>
+      </div>
+    </div>
+  </dialog>
+{/if}
 
 <DeployModal
   open={deployModal.open}

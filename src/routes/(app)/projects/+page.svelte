@@ -132,7 +132,7 @@
       {#if favoriteProcesses.length > 0}
         <button
           class="flex items-center gap-sm px-3 py-2 rounded-lg transition-colors w-fit"
-          style="background: rgba(255, 215, 64, 0.08); border: 1px solid rgba(255, 215, 64, 0.2);"
+          style="background: var(--bg-surface); border: 1px solid var(--border-color);"
           onclick={() => { favoritesExpanded = !favoritesExpanded; }}
         >
           <svg
@@ -152,7 +152,7 @@
       {#if displayedNonFavorites.length > 0}
         <button
           class="flex items-center gap-sm px-3 py-2 rounded-lg transition-colors w-fit"
-          style="background: rgba(12, 22, 32, 0.5); border: 1px solid rgba(130, 160, 190, 0.2);"
+          style="background: var(--bg-surface); border: 1px solid var(--border-color);"
           onclick={() => { othersExpanded = !othersExpanded; }}
         >
           <svg

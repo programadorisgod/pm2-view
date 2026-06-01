@@ -21,42 +21,12 @@
     name: "",
     pm_id: "",
   });
-  let showFavoritesOnly = $state(false);
+  let favoritesExpanded = $state(true);
+  let othersExpanded = $state(true);
 
   let favoriteProcesses = $derived(processes.filter((p) => p.isFavorite));
   let nonFavoriteProcesses = $derived(processes.filter((p) => !p.isFavorite));
-  let displayedNonFavorites = $derived(
-    showFavoritesOnly ? [] : nonFavoriteProcesses,
-  );
-  let totalDisplayed = $derived(
-    showFavoritesOnly ? favoriteProcesses : processes,
-  );
-
-  function getFavoriteStarStyle(isFavorite: boolean) {
-    if (isFavorite) {
-      return "color: #FFD740; text-shadow: 0 0 6px rgba(255, 215, 64, 0.65); background: rgba(255, 215, 64, 0.18); border: 1px solid rgba(255, 215, 64, 0.45); border-radius: 999px; padding: 0.1rem 0.4rem;";
-    }
-    return "color: var(--text-muted); text-shadow: none; background: transparent; border: 1px solid transparent; border-radius: 999px; padding: 0.1rem 0.4rem;";
-  }
-
-  function getFavoriteStarLabel(isFavorite: boolean) {
-    return isFavorite ? "★" : "☆";
-  }
-
-  function getFavoriteStarTitle(isFavorite: boolean) {
-    return isFavorite ? "Remove from favorites" : "Add to favorites";
-  }
-
-  function getFavoritesToggleStyle(isActive: boolean) {
-    if (isActive) {
-      return "background: rgba(56, 205, 255, 0.22); color: #7AE3FF; border: 1px solid rgba(56, 205, 255, 0.65); box-shadow: 0 0 10px rgba(56, 205, 255, 0.25);";
-    }
-    return "background: rgba(12, 22, 32, 0.5); color: var(--text-primary); border: 1px solid rgba(130, 160, 190, 0.45); box-shadow: inset 0 0 0 1px rgba(130, 160, 190, 0.08);";
-  }
-
-  function getFavoritesToggleLabel(isActive: boolean) {
-    return isActive ? "★ Favorites" : "☆ Favorites";
-  }
+  let displayedNonFavorites = $derived(nonFavoriteProcesses);
 
   function getStatusVariant(status: string) {
     switch (status) {
@@ -156,52 +126,68 @@
     <FeedbackBanner type={feedback.type} message={feedback.text} />
   {/if}
 
-  <!-- Favorites Filter -->
+  <!-- Favorites / Others collapsible headers -->
   {#if processes.length > 0}
-    <div class="flex items-center gap-sm mb-lg">
-      <button
-        class="px-3 py-1.5 text-caption rounded-pill transition-colors"
-        style={getFavoritesToggleStyle(showFavoritesOnly)}
-        onclick={() => (showFavoritesOnly = !showFavoritesOnly)}
-      >
-        {getFavoritesToggleLabel(showFavoritesOnly)}
-      </button>
-      {#if showFavoritesOnly}
-        <span class="text-caption" style="color: var(--text-muted);">
-          {favoriteProcesses.length} of {processes.length} projects
-        </span>
+    <div class="flex flex-col gap-sm mb-lg">
+      {#if favoriteProcesses.length > 0}
+        <button
+          class="flex items-center gap-sm px-3 py-2 rounded-lg transition-colors w-fit"
+          style="background: rgba(255, 215, 64, 0.08); border: 1px solid rgba(255, 215, 64, 0.2);"
+          onclick={() => { favoritesExpanded = !favoritesExpanded; }}
+        >
+          <svg
+            class="w-4 h-4 transition-transform"
+            style="color: #FFD740; transform: {favoritesExpanded ? 'rotate(90deg)' : 'rotate(0deg)'};"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+          </svg>
+          <span class="text-body-sm font-semibold" style="color: #FFD740;">
+            ★ Favorites ({favoriteProcesses.length})
+          </span>
+        </button>
+      {/if}
+      {#if displayedNonFavorites.length > 0}
+        <button
+          class="flex items-center gap-sm px-3 py-2 rounded-lg transition-colors w-fit"
+          style="background: rgba(12, 22, 32, 0.5); border: 1px solid rgba(130, 160, 190, 0.2);"
+          onclick={() => { othersExpanded = !othersExpanded; }}
+        >
+          <svg
+            class="w-4 h-4 transition-transform"
+            style="color: var(--text-secondary); transform: {othersExpanded ? 'rotate(90deg)' : 'rotate(0deg)'};"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+          </svg>
+          <span class="text-body-sm font-semibold" style="color: var(--text-secondary);">
+            Others ({displayedNonFavorites.length})
+          </span>
+        </button>
       {/if}
     </div>
   {/if}
 
-  {#if totalDisplayed.length === 0}
+  {#if processes.length === 0}
     <Card>
       <div class="text-center py-2xl">
-        {#if showFavoritesOnly}
-          <p
-            class="text-h3 font-semibold mb-xs"
-            style="color: var(--text-secondary);"
-          >
-            No Favorites Yet
-          </p>
-          <p class="text-body-sm" style="color: var(--text-muted);">
-            Star projects from the list to find them quickly
-          </p>
-        {:else}
-          <p
-            class="text-h3 font-semibold mb-xs"
-            style="color: var(--text-secondary);"
-          >
-            No Processes Found
-          </p>
-          <p class="text-body-sm" style="color: var(--text-muted);">
-            PM2 is not running or no processes have been started
-          </p>
-        {/if}
+        <p
+          class="text-h3 font-semibold mb-xs"
+          style="color: var(--text-secondary);"
+        >
+          No Processes Found
+        </p>
+        <p class="text-body-sm" style="color: var(--text-muted);">
+          PM2 is not running or no processes have been started
+        </p>
       </div>
     </Card>
   {:else}
-    {#if favoriteProcesses.length > 0}
+    {#if favoriteProcesses.length > 0 && favoritesExpanded}
       <div class="mb-lg">
         <h2
           class="text-body-sm font-semibold mb-sm"
@@ -227,12 +213,14 @@
                     </Badge>
                   </div>
                   <button
-                    class="text-h3 transition-colors"
-                    style={getFavoriteStarStyle(!!process.isFavorite)}
+                    class="transition-colors"
+                    style={process.isFavorite
+                      ? "color: #FFD740; text-shadow: 0 0 6px rgba(255, 215, 64, 0.65); background: rgba(255, 215, 64, 0.18); border: 1px solid rgba(255, 215, 64, 0.45); border-radius: 999px; padding: 0.1rem 0.4rem;"
+                      : "color: var(--text-muted); background: transparent; border: 1px solid transparent; border-radius: 999px; padding: 0.1rem 0.4rem;"}
                     onclick={() => toggleFavorite(process.name)}
-                    title={getFavoriteStarTitle(!!process.isFavorite)}
+                    title={process.isFavorite ? "Remove from favorites" : "Add to favorites"}
                   >
-                    {getFavoriteStarLabel(!!process.isFavorite)}
+                    {process.isFavorite ? "★" : "☆"}
                   </button>
                 </div>
 
@@ -319,7 +307,7 @@
       ></div>
     {/if}
 
-    {#if displayedNonFavorites.length > 0}
+    {#if displayedNonFavorites.length > 0 && othersExpanded}
       <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-md">
         {#each displayedNonFavorites as process, i (process.pm_id)}
           <div class="stagger-item" style="--stagger-index: {i};">
@@ -338,12 +326,14 @@
                   </Badge>
                 </div>
                 <button
-                  class="text-h3 transition-colors"
-                  style={getFavoriteStarStyle(!!process.isFavorite)}
+                  class="transition-colors"
+                  style={process.isFavorite
+                    ? "color: #FFD740; text-shadow: 0 0 6px rgba(255, 215, 64, 0.65); background: rgba(255, 215, 64, 0.18); border: 1px solid rgba(255, 215, 64, 0.45); border-radius: 999px; padding: 0.1rem 0.4rem;"
+                    : "color: var(--text-muted); background: transparent; border: 1px solid transparent; border-radius: 999px; padding: 0.1rem 0.4rem;"}
                   onclick={() => toggleFavorite(process.name)}
-                  title={getFavoriteStarTitle(!!process.isFavorite)}
+                  title={process.isFavorite ? "Remove from favorites" : "Add to favorites"}
                 >
-                  {getFavoriteStarLabel(!!process.isFavorite)}
+                  {process.isFavorite ? "★" : "☆"}
                 </button>
               </div>
 

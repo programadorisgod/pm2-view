@@ -56,7 +56,7 @@
 	style="background: var(--bg-surface); border-right: 1px solid var(--border-color);"
 >
 	<!-- Logo -->
-	<div class="px-lg py-4 border-b" style="border-color: var(--border-color);">
+	<div class="px-lg flex items-center h-[52px] border-b" style="border-color: var(--border-color);">
 		<div class="flex items-center gap-2.5">
 			<div class="w-7 h-7 rounded-md flex items-center justify-center" style="background: linear-gradient(135deg, #38CDFF, #009DCD);">
 				<svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">

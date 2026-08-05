@@ -1,8 +1,12 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { PM2Repository } from '../../lib/pm2/pm2-repository.impl';
 import type { IPM2Repository, PM2Process } from '../../lib/pm2/pm2.types';
 
 describe('PM2 Repository', () => {
+	beforeEach(() => {
+		vi.clearAllMocks();
+	});
+
 	it('should implement IPM2Repository interface', () => {
 		const repo: IPM2Repository = new PM2Repository();
 		expect(repo).toBeDefined();
@@ -12,6 +16,7 @@ describe('PM2 Repository', () => {
 		expect(typeof repo.stop).toBe('function');
 		expect(typeof repo.delete).toBe('function');
 		expect(typeof repo.getLogs).toBe('function');
+		expect(typeof repo.clearLogs).toBe('function');
 	});
 
 	it('should be instantiable', () => {
@@ -27,7 +32,8 @@ describe('PM2 Repository', () => {
 			'restart',
 			'stop',
 			'delete',
-			'getLogs'
+			'getLogs',
+			'clearLogs'
 		];
 		methods.forEach((method) => {
 			expect(typeof repo[method]).toBe('function');
@@ -54,5 +60,6 @@ describe('PM2 Repository', () => {
 		expect(repo.stop.length).toBe(1); // stop(name)
 		expect(repo.delete.length).toBe(1); // delete(name)
 		expect(repo.getLogs.length).toBe(1); // getLogs(name, lines?) - lines has default
+		expect(repo.clearLogs.length).toBe(1); // clearLogs(name, stream?) - stream has default
 	});
 });

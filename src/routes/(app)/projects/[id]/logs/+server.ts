@@ -1,6 +1,6 @@
 import { PM2Repository } from '$lib/pm2/pm2-repository.impl';
 import { PM2Service } from '$lib/pm2/pm2.service';
-import { json } from '@sveltejs/kit';
+import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 
 const pm2Repo = new PM2Repository();
@@ -29,4 +29,21 @@ export const GET: RequestHandler = async ({ params, url }) => {
 			{ status: 500 }
 		);
 	}
+};
+
+export const DELETE: RequestHandler = async ({ params, url, locals }) => {
+	const user = locals.user;
+	if (!user) {
+		throw error(401, 'Unauthorized');
+	}
+
+	const { id } = params;
+	const stream = url.searchParams.get('stream') === 'out' ? 'out' : 'err';
+
+	const result = await pm2Service.clearProcessLogs(id, stream);
+	if (!result.success) {
+		return json({ success: false, message: result.message }, { status: 500 });
+	}
+
+	return json({ success: true, message: result.message });
 };

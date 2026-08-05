@@ -1,6 +1,7 @@
 import { exec } from 'child_process';
 import { promisify } from 'util';
 import { existsSync } from 'fs';
+import { truncate } from 'fs/promises';
 import type { IPM2Repository, PM2Process, PM2Log } from './pm2.types';
 import { normalizePagination, type PaginationParams, type PaginatedResult } from '$lib/pagination';
 import { escapeShellArg } from '$lib/utils/shell';
@@ -96,6 +97,21 @@ export class PM2Repository implements IPM2Repository {
 		} catch (error) {
 			logger.warn('Failed to read log file', { path, error: String(error) });
 			return [];
+		}
+	}
+
+	async clearLogs(name: string, stream: 'out' | 'err' = 'err'): Promise<void> {
+		const proc = await this.describe(name);
+		if (!proc) return;
+
+		const logPath = stream === 'out' ? proc.pm2_env.pm_out_log_path : proc.pm2_env.pm_err_log_path;
+		if (!logPath || !existsSync(logPath)) return;
+
+		try {
+			await truncate(logPath, 0);
+		} catch (error) {
+			logger.warn('Failed to clear log file', { path: logPath, error: String(error) });
+			throw error;
 		}
 	}
 }

@@ -164,17 +164,28 @@
     }
   });
 
-  let envVars = $state<Array<{ key: string; value: string }>>([]);
+  interface EnvRow {
+    key: string;
+    value: string;
+    isSecret: boolean;
+  }
+
+  let envRows = $state<EnvRow[]>([]);
+  let envDirty = $state(false);
+  let envSaving = $state(false);
+  let envFeedback = $state<{ type: "success" | "error"; text: string } | null>(
+    null,
+  );
 
   $effect(() => {
-    if (initialEnvVars && Object.keys(initialEnvVars).length > 0) {
-      envVars = Object.entries(initialEnvVars).map(([key, value]) => ({
-        key,
-        value: value as string,
+    if (Array.isArray(initialEnvVars)) {
+      envRows = initialEnvVars.map((env) => ({
+        key: env.key,
+        value: env.value,
+        isSecret: env.isSecret,
       }));
     }
   });
-  let showSecrets = $state<Record<string, boolean>>({});
 
   function getStatusVariant(status: string) {
     switch (status) {
@@ -273,22 +284,70 @@
     };
   });
 
-  function isSensitiveKey(key: string): boolean {
-    const sensitivePatterns = [
-      "PASSWORD",
-      "SECRET",
-      "TOKEN",
-      "KEY",
-      "API",
-      "AUTH",
-    ];
-    return sensitivePatterns.some((pattern) =>
-      key.toUpperCase().includes(pattern),
-    );
+  function addEnvRow() {
+    envRows = [...envRows, { key: "", value: "", isSecret: false }];
+    envDirty = true;
   }
 
-  function toggleSecret(key: string) {
-    showSecrets = { ...showSecrets, [key]: !showSecrets[key] };
+  function removeEnvRow(index: number) {
+    envRows = envRows.filter((_, i) => i !== index);
+    envDirty = true;
+  }
+
+  function updateEnvRow(
+    index: number,
+    field: "key" | "value" | "isSecret",
+    value: string | boolean,
+  ) {
+    envRows = envRows.map((row, i) =>
+      i === index ? { ...row, [field]: value } : row,
+    );
+    envDirty = true;
+  }
+
+  async function saveEnvVars() {
+    const invalid = envRows.find((row) => !row.key.trim());
+    if (invalid) {
+      envFeedback = { type: "error", text: "Every variable needs a key" };
+      return;
+    }
+
+    envSaving = true;
+    envFeedback = null;
+    try {
+      const res = await fetch(
+        `${base}/api/env-vars/${data.projectInternalId ?? ""}`,
+        {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            envVars: envRows.map((row) => ({
+              key: row.key.trim(),
+              value: row.value,
+              isSecret: row.isSecret,
+            })),
+          }),
+        },
+      );
+      const result = await res.json();
+      if (res.ok) {
+        envDirty = false;
+        envFeedback = {
+          type: "success",
+          text: "Environment variables saved. They will be applied on the next deploy.",
+        };
+        await invalidateAll();
+      } else {
+        envFeedback = { type: "error", text: result.error || "Failed to save" };
+      }
+    } catch {
+      envFeedback = {
+        type: "error",
+        text: "Failed to save environment variables",
+      };
+    } finally {
+      envSaving = false;
+    }
   }
 </script>
 
@@ -590,44 +649,96 @@
         </div>
       {:else if activeTab === "env"}
         <Card>
-          <h2
-            class="text-h3 font-semibold mb-md"
-            style="color: var(--text-primary);"
-          >
-            Environment Variables
-          </h2>
+          <div class="flex items-center justify-between mb-md">
+            <h2
+              class="text-h3 font-semibold"
+              style="color: var(--text-primary);"
+            >
+              Environment Variables
+            </h2>
+            <div class="flex items-center gap-sm">
+              {#if envFeedback}
+                <FeedbackBanner
+                  type={envFeedback.type}
+                  message={envFeedback.text}
+                  onDismiss={() => (envFeedback = null)}
+                />
+              {/if}
+              <button
+                class="btn-secondary px-3 py-1.5 text-body-sm inline-flex items-center gap-1"
+                onclick={addEnvRow}
+              >
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+                </svg>
+                Add Variable
+              </button>
+              <button
+                class="btn-primary px-3 py-1.5 text-body-sm"
+                onclick={saveEnvVars}
+                disabled={envSaving || !envDirty || !data.projectInternalId}
+              >
+                {envSaving ? "Saving..." : "Save Changes"}
+              </button>
+            </div>
+          </div>
 
-          {#if envVars.length === 0}
+          <p class="text-body-sm mb-md" style="color: var(--text-secondary);">
+            These variables are injected during the next deploy, alongside the
+            project's <code class="font-mono">.env</code> file. A deploy is
+            required for changes to take effect.
+          </p>
+
+          {#if envRows.length === 0}
             <p class="text-center py-xl" style="color: var(--text-muted);">
-              No environment variables configured
+              No environment variables configured. Click "Add Variable" to get
+              started.
             </p>
           {:else}
             <div class="space-y-xs">
-              {#each envVars as env (env.key)}
+              {#each envRows as env, i (i)}
                 <div
                   class="flex items-center gap-sm py-sm px-md rounded-md"
                   style="background: var(--bg-surface);"
                 >
-                  <span
-                    class="text-body-sm font-medium min-w-[160px] font-mono"
-                    style="color: var(--text-primary);">{env.key}</span
+                  <input
+                    class="min-w-[160px] w-[220px] font-mono text-body-sm px-2 py-1 rounded border"
+                    style="background: var(--bg-base); color: var(--text-primary); border-color: var(--border-color);"
+                    value={env.key}
+                    placeholder="KEY_NAME"
+                    spellcheck="false"
+                    oninput={(e) => updateEnvRow(i, "key", e.currentTarget.value)}
+                  />
+                  <input
+                    class="flex-1 min-w-0 font-mono text-body-sm px-2 py-1 rounded border"
+                    style="background: var(--bg-base); color: var(--text-primary); border-color: var(--border-color);"
+                    value={env.value}
+                    placeholder="value"
+                    spellcheck="false"
+                    oninput={(e) => updateEnvRow(i, "value", e.currentTarget.value)}
+                  />
+                  <label
+                    class="flex items-center gap-xs text-caption shrink-0"
+                    style="color: var(--text-secondary);"
                   >
-                  <div class="flex-1 min-w-0 font-mono text-body-sm">
-                    {#if isSensitiveKey(env.key)}
-                      <span style="color: var(--text-muted); word-break: break-all;">
-                        {showSecrets[env.key] ? env.value : "••••••••••••"}
-                      </span>
-                      <button
-                        onclick={() => toggleSecret(env.key)}
-                        class="ml-sm text-caption font-medium shrink-0"
-                        style="color: #38CDFF;"
-                      >
-                        {showSecrets[env.key] ? "Hide" : "Show"}
-                      </button>
-                    {:else}
-                      <span style="color: var(--text-secondary); word-break: break-all;">{env.value}</span>
-                    {/if}
-                  </div>
+                    <input
+                      type="checkbox"
+                      checked={env.isSecret}
+                      onchange={(e) => updateEnvRow(i, "isSecret", e.currentTarget.checked)}
+                    />
+                    Secret
+                  </label>
+                  <button
+                    class="shrink-0 p-1.5 rounded"
+                    style="color: #FF5252;"
+                    onclick={() => removeEnvRow(i)}
+                    title="Remove variable"
+                    aria-label="Remove variable"
+                  >
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+                    </svg>
+                  </button>
                 </div>
               {/each}
             </div>

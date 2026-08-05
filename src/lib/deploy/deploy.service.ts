@@ -1,6 +1,7 @@
 import { spawn } from 'child_process';
 import { existsSync, readFileSync } from 'fs';
 import { dirname, join } from 'path';
+import dotenv from 'dotenv';
 import type { IPM2Repository } from '$lib/pm2/pm2.types';
 import type {
 	DeployLogCallback,
@@ -19,6 +20,9 @@ const LOCK_FILES: Record<string, PackageManager> = {
 
 const APPROVAL_INDICATORS = /requires approval|needs to be built|approve-builds/i;
 const PACKAGE_LINE = /^\s*-\s+(.+)$/;
+
+/** Environment map passed to spawned child processes (values may be undefined, like Node's process.env). */
+type EnvMap = Record<string, string | undefined>;
 
 function detectPackageManager(dir: string): PackageManager {
 	const pkgPath = join(dir, 'package.json');
@@ -56,6 +60,28 @@ function readPackageScripts(dir: string): Record<string, string> | null {
 	} catch {
 		return null;
 	}
+}
+
+/**
+ * Loads the project's `.env*` files from the working directory.
+ * Order (later wins): .env → .env.local → .env.production → .env.production.local
+ */
+function loadProjectEnv(dir: string): Record<string, string> {
+	const files = ['.env', '.env.local', '.env.production', '.env.production.local'];
+	const env: Record<string, string> = {};
+
+	for (const file of files) {
+		const path = join(dir, file);
+		if (!existsSync(path)) continue;
+		try {
+			const parsed = dotenv.parse(readFileSync(path, 'utf-8'));
+			Object.assign(env, parsed);
+		} catch {
+			// Ignore unparsable env files
+		}
+	}
+
+	return env;
 }
 
 function resolveProjectRoot(execPath: string, maxUpward = 10): string | null {
@@ -96,12 +122,13 @@ function runCommand(
 	command: string,
 	args: string[],
 	onLine: (line: string, isError: boolean) => void,
+	env?: EnvMap,
 ): Promise<number> {
 	return new Promise((resolve) => {
 		const proc = spawn(command, args, {
 			cwd,
 			shell: false,
-			env: { ...process.env },
+			env: env ?? { ...process.env },
 		});
 
 		const bufferOut: string[] = [];
@@ -230,6 +257,8 @@ export class DeployService {
 		const hasBuild = !!scripts?.build;
 		const steps: DeployStepResult[] = [];
 
+		const env = this.buildEnv(workingDir, process.pm2_env?.env ?? {}, options);
+
 		const log = (step: DeployStep, line: string, isError: boolean) => {
 			onLog(step, line, isError);
 		};
@@ -259,7 +288,7 @@ export class DeployService {
 			const args = tokens.slice(1);
 			const exitCode = await runCommand(workingDir, bin, args, (line, isError) =>
 				log('install', line, isError),
-			);
+			env.runEnv);
 			const installSuccess = exitCode === 0;
 			log(
 				'install',
@@ -274,7 +303,7 @@ export class DeployService {
 			log('install', '─── Starting: install ───', false);
 			const installResult = await this.runInstall(workingDir, packageManager, (line, isError) =>
 				log('install', line, isError),
-			);
+			env.runEnv);
 
 			// Check if pnpm requires approval for native builds
 			if (packageManager === 'pnpm') {
@@ -320,7 +349,7 @@ export class DeployService {
 			const args = tokens.slice(1);
 			const exitCode = await runCommand(workingDir, bin, args, (line, isError) =>
 				log('build', line, isError),
-			);
+			env.runEnv);
 			const buildSuccess = exitCode === 0;
 			log(
 				'build',
@@ -335,7 +364,7 @@ export class DeployService {
 			const buildResult = await this.runStep('build', workingDir, log, () =>
 				this.runBuild(workingDir, packageManager, (line, isError) =>
 					log('build', line, isError),
-				),
+				env.runEnv),
 			);
 			steps.push(buildResult);
 			if (!buildResult.success) {
@@ -357,7 +386,7 @@ export class DeployService {
 			for (const cmd of options.restartCommands) {
 				log('restart', `─── Restart command: ${cmd} ───`, false);
 				const stepResult = await this.runStep('restart', workingDir, log, () =>
-					runCommand(workingDir, 'pm2', ['restart', process.name, '--update-env'], (line, isError) => log('restart', line, isError)),
+					runCommand(workingDir, 'pm2', ['restart', process.name, '--update-env'], (line, isError) => log('restart', line, isError), env.restartEnv),
 				);
 				// For custom commands, we still use pm2 restart but log the custom command name
 				stepResult.step = 'restart'; // ensure step is marked correctly
@@ -378,6 +407,7 @@ export class DeployService {
 					'pm2',
 					['restart', process.name, '--update-env'],
 					(line, isError) => log('restart', line, isError),
+					env.restartEnv,
 				),
 			);
 			steps.push(restartResult);
@@ -430,6 +460,8 @@ export class DeployService {
 		const hasBuild = !!scripts?.build;
 		const steps: DeployStepResult[] = [];
 
+		const env = this.buildEnv(workingDir, process.pm2_env?.env ?? {}, options);
+
 		const log = (step: DeployStep, line: string, isError: boolean) => {
 			onLog(step, line, isError);
 		};
@@ -441,6 +473,7 @@ export class DeployService {
 			'pnpm',
 			['approve-builds', '--all'],
 			(line, isError) => log('approve', line, isError),
+			env.runEnv,
 		);
 		const approveSuccess = approveCode === 0;
 		log(
@@ -462,7 +495,7 @@ export class DeployService {
 			const args = tokens.slice(1);
 			const exitCode = await runCommand(workingDir, bin, args, (line, isError) =>
 				log('install', line, isError),
-			);
+			env.runEnv);
 			const installSuccess = exitCode === 0;
 			log(
 				'install',
@@ -477,7 +510,7 @@ export class DeployService {
 			log('install', '─── Starting: install ───', false);
 			const installResult = await this.runInstall(workingDir, packageManager, (line, isError) =>
 				log('install', line, isError),
-			);
+			env.runEnv);
 			const installSuccess = installResult.exitCode === 0;
 			log(
 				'install',
@@ -499,7 +532,7 @@ export class DeployService {
 			const args = tokens.slice(1);
 			const exitCode = await runCommand(workingDir, bin, args, (line, isError) =>
 				log('build', line, isError),
-			);
+			env.runEnv);
 			const buildSuccess = exitCode === 0;
 			log(
 				'build',
@@ -514,7 +547,7 @@ export class DeployService {
 			const buildResult = await this.runStep('build', workingDir, log, () =>
 				this.runBuild(workingDir, packageManager, (line, isError) =>
 					log('build', line, isError),
-				),
+				env.runEnv),
 			);
 			steps.push(buildResult);
 			if (!buildResult.success) {
@@ -536,7 +569,7 @@ export class DeployService {
 			for (const cmd of options.restartCommands) {
 				log('restart', `─── Restart command: ${cmd} ───`, false);
 				const stepResult = await this.runStep('restart', workingDir, log, () =>
-					runCommand(workingDir, 'pm2', ['restart', process.name, '--update-env'], (line, isError) => log('restart', line, isError)),
+					runCommand(workingDir, 'pm2', ['restart', process.name, '--update-env'], (line, isError) => log('restart', line, isError), env.restartEnv),
 				);
 				stepResult.step = 'restart';
 				steps.push(stepResult);
@@ -556,12 +589,34 @@ export class DeployService {
 					'pm2',
 					['restart', process.name, '--update-env'],
 					(line, isError) => log('restart', line, isError),
+					env.restartEnv,
 				),
 			);
 			steps.push(restartResult);
 		}
 
 		return this.buildResult(process.name, pmId, workingDir, packageManager, steps);
+	}
+
+	/**
+	 * Builds the environment for the deployed process.
+	 * Priority (lowest → highest): existing app env → project `.env*` files → DB-managed vars.
+	 * `runEnv` keeps the pm2-view process env for install/build child processes;
+	 * `restartEnv` only carries PATH/HOME so `pm2 restart --update-env` does not leak
+	 * pm2-view's own env (PORT, BETTER_AUTH_*, etc.) into the deployed app.
+	 */
+	private buildEnv(
+		workingDir: string,
+		appEnv: Record<string, string>,
+		options?: DeployOptions,
+	): { runEnv: EnvMap; restartEnv: EnvMap } {
+		const projectEnv = loadProjectEnv(workingDir);
+		const managedEnv = options?.env ?? {};
+		const merged = { ...appEnv, ...projectEnv, ...managedEnv };
+		return {
+			runEnv: { ...process.env, ...merged },
+			restartEnv: { PATH: process.env.PATH ?? '', HOME: process.env.HOME ?? '', ...merged },
+		};
 	}
 
 	/**
@@ -593,12 +648,13 @@ export class DeployService {
 		cwd: string,
 		pm: PackageManager,
 		onLine: (line: string, isError: boolean) => void,
+		env?: EnvMap,
 	): Promise<{ exitCode: number; output: string[] }> {
 		const output: string[] = [];
 		const exitCode = await this.runInstallCommand(cwd, pm, (line, isError) => {
 			output.push(line);
 			onLine(line, isError);
-		});
+		}, env);
 		return { exitCode, output };
 	}
 
@@ -606,14 +662,15 @@ export class DeployService {
 		cwd: string,
 		pm: PackageManager,
 		onLine: (line: string, isError: boolean) => void,
+		env?: EnvMap,
 	): Promise<number> {
 		switch (pm) {
 			case 'bun':
-				return runCommand(cwd, 'bun', ['install'], onLine);
+				return runCommand(cwd, 'bun', ['install'], onLine, env);
 			case 'pnpm':
-				return runCommand(cwd, 'pnpm', ['install'], onLine);
+				return runCommand(cwd, 'pnpm', ['install'], onLine, env);
 			default:
-				return runCommand(cwd, 'npm', ['install'], onLine);
+				return runCommand(cwd, 'npm', ['install'], onLine, env);
 		}
 	}
 
@@ -624,14 +681,15 @@ export class DeployService {
 		cwd: string,
 		pm: PackageManager,
 		onLine: (line: string, isError: boolean) => void,
+		env?: EnvMap,
 	): Promise<number> {
 		switch (pm) {
 			case 'bun':
-				return runCommand(cwd, 'bun', ['run', 'build'], onLine);
+				return runCommand(cwd, 'bun', ['run', 'build'], onLine, env);
 			case 'pnpm':
-				return runCommand(cwd, 'pnpm', ['run', 'build'], onLine);
+				return runCommand(cwd, 'pnpm', ['run', 'build'], onLine, env);
 			default:
-				return runCommand(cwd, 'npm', ['run', 'build'], onLine);
+				return runCommand(cwd, 'npm', ['run', 'build'], onLine, env);
 		}
 	}
 

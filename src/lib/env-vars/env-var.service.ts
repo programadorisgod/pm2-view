@@ -1,18 +1,17 @@
-import { PM2Repository } from '$lib/pm2/pm2-repository.impl';
-import type { PM2Process } from '$lib/pm2/pm2.types';
+import type { EnvVar, IEnvVarRepository, NewEnvVar } from './env-var.types';
 
 export class EnvVarService {
-  private pm2Repo: PM2Repository;
+  private repo: IEnvVarRepository;
 
-  constructor(pm2Repo: PM2Repository) {
-    this.pm2Repo = pm2Repo;
+  constructor(repo: IEnvVarRepository) {
+    this.repo = repo;
   }
 
-	async getEnvVars(processId: string): Promise<Record<string, string>> {
-		const rawProcess = await this.pm2Repo.describe(processId);
-		if (!rawProcess) {
-			throw new Error(`Process with ID ${processId} not found`);
-		}
-		return rawProcess.pm2_env?.env || {};
-	}
+  async getEnvVars(projectId: string): Promise<EnvVar[]> {
+    return await this.repo.getByProjectId(projectId);
+  }
+
+  async saveEnvVars(projectId: string, envVars: Omit<NewEnvVar, 'id'>[]): Promise<EnvVar[]> {
+    return await this.repo.bulkUpdate(projectId, envVars);
+  }
 }

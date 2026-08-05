@@ -1,6 +1,5 @@
 import { PM2Repository } from '$lib/pm2/pm2-repository.impl';
 import { PM2Service } from '$lib/pm2/pm2.service';
-import { EnvVarService } from '$lib/env-vars/env-var.service';
 import { DeployConfigRepository } from '$lib/db/repositories/deploy-config-repository.impl';
 import { createServices } from '$lib/services/factory';
 import { auth } from '$lib/auth';
@@ -9,6 +8,7 @@ import { eq } from 'drizzle-orm';
 import { projects } from '$lib/db/schema';
 import { error } from '@sveltejs/kit';
 import type { PageServerLoad } from './$types';
+import type { EnvVar } from '$lib/env-vars/env-var.types';
 
 export const load: PageServerLoad = async ({ params, request }) => {
 	const { pm2Service, envVarService } = createServices();
@@ -22,9 +22,6 @@ export const load: PageServerLoad = async ({ params, request }) => {
 
 	// Get logs (limited to 50 lines for the detail page)
 	const logs = await pm2Service.getProcessLogs(id, 50);
-
-	// Get environment variables
-	const envVars = await envVarService.getEnvVars(id);
 
 	// Get session for user-dependent operations
 	const session = await auth.api.getSession({ headers: request.headers }).catch(() => null);
@@ -76,6 +73,16 @@ export const load: PageServerLoad = async ({ params, request }) => {
 		}
 	} catch {
 		// Non-critical: deploy config fetch failure
+	}
+
+	// Get DB-managed environment variables
+	let envVars: EnvVar[] = [];
+	if (projectInternalId) {
+		try {
+			envVars = await envVarService.getEnvVars(projectInternalId);
+		} catch {
+			// Non-critical: env vars fetch failure
+		}
 	}
 
 	return {

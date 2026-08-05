@@ -64,6 +64,8 @@
   let loadingMore = $state(false);
   let logPollIntervalMs = 3000;
   let logPollTimer: ReturnType<typeof setInterval> | null = null;
+  let errBaseline = $state<number | null>(null);
+  let clearingErrLogs = $state(false);
 
   $effect(() => {
     if (initialLogs && initialLogs.length > 0) {
@@ -108,6 +110,81 @@
   // Derived: split logs by type (repository already sorts chronologically)
   let outLogs = $derived(logs.filter((l) => l.type === "out"));
   let errLogs = $derived(logs.filter((l) => l.type === "err"));
+  let newErrLogs = $derived(
+    errLogs.filter(
+      (l) => errBaseline !== null && l.timestamp.getTime() > errBaseline,
+    ),
+  );
+
+  function errSeenKey() {
+    return `pm2view:err:seen:${process.pm_id}`;
+  }
+
+  // Sets the "seen" baseline for errors: the first time the Logs tab is
+  // opened, current errors become the baseline; afterwards only errors newer
+  // than the baseline are highlighted as new.
+  function ensureErrBaseline() {
+    if (errBaseline !== null) return;
+    try {
+      const stored = sessionStorage.getItem(errSeenKey());
+      if (stored !== null) {
+        const parsed = Number(stored);
+        if (!Number.isNaN(parsed)) {
+          errBaseline = parsed;
+          return;
+        }
+      }
+    } catch {
+      // Storage unavailable — fall through to fresh baseline
+    }
+    const maxTs = errLogs.reduce(
+      (max, l) => Math.max(max, l.timestamp.getTime()),
+      0,
+    );
+    errBaseline = maxTs;
+    try {
+      sessionStorage.setItem(errSeenKey(), String(maxTs));
+    } catch {
+      // Storage unavailable — ignore
+    }
+  }
+
+  function markErrorsSeen() {
+    const maxTs = errLogs.reduce(
+      (max, l) => Math.max(max, l.timestamp.getTime()),
+      0,
+    );
+    errBaseline = maxTs;
+    try {
+      sessionStorage.setItem(errSeenKey(), String(maxTs));
+    } catch {
+      // Storage unavailable — ignore
+    }
+  }
+
+  async function clearErrLogs() {
+    clearingErrLogs = true;
+    try {
+      const res = await fetch(
+        `${base}/projects/${process.pm_id}/logs?stream=err`,
+        { method: "DELETE" },
+      );
+      const result = await res.json();
+      if (res.ok && result.success) {
+        logs = logs.filter((l) => l.type !== "err");
+        markErrorsSeen();
+      } else {
+        feedback = {
+          type: "error",
+          text: result.message || "Failed to clear error logs",
+        };
+      }
+    } catch {
+      feedback = { type: "error", text: "Failed to clear error logs" };
+    } finally {
+      clearingErrLogs = false;
+    }
+  }
 
   // Scroll containers
   let outContainer: HTMLDivElement | undefined = $state();
@@ -276,6 +353,7 @@
     }
 
     pollLogs();
+    ensureErrBaseline();
     logPollTimer = setInterval(pollLogs, logPollIntervalMs);
 
     return () => {
@@ -614,18 +692,46 @@
                 ></span>
                 ERRORS
               </h2>
-              {#if errIsScrolledUp}
+              <div class="flex items-center gap-sm">
+                {#if newErrLogs.length > 0}
+                  <span
+                    class="px-2 py-1 text-xs rounded-full font-medium"
+                    style="background: rgba(255, 82, 82, 0.15); color: #FF5252;"
+                    title="Errors newer than your last view"
+                  >
+                    +{newErrLogs.length} new
+                  </span>
+                  <button
+                    class="btn-secondary px-2 py-1 text-xs"
+                    onclick={markErrorsSeen}
+                    title="Mark all visible errors as seen"
+                  >
+                    Mark seen
+                  </button>
+                {/if}
                 <button
                   class="btn-secondary px-2 py-1 text-xs flex items-center gap-1"
-                  onclick={forceScrollToBottom}
-                  title="Scroll to bottom"
+                  onclick={clearErrLogs}
+                  disabled={clearingErrLogs}
+                  title="Clear error logs (like cls/clear in a terminal)"
                 >
-                  <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
-                  </svg>
-                  Scroll to bottom
+                  {clearingErrLogs
+                    ? "Clearing..."
+                    : "Clear"}
                 </button>
-              {/if}
+                {#if errIsScrolledUp}
+                  <button
+                    class="btn-secondary px-2 py-1 text-xs flex items-center gap-1"
+                    onclick={forceScrollToBottom}
+                    title="Scroll to bottom"
+                  >
+                    <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                    </svg>
+                    Scroll to bottom
+                  </button>
+                {/if}
+              </div>
             </div>
             {#if errLogs.length === 0}
               <p class="text-center py-xl" style="color: var(--text-muted);">
@@ -639,7 +745,20 @@
                 style="background: var(--bg-base); border: 1px solid var(--border-color);"
               >
                 {#each errLogs as log}
-                  <div class="py-2xs" style="color: #FF5252;">
+                  {@const isNew = errBaseline !== null && log.timestamp.getTime() > errBaseline}
+                  <div
+                    class="py-2xs"
+                    style="color: #FF5252;{isNew
+                      ? ' background: rgba(255, 82, 82, 0.12); border-left: 3px solid #FF5252; padding-left: 4px;'
+                      : ''}"
+                  >
+                    {#if isNew}
+                      <span
+                        class="inline-block text-[10px] font-bold uppercase mr-1 align-middle"
+                        style="color: #FFD740;"
+                        >NEW</span
+                      >
+                    {/if}
                     {log.data}
                   </div>
                 {/each}

@@ -11,6 +11,8 @@ function createMockRepo(overrides: Partial<IPM2Repository> = {}): IPM2Repository
 		stop: vi.fn().mockResolvedValue(undefined),
 		delete: vi.fn().mockResolvedValue(undefined),
 		getLogs: vi.fn().mockResolvedValue([]),
+		start: vi.fn().mockResolvedValue(undefined),
+		clearLogs: vi.fn().mockResolvedValue(undefined),
 		...overrides
 	};
 }
@@ -140,6 +142,33 @@ describe('PM2Service', () => {
 			const logs = await service.getProcessLogs('test-app');
 
 			expect(logs).toEqual([]);
+		});
+	});
+
+	describe('clearProcessLogs', () => {
+		it('should clear error logs by default', async () => {
+			const result = await service.clearProcessLogs('test-app');
+
+			expect(result.success).toBe(true);
+			expect(result.message).toContain('Error logs cleared');
+			expect(mockRepo.clearLogs).toHaveBeenCalledWith('test-app', 'err');
+		});
+
+		it('should clear the requested stream', async () => {
+			const result = await service.clearProcessLogs('test-app', 'out');
+
+			expect(result.success).toBe(true);
+			expect(result.message).toContain('Output logs cleared');
+			expect(mockRepo.clearLogs).toHaveBeenCalledWith('test-app', 'out');
+		});
+
+		it('should return error when clearing fails', async () => {
+			vi.mocked(mockRepo.clearLogs).mockRejectedValue(new Error('Clear failed'));
+
+			const result = await service.clearProcessLogs('test-app');
+
+			expect(result.success).toBe(false);
+			expect(result.message).toContain('Clear failed');
 		});
 	});
 

@@ -95,6 +95,24 @@ export class PM2Service {
 		}
 	}
 
+	async clearProcessLogs(
+		id: string,
+		stream: 'out' | 'err' = 'err'
+	): Promise<{ success: boolean; message: string }> {
+		try {
+			await this.repository.clearLogs(id, stream);
+			return {
+				success: true,
+				message: stream === 'err' ? 'Error logs cleared' : 'Output logs cleared'
+			};
+		} catch (error) {
+			return {
+				success: false,
+				message: error instanceof Error ? error.message : 'Failed to clear logs'
+			};
+		}
+	}
+
 	getSummary(processes: ProcessWithStatus[]): ProcessSummary {
 		return {
 			total: processes.length,

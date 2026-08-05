@@ -14,6 +14,8 @@ function createMockPM2Repo(overrides: Partial<IPM2Repository> = {}): IPM2Reposit
 		stop: vi.fn().mockResolvedValue(undefined),
 		delete: vi.fn().mockResolvedValue(undefined),
 		getLogs: vi.fn().mockResolvedValue([]),
+		start: vi.fn().mockResolvedValue(undefined),
+		clearLogs: vi.fn().mockResolvedValue(undefined),
 		...overrides
 	};
 }

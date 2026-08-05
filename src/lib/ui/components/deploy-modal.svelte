@@ -308,8 +308,13 @@
 		let lastStep = '';
 
 		try {
+			const body: Record<string, unknown> = {};
+			if (projectId) body.projectId = projectId;
+
 			const res = await fetch(`${base}/api/deploy/${pmId}/approve-builds`, {
 				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify(body),
 			});
 
 			if (!res.ok) {

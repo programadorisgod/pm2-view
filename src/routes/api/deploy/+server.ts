@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { PM2Repository } from '$lib/pm2/pm2-repository.impl';
 import { DeployService } from '$lib/deploy/deploy.service';
 import { DeployConfigRepository } from '$lib/db/repositories/deploy-config-repository.impl';
+import { EnvVarRepository } from '$lib/db/repositories/env-var-repository.impl';
 import { rateLimiter } from '$lib/rate-limiter';
 import { logger } from '$lib/logger';
 import type { DeployStep, DeployOptions } from '$lib/deploy/deploy.types';
@@ -59,10 +60,28 @@ export const POST: RequestHandler = async ({ request, getClientAddress }) => {
 			.map((c) => c.command);
 	}
 
-	const deployOptions: DeployOptions | undefined =
+	let deployOptions: DeployOptions | undefined =
 		installCommand || buildCommand || resolvedRestartCommands
 			? { installCommand, buildCommand, restartCommands: resolvedRestartCommands }
 			: undefined;
+
+	// Load DB-managed env vars for the project (fail open — non-critical)
+	let managedEnv: Record<string, string> | undefined;
+	if (projectId) {
+		try {
+			const envVarRepo = new EnvVarRepository();
+			const vars = await envVarRepo.getByProjectId(projectId);
+			if (vars.length > 0) {
+				managedEnv = Object.fromEntries(vars.map((v) => [v.key, v.value]));
+			}
+		} catch (err) {
+			logger.error('Failed to load managed env vars for deploy', { projectId, error: err });
+		}
+	}
+
+	if (managedEnv) {
+		deployOptions = deployOptions ? { ...deployOptions, env: managedEnv } : { env: managedEnv };
+	}
 
 	// Check if a deploy is already running for this process
 	if (activeDeploys.has(pm_id)) {
@@ -139,6 +158,7 @@ export const POST: RequestHandler = async ({ request, getClientAddress }) => {
 			'Content-Type': 'application/x-ndjson',
 			'Cache-Control': 'no-cache',
 			Connection: 'keep-alive',
+			'X-Accel-Buffering': 'no',
 		},
 	});
 };

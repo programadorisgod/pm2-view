@@ -3,6 +3,7 @@ import { PM2Service } from '$lib/pm2/pm2.service';
 import { MetricsRepository } from '$lib/db/repositories/metrics-repository.impl';
 import { MetricsService } from '$lib/metrics/metrics.service';
 import { EnvVarService } from '$lib/env-vars/env-var.service';
+import { EnvVarRepository } from '$lib/db/repositories/env-var-repository.impl';
 import { DeployConfigRepository } from '$lib/db/repositories/deploy-config-repository.impl';
 import { DeployConfigService } from '$lib/deploy-config/deploy-config.service';
 import { logger } from '$lib/logger';
@@ -13,6 +14,7 @@ export interface ServiceContainer {
   metricsService: MetricsService;
   metricsRepo: MetricsRepository;
   envVarService: EnvVarService;
+  envVarRepo: EnvVarRepository;
   deployConfigService: DeployConfigService;
 }
 
@@ -24,7 +26,8 @@ export function createServices(): ServiceContainer {
     const pm2Service = new PM2Service(pm2Repo);
     const metricsRepo = new MetricsRepository();
     const metricsService = new MetricsService(metricsRepo, pm2Service);
-    const envVarService = new EnvVarService(pm2Repo, pm2Service);
+    const envVarRepo = new EnvVarRepository();
+    const envVarService = new EnvVarService(envVarRepo);
     const deployConfigRepo = new DeployConfigRepository();
     const deployConfigService = new DeployConfigService(deployConfigRepo);
 
@@ -34,6 +37,7 @@ export function createServices(): ServiceContainer {
       metricsService,
       metricsRepo,
       envVarService,
+      envVarRepo,
       deployConfigService,
     };
   }

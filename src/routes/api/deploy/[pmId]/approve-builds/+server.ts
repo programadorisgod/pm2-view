@@ -1,10 +1,12 @@
 import { type RequestHandler } from '@sveltejs/kit';
 import { PM2Repository } from '$lib/pm2/pm2-repository.impl';
 import { DeployService } from '$lib/deploy/deploy.service';
+import { EnvVarRepository } from '$lib/db/repositories/env-var-repository.impl';
 import { rateLimiter } from '$lib/rate-limiter';
-import type { DeployStep } from '$lib/deploy/deploy.types';
+import { logger } from '$lib/logger';
+import type { DeployStep, DeployOptions } from '$lib/deploy/deploy.types';
 
-export const POST: RequestHandler = async ({ params, getClientAddress }) => {
+export const POST: RequestHandler = async ({ params, request, getClientAddress }) => {
 	const ip = getClientAddress();
 	const rateLimitResult = rateLimiter.check(ip);
 
@@ -32,6 +34,31 @@ export const POST: RequestHandler = async ({ params, getClientAddress }) => {
 	const pm2Repo = new PM2Repository();
 	const deployService = new DeployService(pm2Repo);
 
+	// Load DB-managed env vars for the project (fail open — non-critical)
+	const body = await request.json().catch(() => null);
+	const projectId =
+		body && typeof body === 'object' && 'projectId' in body && typeof body.projectId === 'string'
+			? body.projectId
+			: undefined;
+
+	let deployOptions: DeployOptions | undefined;
+	if (projectId) {
+		try {
+			const envVarRepo = new EnvVarRepository();
+			const vars = await envVarRepo.getByProjectId(projectId);
+			if (vars.length > 0) {
+				deployOptions = {
+					env: Object.fromEntries(vars.map((v) => [v.key, v.value])),
+				};
+			}
+		} catch (err) {
+			logger.error('Failed to load managed env vars for approve-builds', {
+				projectId,
+				error: err,
+			});
+		}
+	}
+
 	const encoder = new TextEncoder();
 
 	const stream = new ReadableStream({
@@ -49,7 +76,7 @@ export const POST: RequestHandler = async ({ params, getClientAddress }) => {
 			try {
 				await deployService.approveAndContinue(pmId, (step: DeployStep, line: string, isError: boolean) => {
 					safeEnqueue(JSON.stringify({ step, line, isError, isComplete: false }));
-				});
+				}, deployOptions);
 
 				safeEnqueue(JSON.stringify({
 					step: 'complete',
@@ -78,6 +105,7 @@ export const POST: RequestHandler = async ({ params, getClientAddress }) => {
 			'Content-Type': 'application/x-ndjson',
 			'Cache-Control': 'no-cache',
 			Connection: 'keep-alive',
+			'X-Accel-Buffering': 'no',
 		},
 	});
 };

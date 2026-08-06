@@ -1,6 +1,7 @@
 	<script lang="ts">
 	import { authClient } from '$lib/auth/client';
 	import { base } from '$app/paths';
+	import PasswordInput from '$lib/components/PasswordInput.svelte';
 
 	let email = $state('');
 	let password = $state('');
@@ -74,15 +75,17 @@
 
 				<div>
 					<label for="password" class="block text-caption font-medium mb-xs" style="color: var(--text-secondary);">Password</label>
-					<input
+					<PasswordInput
 						id="password"
-						type="password"
 						bind:value={password}
 						placeholder="••••••••"
-						class="input-base w-full h-10 px-md text-body-sm"
 						autocomplete="current-password"
 						required
 					/>
+				</div>
+
+				<div class="flex justify-end -mt-sm">
+					<a href="{base}/forgot-password" class="text-caption font-medium" style="color: var(--text-secondary);">Forgot password?</a>
 				</div>
 
 				<button type="submit" disabled={loading} class="btn-primary w-full h-10 text-body-sm font-medium">

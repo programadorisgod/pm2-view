@@ -8,6 +8,7 @@ import { env } from '$env/dynamic/private';
 import { base } from '$app/paths';
 import { admin } from 'better-auth/plugins/admin';
 import { createAccessControl } from 'better-auth/plugins/access';
+import { sendNotificationEmail } from '../notifications';
 
 const allowedHosts = (process.env.VITE_ALLOWED_HOSTS || 'localhost')
 	.split(',')
@@ -94,7 +95,31 @@ export function getAuth() {
 				}
 			},
 			emailAndPassword: {
-				enabled: true
+				enabled: true,
+				sendResetPassword: async ({ user, url }) => {
+					const sent = await sendNotificationEmail({
+						from: env.SMTP_FROM_EMAIL,
+						to: user.email,
+						subject: 'Reset your password',
+						text: `Reset your PM2 View password by opening this link: ${url}`,
+						html: `<!doctype html>
+<html>
+<body style="margin:0;padding:24px;background:#0B1520;font-family:Arial,sans-serif;">
+	<div style="max-width:480px;margin:0 auto;background:#101B29;border:1px solid #1E2D3D;border-radius:12px;padding:32px;">
+		<h1 style="color:#38CDFF;font-size:20px;margin:0 0 16px;">Reset your password</h1>
+		<p style="color:#C7D5E0;font-size:14px;line-height:1.6;margin:0 0 24px;">We received a request to reset the password for your PM2 View account. Click the button below to choose a new password. This link expires in 1 hour.</p>
+		<a href="${url}" style="display:inline-block;background:linear-gradient(135deg,#009DCD,#007CA2);color:#CAF8FF;text-decoration:none;font-weight:600;font-size:14px;padding:12px 24px;border-radius:999px;">Reset password</a>
+		<p style="color:#5A6B7B;font-size:12px;line-height:1.6;margin:24px 0 0;">If you didn't request this, you can safely ignore this email. Or open this link: <a href="${url}" style="color:#5A9DB8;">${url}</a></p>
+	</div>
+</body>
+</html>`
+					});
+					if (!sent) {
+						console.log(`[auth] Password reset link for ${user.email}: ${url}`);
+					}
+				},
+				resetPasswordTokenExpiresIn: 60 * 60, // 1 hour
+				revokeSessionsOnPasswordReset: true
 			}
 		});
 	}

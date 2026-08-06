@@ -4,6 +4,7 @@
     Badge,
     ConfirmDeleteModal,
     FeedbackBanner,
+    PM2SystemModal,
   } from "$lib/ui/components";
   import { base } from "$app/paths";
   import type { PageData } from "./$types";
@@ -23,6 +24,10 @@
   });
   let favoritesExpanded = $state(true);
   let othersExpanded = $state(true);
+  let systemModal = $state<{ open: boolean; mode: "save" | "startup" }>({
+    open: false,
+    mode: "startup",
+  });
 
   let favoriteProcesses = $derived(processes.filter((p) => p.isFavorite));
   let nonFavoriteProcesses = $derived(processes.filter((p) => !p.isFavorite));
@@ -110,16 +115,43 @@
 
 <div class="max-w-6xl mx-auto">
   <!-- Header -->
-  <div class="mb-xl">
-    <h1
-      class="text-hero font-bold mb-xs"
-      style="view-transition-name: page-title; color: var(--text-primary);"
-    >
-      Projects
-    </h1>
-    <p class="text-body-sm" style="color: var(--text-secondary);">
-      Manage and monitor all your PM2 processes
-    </p>
+  <div class="mb-xl flex items-start justify-between gap-md flex-wrap">
+    <div>
+      <h1
+        class="text-hero font-bold mb-xs"
+        style="view-transition-name: page-title; color: var(--text-primary);"
+      >
+        Projects
+      </h1>
+      <p class="text-body-sm" style="color: var(--text-secondary);">
+        Manage and monitor all your PM2 processes
+      </p>
+    </div>
+
+    {#if data.userRole === "admin"}
+      <div class="flex gap-xs">
+        <button
+          class="btn-secondary px-3 py-1.5 text-body-sm inline-flex items-center gap-1.5"
+          onclick={() => (systemModal = { open: true, mode: "save" })}
+          title="Save the current process list (pm2 save)"
+        >
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4"/>
+          </svg>
+          PM2 Save
+        </button>
+        <button
+          class="btn-secondary px-3 py-1.5 text-body-sm inline-flex items-center gap-1.5"
+          onclick={() => (systemModal = { open: true, mode: "startup" })}
+          title="Enable PM2 to start processes on boot (pm2 startup)"
+        >
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
+          </svg>
+          PM2 Startup
+        </button>
+      </div>
+    {/if}
   </div>
 
   {#if feedback}
@@ -438,5 +470,13 @@
   onConfirm={confirmDelete}
   onCancel={() => {
     deleteModal.open = false;
+  }}
+/>
+
+<PM2SystemModal
+  open={systemModal.open}
+  mode={systemModal.mode}
+  onClose={() => {
+    systemModal.open = false;
   }}
 />

@@ -160,11 +160,13 @@
 			const decoder = new TextDecoder();
 			let buffer = '';
 
-			const handleRecord = (data: LogLine & { isComplete?: boolean; success?: boolean }) => {
+			const handleRecord = (data: LogLine & { isComplete?: boolean; success?: boolean; serviceName?: string }) => {
 				lines = [...lines, { text: data.text, isError: data.isError }];
 				if (data.isComplete) {
 					success = data.success ?? false;
-					doneMessage = success ? 'Startup script applied' : 'Failed to apply the startup script';
+					doneMessage = success
+						? `Startup script applied${data.serviceName ? ` (${data.serviceName})` : ''}`
+						: 'Failed to apply the startup script';
 					view = 'done';
 				}
 			};

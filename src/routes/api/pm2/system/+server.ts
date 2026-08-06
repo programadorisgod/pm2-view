@@ -96,7 +96,8 @@ function streamApplyStartup(
 						line: 'Startup script applied successfully',
 						isError: false,
 						isComplete: true,
-						success: true
+						success: true,
+						serviceName: result.serviceName
 					});
 				} else {
 					safeEnqueue({

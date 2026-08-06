@@ -8,6 +8,7 @@ import { env } from '$env/dynamic/private';
 import { base } from '$app/paths';
 import { admin } from 'better-auth/plugins/admin';
 import { createAccessControl } from 'better-auth/plugins/access';
+import { google } from 'better-auth/social-providers';
 import { sendNotificationEmail } from '../notifications';
 
 const allowedHosts = (process.env.VITE_ALLOWED_HOSTS || 'localhost')
@@ -120,6 +121,12 @@ export function getAuth() {
 				},
 				resetPasswordTokenExpiresIn: 60 * 60, // 1 hour
 				revokeSessionsOnPasswordReset: true
+			},
+			socialProviders: {
+				google: {
+					clientId: env.GOOGLE_CLIENT_ID,
+					clientSecret: env.GOOGLE_CLIENT_SECRET
+				}
 			}
 		});
 	}

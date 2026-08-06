@@ -61,9 +61,10 @@
 					type: 'success',
 					text: result.message || 'Update complete'
 				};
-				// The server restarts via pm2 in the background — give it time,
+				// The server restarts via pm2 in the background — give it time to
+				// come back up (nginx returns 502 until pm2 finishes starting),
 				// then reload the page to pick up the new build.
-				setTimeout(() => window.location.reload(), 4000);
+				setTimeout(() => window.location.reload(), 30000);
 			} else {
 				updateFeedback = {
 					type: 'error',

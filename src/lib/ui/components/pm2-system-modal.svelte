@@ -200,6 +200,15 @@
 					// Ignore parse errors
 				}
 			}
+
+			// The stream ended without a terminal record — never leave the user
+			// hanging on an indeterminate "running" state.
+			if (success === null) {
+				lines = [...lines, { text: 'The operation ended without reporting a result.', isError: true }];
+				success = false;
+				doneMessage = 'Failed to apply the startup script';
+				view = 'done';
+			}
 		} catch (err) {
 			lines = [
 				...lines,
@@ -396,24 +405,33 @@
 							{view === 'running' ? 'Running command...' : 'Executing...'}
 						</p>
 					{:else}
-						{#each lines as log (log.text + log.isError)}
-							<div
-								class="py-2xs whitespace-pre-wrap"
-								style={cn(
-									'color: var(--text-secondary);',
-									log.isCommand ? 'color: var(--text-muted); font-style: italic;' : '',
-									log.isError ? 'color: #FF5252;' : '',
-									log.text.includes('Successfully') ? 'color: #00E676; font-weight: 600;' : '',
-									log.text.includes('Command successfully executed') ? 'color: #00E676; font-weight: 600;' : '',
-									log.text.includes('Failed') ? 'color: #FF5252; font-weight: 600;' : '',
-									log.text.includes('error') ? 'color: #FF5252; font-weight: 600;' : ''
-								)}
-							>
-								{log.text}
-							</div>
-						{/each}
-					{/if}
+					{#each lines as log (log.text + log.isError)}
+						<div
+							class="py-2xs whitespace-pre-wrap"
+							style={cn(
+								'color: var(--text-secondary);',
+								log.isCommand ? 'color: var(--text-muted); font-style: italic;' : '',
+								log.isError ? 'color: #FF5252;' : '',
+								log.text.includes('Successfully') ? 'color: #00E676; font-weight: 600;' : '',
+								log.text.includes('Command successfully executed') ? 'color: #00E676; font-weight: 600;' : '',
+								log.text.includes('Failed') ? 'color: #FF5252; font-weight: 600;' : '',
+								log.text.includes('error') ? 'color: #FF5252; font-weight: 600;' : ''
+							)}
+						>
+							{log.text}
+						</div>
+					{/each}
+				{/if}
+			</div>
+
+			{#if view === 'done'}
+				<div
+					class="mx-lg mb-lg rounded-lg px-md py-sm text-body-sm font-semibold text-center"
+					style="background: {success ? 'rgba(0, 230, 118, 0.12)' : 'rgba(255, 82, 82, 0.12)'}; border: 1px solid {success ? 'rgba(0, 230, 118, 0.45)' : 'rgba(255, 82, 82, 0.45)'}; color: {success ? '#00E676' : '#FF5252'};"
+				>
+					{success ? '✓ ' + doneMessage : '✗ ' + doneMessage}
 				</div>
+			{/if}
 			{/if}
 		</div>
 	</dialog>

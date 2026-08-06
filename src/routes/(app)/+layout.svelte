@@ -1,5 +1,5 @@
 	<script lang="ts">
-	import { Header, Sidebar } from '$lib/ui/components';
+	import { Header, Sidebar, FeedbackBanner } from '$lib/ui/components';
 	import { page } from '$app/state';
 	import { base } from '$app/paths';
 	import { goto } from '$app/navigation';
@@ -10,6 +10,8 @@
 
 	let mobileMenuOpen = $state(false);
 	let userMenuOpen = $state(false);
+	let updating = $state(false);
+	let updateFeedback = $state<{ type: 'success' | 'error'; text: string } | null>(null);
 
 	let user = $derived(data.user);
 	let isAdmin = $derived(user?.role === 'admin');
@@ -44,6 +46,34 @@
 			goto(`${base}/login`);
 		} catch (err) {
 			console.error('Logout failed:', err);
+		}
+	}
+
+	async function handleUpdate() {
+		if (updating) return;
+		updating = true;
+		updateFeedback = null;
+		try {
+			const res = await fetch(`${base}/api/update`, { method: 'POST' });
+			const result = await res.json();
+			if (res.ok && result.success) {
+				updateFeedback = {
+					type: 'success',
+					text: result.message || 'Update complete'
+				};
+				// The server restarts via pm2 in the background — give it time,
+				// then reload the page to pick up the new build.
+				setTimeout(() => window.location.reload(), 4000);
+			} else {
+				updateFeedback = {
+					type: 'error',
+					text: result.error || result.message || 'Update failed'
+				};
+			}
+		} catch {
+			updateFeedback = { type: 'error', text: 'Update failed' };
+		} finally {
+			updating = false;
 		}
 	}
 </script>
@@ -102,6 +132,27 @@
 					<button class="btn-primary px-4 py-1.5 text-body-sm opacity-40 cursor-not-allowed" disabled>
 						Add Project
 					</button>
+
+					{#if isAdmin}
+						<button
+							class="btn-secondary px-4 py-1.5 text-body-sm inline-flex items-center gap-1.5"
+							onclick={handleUpdate}
+							disabled={updating}
+							title="git pull && pnpm build && pm2 restart pm2-view"
+						>
+							{#if updating}
+								<svg class="w-3.5 h-3.5 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+									<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+								</svg>
+								Updating...
+							{:else}
+								<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+									<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+								</svg>
+								Update
+							{/if}
+						</button>
+					{/if}
 
 					{#if user}
 						<!-- User menu -->
@@ -186,6 +237,15 @@
 		</Header>
 
 		<main class="flex-1 overflow-y-auto p-lg lg:p-xl scrollbar-thin page-enter">
+			{#if updateFeedback}
+				<div class="mb-lg">
+					<FeedbackBanner
+						type={updateFeedback.type}
+						message={updateFeedback.text}
+						onDismiss={() => (updateFeedback = null)}
+					/>
+				</div>
+			{/if}
 			{@render children?.()}
 		</main>
 	</div>

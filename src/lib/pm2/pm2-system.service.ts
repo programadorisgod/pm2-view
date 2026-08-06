@@ -32,7 +32,10 @@ export class PM2SystemService {
 	 * command was extracted from the output.
 	 */
 	async startup(): Promise<CommandResult & { command?: string }> {
-		const result = await this.runCommand('pm2 startup');
+		// `pm2 startup` exits non-zero whenever it prints the copy/paste
+		// command (its normal success path), so run quietly and treat a
+		// missing command as the only real failure.
+		const result = await this.runCommand('pm2 startup', true);
 		const command = this.extractStartupCommand(result.output);
 
 		if (command) return { ok: true, output: result.output, command };

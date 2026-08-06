@@ -160,8 +160,9 @@
 			const decoder = new TextDecoder();
 			let buffer = '';
 
-			const handleRecord = (data: LogLine & { isComplete?: boolean; success?: boolean; serviceName?: string }) => {
-				lines = [...lines, { text: data.text, isError: data.isError }];
+			const handleRecord = (data: LogLine & { line?: string; isComplete?: boolean; success?: boolean; serviceName?: string }) => {
+				const text = data.line ?? data.text ?? '';
+				if (text) lines = [...lines, { text, isError: data.isError }];
 				if (data.isComplete) {
 					success = data.success ?? false;
 					doneMessage = success

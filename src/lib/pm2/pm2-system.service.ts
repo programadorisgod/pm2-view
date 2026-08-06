@@ -87,7 +87,13 @@ export class PM2SystemService {
 					resolve({ ok: false, error: lastErrorLine ?? `Command exited with code ${code}` });
 					return;
 				}
-				await this.verifyStartup(serviceName, onLine);
+				// The sudo/pm2 command exiting 0 is the success signal. The
+				// systemd check below only adds confirmation output and never
+				// blocks or overturns that verdict, so the UI always reports.
+				const verified = await this.verifyStartup(serviceName, onLine);
+				if (!verified) {
+					onLine('[PM2] Note: the apply succeeded but the service could not be confirmed as enabled.', true);
+				}
 				resolve({ ok: true, serviceName });
 			});
 
@@ -103,24 +109,26 @@ export class PM2SystemService {
 	/**
 	 * Confirms the systemd unit that pm2 just installed actually exists and is
 	 * enabled, streaming real output so the UI shows a concrete result even if
-	 * pm2 printed nothing during the sudo step.
+	 * pm2 printed nothing during the sudo step. Returns false when the unit
+	 * cannot be confirmed, which turns the whole apply into a failure.
 	 */
 	private async verifyStartup(
 		serviceName: string | undefined,
 		onLine: (line: string, isError: boolean) => void
-	): Promise<void> {
+	): Promise<boolean> {
 		if (!serviceName) {
 			onLine('[PM2] Startup script applied.', false);
-			return;
+			return true;
 		}
 
 		onLine(`[PM2] Verifying ${serviceName}...`, false);
-		const result = await this.runCommand(`systemctl is-enabled ${escapeShellArg(serviceName)}`, true);
+		const result = await this.runCommand(`systemctl is-enabled ${escapeShellArg(serviceName)}`, true, 8000);
 		if (result.ok && result.output) {
 			onLine(`[PM2] ${serviceName} is ${result.output}`, false);
-		} else {
-			onLine(`[PM2] ${result.output || `${serviceName} could not be verified`}`, true);
+			return result.output.trim().toLowerCase() === 'enabled';
 		}
+		onLine(`[PM2] ${result.output || `${serviceName} could not be verified`}`, true);
+		return false;
 	}
 
 	/**
@@ -132,9 +140,11 @@ export class PM2SystemService {
 		return userMatch ? `pm2-${userMatch[1]}.service` : undefined;
 	}
 
-	private async runCommand(command: string, quiet = false): Promise<CommandResult> {
+	private async runCommand(command: string, quiet = false, timeoutMs?: number): Promise<CommandResult> {
+		const options: { maxBuffer: number; timeout?: number } = { maxBuffer: 10 * 1024 * 1024 };
+		if (timeoutMs) options.timeout = timeoutMs;
 		return new Promise((resolve) => {
-			exec(command, { maxBuffer: 10 * 1024 * 1024 }, (error, stdout, stderr) => {
+			exec(command, options, (error, stdout, stderr) => {
 				const output = `${stdout ?? ''}${stderr ?? ''}`.trim();
 				if (error) {
 					// `error` only carries the generic "Command failed" message;

@@ -182,6 +182,8 @@ describe('PM2SystemService', () => {
 			expect(lines).toContain('[PM2] Verifying pm2-rpatic.service...');
 			expect(lines).toContain('[PM2] pm2-rpatic.service is enabled');
 			expect(vi.mocked(exec).mock.calls.some((c) => String(c[0]).includes("'pm2-rpatic.service'"))).toBe(true);
+			const verifyCall = vi.mocked(exec).mock.calls.find((c) => String(c[0]).includes('systemctl is-enabled'));
+			expect(verifyCall?.[1]).toMatchObject({ timeout: 8000 });
 		});
 
 		it('should report when the service cannot be verified', async () => {
@@ -200,7 +202,11 @@ describe('PM2SystemService', () => {
 			const result = await promise;
 
 			expect(result.ok).toBe(true);
+			expect(result.serviceName).toBe('pm2-rpatic.service');
 			expect(lines.some((l) => l.isError && l.text === '[PM2] systemctl failed')).toBe(true);
+			expect(
+				lines.some((l) => l.isError && l.text.includes('could not be confirmed as enabled'))
+			).toBe(true);
 		});
 
 		it('should mark the result as failed when the command exits non-zero', async () => {

@@ -1,6 +1,7 @@
 import { exec, spawn } from 'child_process';
 import type { Readable } from 'stream';
 import { logger } from '$lib/logger';
+import { escapeShellArg } from '$lib/utils/shell';
 
 export interface CommandResult {
 	ok: boolean;
@@ -10,6 +11,7 @@ export interface CommandResult {
 export interface ApplyStartupResult {
 	ok: boolean;
 	error?: string;
+	serviceName?: string;
 }
 
 /**
@@ -41,7 +43,8 @@ export class PM2SystemService {
 
 	/**
 	 * Executes the pm2-generated startup command through `sudo -S`, feeding the
-	 * password through stdin (never via argv/env). Streams output line by line.
+	 * password through stdin (never via argv/env). Streams output line by line,
+	 * then verifies the resulting systemd service is enabled.
 	 */
 	async applyStartup(
 		command: string,
@@ -56,6 +59,7 @@ export class PM2SystemService {
 		// Replace the leading `sudo` with `sudo -S -p ''` so the password is
 		// read from stdin and no prompt line is printed to the output.
 		const cmd = trimmed.replace(/^\s*sudo\b/, `sudo -S -p ''`);
+		const serviceName = this.extractServiceName(trimmed);
 
 		return new Promise<ApplyStartupResult>((resolve) => {
 			const child = spawn('sh', ['-c', cmd], {
@@ -74,10 +78,14 @@ export class PM2SystemService {
 				resolve({ ok: false, error: err.message });
 			});
 
-			child.on('close', (code) => {
-				const ok = code === 0;
-				const lastErrorLine = [...lines].reverse().find((l) => l.isError)?.text;
-				resolve(ok ? { ok } : { ok, error: lastErrorLine ?? `Command exited with code ${code}` });
+			child.on('close', async (code) => {
+				if (code !== 0) {
+					const lastErrorLine = [...lines].reverse().find((l) => l.isError)?.text;
+					resolve({ ok: false, error: lastErrorLine ?? `Command exited with code ${code}` });
+					return;
+				}
+				await this.verifyStartup(serviceName, onLine);
+				resolve({ ok: true, serviceName });
 			});
 
 			try {
@@ -89,7 +97,39 @@ export class PM2SystemService {
 		});
 	}
 
-	private async runCommand(command: string): Promise<CommandResult> {
+	/**
+	 * Confirms the systemd unit that pm2 just installed actually exists and is
+	 * enabled, streaming real output so the UI shows a concrete result even if
+	 * pm2 printed nothing during the sudo step.
+	 */
+	private async verifyStartup(
+		serviceName: string | undefined,
+		onLine: (line: string, isError: boolean) => void
+	): Promise<void> {
+		if (!serviceName) {
+			onLine('[PM2] Startup script applied.', false);
+			return;
+		}
+
+		onLine(`[PM2] Verifying ${serviceName}...`, false);
+		const result = await this.runCommand(`systemctl is-enabled ${escapeShellArg(serviceName)}`, true);
+		if (result.ok && result.output) {
+			onLine(`[PM2] ${serviceName} is ${result.output}`, false);
+		} else {
+			onLine(`[PM2] ${result.output || `${serviceName} could not be verified`}`, true);
+		}
+	}
+
+	/**
+	 * Derives the systemd service name (`pm2-<user>`) from the generated
+	 * startup command (`pm2 startup systemd -u <user> --hp <home>`).
+	 */
+	private extractServiceName(command: string): string | undefined {
+		const userMatch = command.match(/\s-u\s+([A-Za-z0-9._-]+)/);
+		return userMatch ? `pm2-${userMatch[1]}.service` : undefined;
+	}
+
+	private async runCommand(command: string, quiet = false): Promise<CommandResult> {
 		return new Promise((resolve) => {
 			exec(command, { maxBuffer: 10 * 1024 * 1024 }, (error, stdout, stderr) => {
 				const output = `${stdout ?? ''}${stderr ?? ''}`.trim();
@@ -98,7 +138,7 @@ export class PM2SystemService {
 					// the real pm2 output arrives via the callback args, so use
 					// them on non-zero exit too.
 					const message = output || error.message;
-					logger.warn('PM2 system command failed', { command, output: message });
+					if (!quiet) logger.warn('PM2 system command failed', { command, output: message });
 					resolve({ ok: false, output: message });
 					return;
 				}

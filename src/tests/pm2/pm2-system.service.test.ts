@@ -137,10 +137,11 @@ describe('PM2SystemService', () => {
 		it('should run the command through sudo -S and feed the password via stdin', async () => {
 			const child = createMockChild();
 			vi.mocked(spawn).mockReturnValue(child);
+			mockExecSuccess('enabled\n');
 
-			const lines: string[] = [];
-			const promise = service.applyStartup(STARTUP_COMMAND, 'secret', (line) => {
-				lines.push(line);
+			const lines: { text: string; isError: boolean }[] = [];
+			const promise = service.applyStartup(STARTUP_COMMAND, 'secret', (line, isError) => {
+				lines.push({ text: line, isError });
 			});
 
 			// Simulate streaming output then a successful exit
@@ -157,7 +158,49 @@ describe('PM2SystemService', () => {
 			expect(child.stdin.write).toHaveBeenCalledWith('secret\n');
 			expect(child.stdin.end).toHaveBeenCalled();
 			expect(result.ok).toBe(true);
-			expect(lines).toContain('[PM2] Writing init configuration in /etc/systemd/system/pm2-rpatic.service');
+			expect(result.serviceName).toBe('pm2-rpatic.service');
+			expect(lines.some((l) => l.text === '[PM2] Writing init configuration in /etc/systemd/system/pm2-rpatic.service')).toBe(true);
+		});
+
+		it('should verify the installed service is enabled and stream the result', async () => {
+			const child = createMockChild();
+			vi.mocked(spawn).mockReturnValue(child);
+			mockExecSuccess('enabled\n');
+
+			const lines: string[] = [];
+			const promise = service.applyStartup(STARTUP_COMMAND, 'secret', (line) => {
+				lines.push(line);
+			});
+
+			child.stdout.emit('end');
+			child.__handlers['close'](0);
+
+			const result = await promise;
+
+			expect(result.ok).toBe(true);
+			expect(result.serviceName).toBe('pm2-rpatic.service');
+			expect(lines).toContain('[PM2] Verifying pm2-rpatic.service...');
+			expect(lines).toContain('[PM2] pm2-rpatic.service is enabled');
+			expect(vi.mocked(exec).mock.calls.some((c) => String(c[0]).includes("'pm2-rpatic.service'"))).toBe(true);
+		});
+
+		it('should report when the service cannot be verified', async () => {
+			const child = createMockChild();
+			vi.mocked(spawn).mockReturnValue(child);
+			mockExecFailure('systemctl failed');
+
+			const lines: { text: string; isError: boolean }[] = [];
+			const promise = service.applyStartup(STARTUP_COMMAND, 'secret', (line, isError) => {
+				lines.push({ text: line, isError });
+			});
+
+			child.stdout.emit('end');
+			child.__handlers['close'](0);
+
+			const result = await promise;
+
+			expect(result.ok).toBe(true);
+			expect(lines.some((l) => l.isError && l.text === '[PM2] systemctl failed')).toBe(true);
 		});
 
 		it('should mark the result as failed when the command exits non-zero', async () => {

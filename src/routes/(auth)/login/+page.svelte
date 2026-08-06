@@ -1,13 +1,27 @@
 	<script lang="ts">
 	import { authClient } from '$lib/auth/client';
 	import { base } from '$app/paths';
+	import { page } from '$app/state';
 	import PasswordInput from '$lib/components/PasswordInput.svelte';
 
+	const oauthError = $derived(page.url.searchParams.get('error'));
 	let email = $state('');
 	let password = $state('');
 	let error = $state('');
 	let loading = $state(false);
 	let googleLoading = $state(false);
+
+	$effect(() => {
+		if (oauthError) {
+			error = `Google sign in failed: ${oauthError.replace(/_/g, ' ')}. Please try again.`;
+			return;
+		}
+		authClient.getSession().then((session) => {
+			if (session?.user) {
+				window.location.href = `${base}/`;
+			}
+		});
+	});
 
 	async function handleSubmit(e: Event) {
 		e.preventDefault();

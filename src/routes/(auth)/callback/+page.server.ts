@@ -3,12 +3,12 @@ import { redirect } from '@sveltejs/kit';
 import { base } from '$app/paths';
 import type { PageServerLoad } from './$types';
 
-export const load: PageServerLoad = async ({ url }) => {
+export const load: PageServerLoad = async ({ url, request }) => {
 	const error = url.searchParams.get('error');
 	if (error) {
 		throw redirect(303, `${base}/login?oauth_error=${encodeURIComponent(error)}`);
 	}
-	const session = await auth.api.getSession({ headers: new Headers() });
+	const session = await auth.api.getSession({ headers: request.headers });
 	if (!session?.user) {
 		throw redirect(303, `${base}/login`);
 	}

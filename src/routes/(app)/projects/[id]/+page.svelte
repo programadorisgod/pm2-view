@@ -57,9 +57,25 @@
     }
   }
 
-  let logs = $state<
-    Array<{ type: "out" | "err"; data: string; timestamp: Date }>
-  >([]);
+  type LogEntry = { type: "out" | "err"; data: string; timestamp: Date };
+
+  // JSON (polling/load-more) serializes Date timestamps as ISO strings,
+  // while SSR (devalue) preserves them as Date objects. Normalize so
+  // timestamp.getTime() always works.
+  function toLogEntry(raw: {
+    type: "out" | "err";
+    data: string;
+    timestamp: Date | string;
+  }): LogEntry {
+    return {
+      type: raw.type,
+      data: raw.data,
+      timestamp:
+        raw.timestamp instanceof Date ? raw.timestamp : new Date(raw.timestamp),
+    };
+  }
+
+  let logs = $state<LogEntry[]>([]);
   let loadedLines = $state(50);
   let loadingMore = $state(false);
   let logPollIntervalMs = 3000;
@@ -69,7 +85,7 @@
 
   $effect(() => {
     if (initialLogs && initialLogs.length > 0) {
-      logs = initialLogs;
+      logs = initialLogs.map(toLogEntry);
     }
   });
 
@@ -82,7 +98,7 @@
       );
       const result = await res.json();
       if (result.success) {
-        logs = result.logs;
+        logs = result.logs.map(toLogEntry);
         loadedLines = newCount;
       }
     } catch {
@@ -100,7 +116,7 @@
       );
       const result = await res.json();
       if (result.success) {
-        logs = result.logs;
+        logs = result.logs.map(toLogEntry);
       }
     } catch {
       // Silent fail

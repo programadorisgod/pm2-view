@@ -1,6 +1,7 @@
 	<script lang="ts">
 	import { authClient } from '$lib/auth/client';
 	import { base } from '$app/paths';
+	import PasswordInput from '$lib/components/PasswordInput.svelte';
 
 	let name = $state('');
 	let email = $state('');
@@ -101,12 +102,10 @@
 
 				<div>
 					<label for="password" class="block text-caption font-medium mb-xs" style="color: var(--text-secondary);">Password</label>
-					<input
+					<PasswordInput
 						id="password"
-						type="password"
 						bind:value={password}
 						placeholder="••••••••"
-						class="input-base w-full h-10 px-md text-body-sm"
 						autocomplete="new-password"
 						required
 					/>
@@ -114,12 +113,10 @@
 
 				<div>
 					<label for="confirmPassword" class="block text-caption font-medium mb-xs" style="color: var(--text-secondary);">Confirm Password</label>
-					<input
+					<PasswordInput
 						id="confirmPassword"
-						type="password"
 						bind:value={confirmPassword}
 						placeholder="••••••••"
-						class="input-base w-full h-10 px-md text-body-sm"
 						autocomplete="new-password"
 						required
 					/>

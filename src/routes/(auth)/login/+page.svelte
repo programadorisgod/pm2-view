@@ -4,7 +4,7 @@
 	import { page } from '$app/state';
 	import PasswordInput from '$lib/components/PasswordInput.svelte';
 
-	const oauthError = $derived(page.url.searchParams.get('error'));
+	const oauthError = $derived(page.url.searchParams.get('error') || page.url.searchParams.get('oauth_error'));
 	let email = $state('');
 	let password = $state('');
 	let error = $state('');
@@ -13,7 +13,11 @@
 
 	$effect(() => {
 		if (oauthError) {
-			error = `Google sign in failed: ${oauthError.replace(/_/g, ' ')}. Please try again.`;
+			if (oauthError === 'session_timeout') {
+				error = 'Sign in timed out. Please try again.';
+			} else {
+				error = `Google sign in failed: ${oauthError.replace(/_/g, ' ')}. Please try again.`;
+			}
 			return;
 		}
 		authClient.getSession().then((session) => {
@@ -50,9 +54,10 @@
 		error = '';
 		googleLoading = true;
 		try {
+			const callbackUrl = `${window.location.origin}${base}/callback`;
 			const result = await authClient.signIn.social({
 				provider: 'google',
-				callbackURL: `${window.location.origin}${base}/login`
+				callbackURL: callbackUrl
 			}) as { url?: string };
 			if (result.url) {
 				window.location.href = result.url;

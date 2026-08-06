@@ -15,6 +15,7 @@
 	interface LogLine {
 		text: string;
 		isError: boolean;
+		isCommand?: boolean;
 	}
 
 	let dialogRef = $state<HTMLDialogElement | undefined>();
@@ -126,6 +127,9 @@
 
 	async function applyStartup() {
 		view = 'running';
+		// Show only the apply output, starting with the command being executed,
+		// so the sudo/pm2 streaming lines are not lost among the detection log.
+		lines = [{ text: `$ ${startupCommand}`, isError: false, isCommand: true }];
 
 		try {
 			const res = await fetch(`${base}/api/pm2/system?action=apply-startup`, {
@@ -156,6 +160,15 @@
 			const decoder = new TextDecoder();
 			let buffer = '';
 
+			const handleRecord = (data: LogLine & { isComplete?: boolean; success?: boolean }) => {
+				lines = [...lines, { text: data.text, isError: data.isError }];
+				if (data.isComplete) {
+					success = data.success ?? false;
+					doneMessage = success ? 'Startup script applied' : 'Failed to apply the startup script';
+					view = 'done';
+				}
+			};
+
 			while (true) {
 				const { done, value } = await reader.read();
 				if (done) break;
@@ -170,19 +183,19 @@
 				for (const rawLine of chunk.split('\n')) {
 					if (!rawLine.trim()) continue;
 					try {
-						const data = JSON.parse(rawLine) as LogLine & {
-							isComplete?: boolean;
-							success?: boolean;
-						};
-						lines = [...lines, { text: data.text, isError: data.isError }];
-						if (data.isComplete) {
-							success = data.success ?? false;
-							doneMessage = success ? 'Startup script applied' : 'Failed to apply the startup script';
-							view = 'done';
-						}
+						handleRecord(JSON.parse(rawLine));
 					} catch {
 						// Ignore parse errors
 					}
+				}
+			}
+
+			// Flush any trailing record that arrived without a newline
+			if (buffer.trim()) {
+				try {
+					handleRecord(JSON.parse(buffer));
+				} catch {
+					// Ignore parse errors
 				}
 			}
 		} catch (err) {
@@ -386,6 +399,7 @@
 								class="py-2xs whitespace-pre-wrap"
 								style={cn(
 									'color: var(--text-secondary);',
+									log.isCommand ? 'color: var(--text-muted); font-style: italic;' : '',
 									log.isError ? 'color: #FF5252;' : '',
 									log.text.includes('Successfully') ? 'color: #00E676; font-weight: 600;' : '',
 									log.text.includes('Command successfully executed') ? 'color: #00E676; font-weight: 600;' : '',

@@ -12,6 +12,8 @@
 	let userMenuOpen = $state(false);
 	let updating = $state(false);
 	let updateFeedback = $state<{ type: 'success' | 'error'; text: string } | null>(null);
+	let countdown = $state<number | null>(null);
+	let countdownTimer: ReturnType<typeof setInterval> | undefined;
 
 	let user = $derived(data.user);
 	let isAdmin = $derived(user?.role === 'admin');
@@ -53,18 +55,20 @@
 		if (updating) return;
 		updating = true;
 		updateFeedback = null;
+		countdown = null;
+		clearInterval(countdownTimer);
 		try {
 			const res = await fetch(`${base}/api/update`, { method: 'POST' });
 			const result = await res.json();
 			if (res.ok && result.success) {
 				updateFeedback = {
 					type: 'success',
-					text: result.message || 'Update complete'
+					text: 'Update applied. Restarting pm2-view...'
 				};
 				// The server restarts via pm2 in the background — give it time to
 				// come back up (nginx returns 502 until pm2 finishes starting),
-				// then reload the page to pick up the new build.
-				setTimeout(() => window.location.reload(), 30000);
+				// counting down before reloading the page to pick up the new build.
+				startCountdown();
 			} else {
 				updateFeedback = {
 					type: 'error',
@@ -76,6 +80,20 @@
 		} finally {
 			updating = false;
 		}
+	}
+
+	function startCountdown() {
+		clearInterval(countdownTimer);
+		countdown = 30;
+		countdownTimer = setInterval(() => {
+			if (countdown !== null) {
+				countdown -= 1;
+				if (countdown <= 0) {
+					clearInterval(countdownTimer);
+					window.location.reload();
+				}
+			}
+		}, 1000);
 	}
 </script>
 
@@ -242,7 +260,7 @@
 				<div class="mb-lg">
 					<FeedbackBanner
 						type={updateFeedback.type}
-						message={updateFeedback.text}
+						message={updateFeedback.text + (countdown !== null ? ` (${countdown}s)` : '')}
 						onDismiss={() => (updateFeedback = null)}
 					/>
 				</div>

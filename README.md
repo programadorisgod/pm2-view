@@ -181,10 +181,12 @@ VITE_ALLOWED_HOSTS=localhost,your-domain.com
 Setup in Google Cloud Console:
 
 1. Create OAuth 2.0 credentials (APIs & Credentials → Create Credentials → OAuth client ID).
-2. Add the **Authorized redirect URI**: `{BETTER_AUTH_URL}/api/auth/callback/google`
+2. Add the **Authorized redirect URI**: `{BETTER_AUTH_URL}{base}/api/auth/callback/google`, where `base` is the app's base path (from `APP_BASE_PATH`, empty by default, `/pm2` in this deployment)
    - Dev: `http://localhost:5179/api/auth/callback/google`
-   - Production: `https://your-domain.com/api/auth/callback/google`
+   - Production (base `/pm2`): `https://engine.clinicamedicos.com/pm2/api/auth/callback/google`
 3. Add `http://localhost:5179` and your production origin to **Authorized JavaScript origins** if required.
+
+> **`BETTER_AUTH_URL` must be the origin only** — no base path, no trailing slash. The app appends the base path itself. Setting it to `https://engine.clinicamedicos.com/pm2` produces a doubled path (`.../pm2/pm2/api/auth/...`) and `redirect_uri_mismatch`. The full redirect URI you register in Google **does** include the base path.
 
 `VITE_ALLOWED_HOSTS` (comma-separated) controls better-auth's `trustedOrigins`, used to validate the OAuth callback URL (open-redirect protection) and CSRF origin checks. The Google button appears on the login page only — first-time Google users get an account created automatically (no separate registration step).
 
@@ -233,6 +235,12 @@ TURSO_AUTH_TOKEN=your-auth-token  # Only for libsql/Turso
 # Better Auth (required for default provider)
 BETTER_AUTH_URL=http://localhost:5179
 BETTER_AUTH_SECRET=your-secret-key
+# Optional — forces the public origin when behind a reverse proxy.
+# Without it, adapter-node derives the origin from request headers; if the
+# proxy does not forward the correct Host/X-Forwarded-* headers, better-auth
+# rejects requests (404 on /api/auth/*) because the perceived origin no longer
+# matches BETTER_AUTH_URL. Set to the same origin as BETTER_AUTH_URL.
+# ORIGIN=https://engine.clinicamedicos.com
 
 # Auth Provider (optional — defaults to 'better-auth')
 AUTH_PROVIDER=better-auth

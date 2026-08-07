@@ -2,42 +2,10 @@
 
 ## Domain: user-roles
 
-### Requirement: Global Role Assignment
-The system MUST support three global roles for users: `admin`, `user`, and `viewer`. Each user MUST have exactly one global role assigned at any time.
 
-#### Scenario: Admin assigns admin role to a user
-Given a user with role `user` exists in the system  
-And an admin user is authenticated  
-When the admin assigns the role `admin` to the user  
-Then the user's global role MUST be updated to `admin`  
-And the role change MUST be recorded in the audit log
-
-#### Scenario: Admin assigns viewer role to a user
-Given a user with role `user` exists in the system  
-And an admin user is authenticated  
-When the admin assigns the role `viewer` to the user  
-Then the user's global role MUST be updated to `viewer`  
-And the role change MUST be recorded in the audit log
-
-#### Scenario: Non-admin cannot assign roles
-Given a user with role `user` is authenticated  
-When the user attempts to assign a role to another user  
 Then the system MUST return a 403 Forbidden error  
 And the role MUST NOT be changed
 
-#### Scenario: Self-role-change prevention
-Given an admin user is authenticated  
-When the admin attempts to change their own role  
-Then the system MUST reject the change with a 403 Forbidden error  
-And the admin's role MUST remain unchanged
-
-#### Scenario: Last admin cannot be banned or demoted
-Given only one user with role `admin` exists in the system  
-When an attempt is made to ban that admin or change their role to non-admin  
-Then the system MUST reject the operation  
-And the admin's role and status MUST remain unchanged
-
-#### Scenario: New user gets default role
 Given a new user registers in the system  
 When the user account is created  
 Then the user's global role MUST be set to `user` by default  
@@ -45,32 +13,8 @@ And no manual role assignment SHOULD be required
 
 ---
 
-### Requirement: User Banning and Unbanning
-The system MUST allow admins to ban and unban users. Banned users MUST NOT be able to authenticate.
-
-#### Scenario: Admin bans a user
-Given a user with role `user` exists in the system  
-And the user is not currently banned  
-When an admin bans the user with a reason  
-Then the user's banned status MUST be set to true  
-And the ban reason MUST be recorded  
 And the user MUST NOT be able to authenticate  
-And the ban action MUST be recorded in the audit log
 
-#### Scenario: Admin unbans a user
-Given a user with role `user` is banned  
-When an admin unbans the user  
-Then the user's banned status MUST be set to false  
-And the user MUST be able to authenticate  
-And the unban action MUST be recorded in the audit log
-
-#### Scenario: Cannot ban the last admin
-Given only one user with role `admin` exists in the system  
-When an attempt is made to ban that admin  
-Then the system MUST reject the operation  
-And the admin MUST NOT be banned
-
-#### Scenario: Banned user cannot access protected routes
 Given a user is banned  
 When the user attempts to access any authenticated route  
 Then the system MUST return a 401 Unauthorized error  
@@ -79,12 +23,7 @@ And the user MUST be redirected to the login page
 ---
 
 ### Requirement: Role-Based Permission Checking
-The system MUST provide a `hasPermission()` function that checks if a user has a specific permission based on their global role.
 
-#### Scenario: Admin has all permissions
-Given a user with role `admin` is authenticated  
-When the system checks if the user has permission to perform any action  
-Then the system MUST return true for all permission checks
 
 #### Scenario: Viewer has read-only permissions
 Given a user with role `viewer` is authenticated  
@@ -95,10 +34,6 @@ Then the system MUST return false
 
 #### Scenario: User has standard permissions
 Given a user with role `user` is authenticated  
-When the system checks if the user has permission to read and create resources  
-Then the system MUST return true  
-When the system checks if the user has permission to perform admin actions  
-Then the system MUST return false
 
 ---
 
@@ -158,11 +93,7 @@ Then the user MUST be removed from the project_members table
 And the removal MUST be recorded in the audit log  
 And the user MUST NOT be able to access the project
 
-#### Scenario: Removing user who is the only owner promotes next eligible member
-Given a project exists with one owner and multiple editors  
-When the owner is removed from the project (by an admin or via transfer)  
-Then the system MUST promote the earliest-added editor to owner  
-And the promotion MUST be recorded in the audit log
+
 
 ---
 
@@ -236,19 +167,6 @@ And no new team MUST be created
 
 ---
 
-### Requirement: Team Role Assignment
-The system MUST support three team-level roles: `team_owner`, `team_admin`, and `team_member`.
-
-#### Scenario: Team owner promotes member to team admin
-Given a team exists with an owner and a member with role `team_member`  
-When the owner promotes the member to `team_admin`  
-Then the member's role MUST be updated to `team_admin`  
-And the role change MUST be recorded in the audit log
-
-#### Scenario: Team admin cannot promote members to owner
-Given a user with role `team_admin` on a team is authenticated  
-When the user attempts to promote a member to `team_owner`  
-Then the system MUST return a 403 Forbidden error  
 And the member's role MUST NOT be changed
 
 #### Scenario: Team member cannot modify other members
@@ -257,28 +175,14 @@ When the user attempts to change another member's role
 Then the system MUST return a 403 Forbidden error  
 And no role MUST be changed
 
-#### Scenario: Last team owner cannot be demoted
-Given a team has only one member with role `team_owner`  
-When an attempt is made to change that owner's role to `team_member` or `team_admin`  
-Then the system MUST reject the operation  
-And the owner's role MUST remain `team_owner`
+
 
 ---
 
-### Requirement: Team Member Removal
-The system MUST allow team owners and admins to remove members from a team.
-
-#### Scenario: Team owner removes a member
 Given a team exists with an owner and a member with role `team_member`  
 When the owner removes the member from the team  
 Then the member MUST be removed from the team_members table  
-And the removal MUST be recorded in the audit log
 
-#### Scenario: Team admin removes a member
-Given a team exists with an admin and a member with role `team_member`  
-When the admin removes the member from the team  
-Then the member MUST be removed from the team_members table  
-And the removal MUST be recorded in the audit log
 
 #### Scenario: Team member cannot remove other members
 Given a user with role `team_member` on a team is authenticated  
@@ -293,13 +197,6 @@ Then the system MUST reject the operation
 And the owner MUST remain on the team  
 And the system SHOULD prompt to transfer ownership first
 
-#### Scenario: Owner leaves after transferring ownership
-Given a team has an owner and another member with role `team_admin`  
-When the owner transfers ownership to the admin  
-And then the former owner leaves the team  
-Then the new owner MUST be the admin  
-And the former owner MUST be removed from the team  
-And both actions MUST be recorded in the audit log
 
 ---
 
@@ -309,12 +206,7 @@ The system MUST enforce team-level access control based on the user's team role.
 #### Scenario: Team owner can perform all team actions
 Given a user with role `team_owner` on a team is authenticated  
 When the user attempts to update team settings, add/remove members, or change roles  
-Then the system MUST allow all actions
 
-#### Scenario: Team admin can manage members but not delete team
-Given a user with role `team_admin` on a team is authenticated  
-When the user attempts to add or remove members  
-Then the system MUST allow the action  
 When the user attempts to delete the team or change the owner's role  
 Then the system MUST return a 403 Forbidden error
 
@@ -335,10 +227,6 @@ Given a user belongs to three teams
 When the user requests their team list  
 Then the system MUST return all three teams with the user's role in each
 
-#### Scenario: Team owner lists team members
-Given a team exists with an owner, an admin, and two members  
-When the owner requests the list of team members  
-Then the system MUST return all four members with their respective roles
 
 ---
 
@@ -347,14 +235,6 @@ Then the system MUST return all four members with their respective roles
 ### Requirement: Audit Log Creation
 The system MUST create an immutable audit log entry for every role change, permission change, team change, and project sharing action.
 
-#### Scenario: Role change creates audit log entry
-Given an admin changes a user's role from `user` to `admin`  
-When the role change is successful  
-Then an audit log entry MUST be created with:  
-- action: "role_change"  
-- actor_id: the admin's user ID  
-- target_id: the affected user's ID  
-- details: the old and new roles  
 - timestamp: the time of the change
 
 #### Scenario: Project sharing creates audit log entry
@@ -379,14 +259,6 @@ Then an audit log entry MUST be created with:
 - resource_id: the new team ID  
 - timestamp: the time of creation
 
-#### Scenario: User ban creates audit log entry
-Given an admin bans a user with reason "Violation of terms"  
-When the ban is successful  
-Then an audit log entry MUST be created with:  
-- action: "user_ban"  
-- actor_id: the admin's user ID  
-- target_id: the banned user's ID  
-- details: the ban reason  
 - timestamp: the time of the ban
 
 ---
@@ -415,34 +287,7 @@ And only INSERT operations MUST be allowed
 ---
 
 ### Requirement: Audit Log Query and Pagination
-The system MUST provide a way to query audit logs with filtering and pagination. Audit logs MAY grow large over time.
 
-#### Scenario: Admin queries all audit logs with pagination
-Given 1000 audit log entries exist in the system  
-When an admin requests audit logs with page=1 and limit=50  
-Then the system MUST return the first 50 entries ordered by timestamp descending  
-And the response MUST include pagination metadata (total count, current page, total pages)
-
-#### Scenario: Admin filters audit logs by action type
-Given audit log entries of types "role_change", "project_member_add", and "team_create" exist  
-When an admin filters audit logs by action="role_change"  
-Then the system MUST return only entries with action "role_change"
-
-#### Scenario: Admin filters audit logs by actor
-Given multiple users have performed actions recorded in audit logs  
-When an admin filters audit logs by actor_id  
-Then the system MUST return only entries where the specified user was the actor
-
-#### Scenario: Admin filters audit logs by date range
-Given audit log entries span multiple months  
-When an admin filters audit logs by start_date and end_date  
-Then the system MUST return only entries within the specified date range
-
-#### Scenario: Pagination prevents timeout on large datasets
-Given 1,000,000 audit log entries exist  
-When an admin requests audit logs with limit=100  
-Then the system MUST return results within 5 seconds  
-And MUST NOT attempt to load all entries into memory
 
 ---
 
@@ -456,142 +301,32 @@ When the archival process runs
 Then old entries MUST be moved to an archive table or storage  
 And the entries MUST NOT be deleted from the system
 
-#### Scenario: Archived audit logs remain queryable
-Given archived audit log entries exist  
-When an admin queries audit logs with include_archive=true  
-Then the system MUST return both active and archived entries
 
 ---
 
-## Domain: admin-dashboard
-
-### Requirement: Admin Dashboard Access Control
-The system MUST restrict access to the admin dashboard to users with the `admin` global role only.
-
-#### Scenario: Admin accesses admin dashboard
-Given a user with role `admin` is authenticated  
-When the user navigates to `/admin`  
-Then the system MUST allow access to the admin dashboard
-
-#### Scenario: Non-admin cannot access admin dashboard
-Given a user with role `user` is authenticated  
-When the user attempts to navigate to `/admin`  
-Then the system MUST return a 403 Forbidden error  
-And the user MUST NOT see any admin dashboard content
-
-#### Scenario: Viewer cannot access admin dashboard
-Given a user with role `viewer` is authenticated  
-When the user attempts to navigate to `/admin`  
-Then the system MUST return a 403 Forbidden error
-
----
-
-### Requirement: User Management Interface
-The admin dashboard MUST provide an interface for managing users, including listing users, changing roles, and banning/unbanning users.
-
-#### Scenario: Admin views user list
-Given a user with role `admin` is authenticated  
-When the admin navigates to `/admin/users`  
-Then the system MUST display a list of all users with:  
-- User ID, name, email  
 - Global role  
 - Ban status  
 - Date joined  
-And the list MUST be paginated
-
-#### Scenario: Admin changes user role from dashboard
-Given an admin is viewing the user list  
-When the admin selects a user and changes their role from `user` to `admin`  
-Then the system MUST update the user's role  
-And the change MUST be reflected in the user list  
-And the change MUST be recorded in the audit log
-
-#### Scenario: Admin bans user from dashboard
-Given an admin is viewing the user list  
-When the admin selects a user and bans them with a reason  
-Then the system MUST update the user's ban status  
-And the ban MUST be reflected in the user list  
-And the ban action MUST be recorded in the audit log
-
-#### Scenario: Admin cannot change their own role from dashboard
-Given an admin is viewing the user list  
-When the admin attempts to change their own role  
-Then the system MUST disable the role change option for the admin's own account  
-Or MUST reject the change if attempted
 
 ---
 
-### Requirement: Team Management Interface
-The admin dashboard MUST provide an interface for managing teams, including listing teams, viewing team members, and dissolving teams.
-
-#### Scenario: Admin views team list
-Given a user with role `admin` is authenticated  
-When the admin navigates to `/admin/teams`  
-Then the system MUST display a list of all teams with:  
-- Team ID, name, description  
 - Number of members  
 - Date created  
-And the list MUST be paginated
 
-#### Scenario: Admin views team details
-Given an admin is viewing the team list  
-When the admin selects a team to view details  
-Then the system MUST display:  
-- Team information (name, description, created date)  
 - List of all team members with their roles  
-- Option to dissolve the team (with confirmation)
 
-#### Scenario: Admin dissolves a team
-Given an admin is viewing a team with members  
-When the admin chooses to dissolve the team and confirms  
-Then the team MUST be marked as dissolved or deleted  
-And all team members MUST be removed from the team  
 And the dissolution MUST be recorded in the audit log
 
 ---
 
-### Requirement: Audit Log Viewer Interface
-The admin dashboard MUST provide an interface for viewing audit logs with filtering and pagination.
-
-#### Scenario: Admin views audit logs
-Given a user with role `admin` is authenticated  
-When the admin navigates to `/admin/audit`  
-Then the system MUST display audit log entries with:  
-- Timestamp  
 - Actor (user who performed the action)  
 - Action type  
 - Target (affected user/resource)  
 - Details  
-And the list MUST be paginated
 
-#### Scenario: Admin filters audit logs from dashboard
-Given an admin is viewing the audit log page  
-When the admin applies filters (action type, actor, date range)  
-Then the system MUST display only entries matching the filters  
-And the filters MUST be applied server-side
-
-#### Scenario: Admin exports audit logs
-Given an admin is viewing the audit log page  
-When the admin requests to export audit logs as CSV  
-Then the system MUST generate a CSV file with all filtered entries  
-And the file MUST include all audit log fields
 
 ---
 
-### Requirement: Role Management Interface
-The admin dashboard MUST provide an interface for viewing and managing global role definitions and permissions.
-
-#### Scenario: Admin views role definitions
-Given a user with role `admin` is authenticated  
-When the admin navigates to `/admin/roles`  
-Then the system MUST display all global roles (`admin`, `user`, `viewer`)  
-And their associated permissions
-
-#### Scenario: Admin views permission matrix
-Given an admin is viewing the roles page  
-When the admin requests to view the permission matrix  
-Then the system MUST display a matrix showing:  
-- Each role as a row  
 - Each permission as a column  
 - Which roles have which permissions
 
@@ -616,12 +351,7 @@ Then the system MUST return a 403 Forbidden error
 #### Scenario: User with sufficient permissions accesses protected route
 Given a user with role `user` is authenticated  
 When the user attempts to access a route requiring `user` role  
-Then the system MUST allow access to the route
 
-#### Scenario: Admin accesses any protected route
-Given a user with role `admin` is authenticated  
-When the user attempts to access any protected route  
-Then the system MUST allow access regardless of the route's specific role requirement
 
 ---
 
@@ -661,47 +391,13 @@ Then the system MUST allow access
 #### Scenario: Non-member attempts to access team route
 Given a user is not a member of a team  
 When the user attempts to access the team's URL  
-Then the system MUST return a 404 Not Found error
 
-#### Scenario: Team member attempts to access admin route
-Given a user is a member of a team with role `team_member`  
-When the user attempts to access the team's member management page  
-Then the system MUST return a 403 Forbidden error
 
-#### Scenario: Team admin accesses admin route
-Given a user is a member of a team with role `team_admin`  
-When the user attempts to access the team's member management page  
-Then the system MUST allow access
-
----
-
-### Requirement: Admin Route Protection
-The system MUST protect admin dashboard routes to allow access only to users with the `admin` global role.
-
-#### Scenario: Admin accesses admin route
-Given a user with role `admin` is authenticated  
-When the user attempts to access any `/admin/*` route  
-Then the system MUST allow access
-
-#### Scenario: Non-admin attempts to access admin route
-Given a user with role `user` is authenticated  
-When the user attempts to access `/admin/users`  
-Then the system MUST return a 403 Forbidden error
-
-#### Scenario: Viewer attempts to access admin route
-Given a user with role `viewer` is authenticated  
-When the user attempts to access `/admin/audit`  
-Then the system MUST return a 403 Forbidden error
 
 ---
 
 ### Requirement: Concurrent Role Change Protection
-The system MUST handle concurrent role changes gracefully, ensuring data consistency.
 
-#### Scenario: Concurrent role change by two admins
-Given two admins attempt to change the same user's role at the same time  
-When both requests are processed  
-Then the system MUST ensure only one change is applied  
 Or MUST serialize the changes so the last write wins with audit log entries for both  
 And the user's role MUST be in a consistent state
 

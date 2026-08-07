@@ -1,11 +1,15 @@
+const fs = require("fs");
 const path = require("path");
-require("dotenv").config({ path: path.join(__dirname, ".env") });
+const dotenv = require("dotenv");
+
+const envFile = path.join(__dirname, ".env");
+const fileEnv = fs.existsSync(envFile) ? dotenv.parse(fs.readFileSync(envFile)) : {};
 
 const env = {
-    NODE_ENV: process.env.NODE_ENV ?? "production",
-    PORT: process.env.PORT ?? "5179",
-    ORIGIN: process.env.ORIGIN ?? "http://localhost:5179",
-    BODY_SIZE_LIMIT: process.env.BODY_SIZE_LIMIT ?? "Infinity",
+    NODE_ENV: fileEnv.NODE_ENV ?? "production",
+    PORT: fileEnv.PORT ?? "5179",
+    ORIGIN: fileEnv.ORIGIN ?? "http://localhost:5179",
+    BODY_SIZE_LIMIT: fileEnv.BODY_SIZE_LIMIT ?? "Infinity",
 };
 
 module.exports = {
@@ -23,7 +27,7 @@ module.exports = {
             max_memory_restart: "500M",
 
             env: {
-                ...process.env,
+                ...fileEnv,
                 ...env,
             },
 

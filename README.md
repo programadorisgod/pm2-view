@@ -9,17 +9,22 @@ A beautiful, modern visual dashboard for managing PM2 processes. Monitor CPU, RA
 
 ## Features
 
-- **Authentication** — Pluggable auth system (Better Auth included, swap with any provider)
+- **Authentication** — Email/password with Better Auth, **Google sign-in**, and **password reset** (email or console fallback)
 - **Dashboard** — Overview of all PM2 processes with real-time status
 - **Project Cards** — Beautiful cards showing CPU, RAM, uptime, and status
 - **Favorites** — Star projects to quickly find them, filter by favorites in the list
 - **Process Actions** — Restart, stop, and delete processes directly from the UI
+- **PM2 Save & Startup** — Persist the process list (`pm2 save`) and enable boot startup (`pm2 startup`) from the UI (admin only)
+- **One-Click Update** — Pull, rebuild, and restart the app from the UI (admin only)
 - **Real-time Logs** — Live log streaming via Server-Sent Events (SSE) with auto-scroll
 - **Efficient Log Reading** — Uses `tail -n` for fast log loading, "Load more" button for history
 - **Real-time Metrics** — Push-based CPU/RAM updates every 10s via SSE
-- **Environment Variables** — View, edit, add, and delete env vars with auto-restart on save
-- **Teams** — Manage teams, invite members, assign roles (owner, admin, member), team-based project access
+- **Environment Variables** — View, edit, add, and delete env vars (applied on next deploy)
+- **Teams** — Manage teams, invite members, assign roles (team_owner, team_admin, team_member), team-based project access
+- **Project Sharing** — Invite users to projects with viewer/editor/owner roles
 - **Metrics Dashboard** — Visual CPU/RAM bars, aggregated stats
+- **Admin Panel** — Manage users, teams, and audit logs; role-based access control (admin/user/viewer)
+- **Audit Logs** — Track admin actions with filters and CSV export
 - **Dark/Light Mode** — Toggle between themes with smooth transitions
 - **Premium Animations** — Page transitions, staggered lists, smooth tab switching
 
@@ -106,6 +111,32 @@ cp .env.example .env
 # Edit .env with your database and auth configuration
 ```
 
+> **Do this first:** after setup, promote a user to admin (see [Create an Admin Account](#create-an-admin-account)) — every new account starts with the `user` role and there is no bootstrap.
+
+### Create an Admin Account
+
+All new users are created with the `user` role by default, so you must promote your first user to admin. The user must already exist (registered via the app) before running this.
+
+```bash
+npm run make-admin <email>
+
+# Example:
+npm run make-admin admin@example.com
+```
+
+This runs a one-off script (`src/lib/server/migrations/make-admin.ts`) that updates the `role` column to `admin` in the database. It prints what it did: user not found, already admin, or promoted.
+
+> **Note:** The script connects via `TURSO_DATABASE_URL` / `TURSO_AUTH_TOKEN` (SQLite/Turso). It does **not** work against a PostgreSQL `DATABASE_URL` — run it against your SQLite/Turso database instead.
+
+**What admins can do:**
+
+- Access the `/admin` panel (users, teams, audit logs, roles)
+- Create users, change roles, ban/unban, and delete users
+- See **all** projects (admin bypasses project-level access checks)
+- Run admin-only PM2 operations: [PM2 Save](#pm2-save) / [PM2 Startup](#pm2-startup), and the [Update button](#one-click-update)
+
+**Safety guards:** an admin cannot change their own role, and the **last remaining admin** cannot be demoted, banned, or deleted (HTTP 409).
+
 ### Database
 
 PM2 View supports multiple database backends through a driver abstraction. The dialect is auto-detected from the connection URL.
@@ -131,9 +162,57 @@ DATABASE_URL=file:./data/local.db
 
 To add a new database driver, register a dialect rule and driver in the factory — no existing code needs modification.
 
-### Auth Providers
+### Authentication
 
-The default auth provider is Better Auth. To swap to a different provider:
+#### Email & Password (default)
+
+The default auth provider is Better Auth. All auth endpoints live under `/api/auth/*`. Sessions last 30 days with a 5-minute cookie cache.
+
+#### Google Sign-In
+
+Google OAuth is configured via the Better Auth `socialProviders` block (`src/lib/auth/auth.ts`):
+
+```env
+GOOGLE_CLIENT_ID=your-client-id
+GOOGLE_CLIENT_SECRET=your-client-secret
+VITE_ALLOWED_HOSTS=localhost,your-domain.com
+```
+
+Setup in Google Cloud Console:
+
+1. Create OAuth 2.0 credentials (APIs & Credentials → Create Credentials → OAuth client ID).
+2. Add the **Authorized redirect URI**: `{BETTER_AUTH_URL}/api/auth/callback/google`
+   - Dev: `http://localhost:5179/api/auth/callback/google`
+   - Production: `https://your-domain.com/api/auth/callback/google`
+3. Add `http://localhost:5179` and your production origin to **Authorized JavaScript origins** if required.
+
+`VITE_ALLOWED_HOSTS` (comma-separated) controls better-auth's `trustedOrigins`, used to validate the OAuth callback URL (open-redirect protection) and CSRF origin checks. The Google button appears on the login page only — first-time Google users get an account created automatically (no separate registration step).
+
+#### Password Reset
+
+Forgot your password? The login page links to `/forgot-password`, which sends a signed reset link valid for **1 hour**. The email is sent via SMTP (see env vars below); if SMTP is not configured, the reset link is printed to the server console instead.
+
+- Reset links are signed with `BETTER_AUTH_SECRET` and expire after 1 hour (`resetPasswordTokenExpiresIn`).
+- Changing the password **revokes all existing sessions** (`revokeSessionsOnPasswordReset`), so the user must sign in again.
+- The forgot-password page never reveals whether an account exists (privacy-preserving message).
+
+To enable email delivery, configure SMTP:
+
+```env
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=465
+SMTP_SECURE=true
+SMTP_USER=you@example.com
+SMTP_PASS=your-app-password
+SMTP_FROM_EMAIL=you@example.com
+NOTIFICATION_CHANNELS=nodemailer   # default if unset
+```
+
+> Gmail works with an app password. If `SMTP_HOST` is unset, no email is sent and reset links only appear in the server logs.
+
+#### Swapping the Auth Provider
+
+To swap to a different provider:
 
 ```typescript
 // src/lib/auth/factory.ts
@@ -157,6 +236,20 @@ BETTER_AUTH_SECRET=your-secret-key
 
 # Auth Provider (optional — defaults to 'better-auth')
 AUTH_PROVIDER=better-auth
+
+# Google OAuth (optional — enables "Sign in with Google")
+GOOGLE_CLIENT_ID=
+GOOGLE_CLIENT_SECRET=
+VITE_ALLOWED_HOSTS=localhost
+
+# Email (optional — password reset delivery; console fallback if unset)
+SMTP_HOST=
+SMTP_PORT=587
+SMTP_SECURE=false
+SMTP_USER=
+SMTP_PASS=
+SMTP_FROM_EMAIL=
+NOTIFICATION_CHANNELS=nodemailer
 
 # PM2 (optional)
 PM2_HOST=localhost
@@ -194,6 +287,48 @@ npx drizzle-kit push
 # Generate migrations
 npx drizzle-kit generate
 ```
+
+## PM2 System Operations
+
+Admin-only operations backed by the PM2 CLI, exposed in the Projects page header (visible only to users with the `admin` role). The underlying PM2 commands can also be run directly in your terminal.
+
+### PM2 Save
+
+The **PM2 Save** button runs `pm2 save`, persisting the current process list as the "dump file" so PM2 can restore it later.
+
+- Opens a modal, runs the command, and shows the output.
+- A success banner ("Process list saved") confirms the dump was written.
+
+> Run this after adding/removing processes to keep the resurrection list up to date.
+
+### PM2 Startup
+
+The **PM2 Startup** button enables PM2 to start processes automatically on boot.
+
+1. It runs `pm2 startup` (quietly) and extracts the generated copy/paste command (a `sudo ... pm2 startup systemd ...` line).
+2. The modal shows that command with a **Copy command** button — you can run it yourself in a terminal — or click **Apply here** to run it in-app.
+3. To apply in-app, enter the **sudo password** (sent to the command's stdin via `sudo -S`; never stored or placed in argv). The output streams live as NDJSON (`/api/pm2/system?action=apply-startup`).
+4. On success it verifies the service with `systemctl is-enabled '<service>'` (8s timeout) and reports the service name (e.g. `pm2-<user>.service`).
+
+**Security:** the startup command is validated before running — it must be a single-line `sudo` invocation containing `pm2 startup`, blocking injection.
+
+> **Note:** `pm2 startup` prints the copy/paste command and exits with a non-zero code as its *normal* success path, so the app treats "command extracted" as success, not the exit code.
+
+### One-Click Update
+
+The **Update** button in the app header (admin only) pulls and rebuilds the app:
+
+```bash
+git pull && pnpm build && pm2 restart pm2-view
+```
+
+Flow:
+
+1. `POST /api/update` runs `git pull` then `pnpm build` (each fails the update if it errors).
+2. After a 1.5s delay (to let the HTTP response flush), a detached background process runs `pm2 restart pm2-view`.
+3. The UI shows a success banner and a **30-second countdown** before reloading the page — this avoids the nginx 502 that appears while PM2 is starting the new build.
+
+> **Note:** The app name `pm2-view` is hardcoded. If you run the app under a different PM2 name, restart manually after updating.
 
 ## Real-time (SSE)
 
@@ -310,10 +445,11 @@ pm2-view/
 - Passwords hashed by Better Auth (bcrypt)
 - HTTP-only session cookies
 - CSRF protection built-in
-- Environment variables masked in UI (sensitive keys)
 - Auth guard on all protected routes
+- Role-based access control (admin / user / viewer) — the `/admin` panel and admin-only operations (`/api/update`, `/api/pm2/system`) require the `admin` role
 - Shell commands sanitized with `escapeShellArg()` to prevent command injection
-- Rate limiting on API endpoints (100 req/min per IP)
+- The PM2 startup command is validated (single-line `sudo` + `pm2 startup`) before execution
+- Rate limiting on the PM2 system endpoint (100 req/min per IP)
 - Team-based access control — users only see projects they own or have team access to
 - Team detail pages protected — non-members get 403
 

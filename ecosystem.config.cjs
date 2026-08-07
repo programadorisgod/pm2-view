@@ -8,9 +8,10 @@ const fileEnv = fs.existsSync(envFile) ? dotenv.parse(fs.readFileSync(envFile)) 
 const env = {
     NODE_ENV: fileEnv.NODE_ENV ?? "production",
     PORT: fileEnv.PORT ?? "5179",
-    ORIGIN: fileEnv.ORIGIN ?? "http://localhost:5179",
     BODY_SIZE_LIMIT: fileEnv.BODY_SIZE_LIMIT ?? "Infinity",
 };
+
+if (fileEnv.ORIGIN) env.ORIGIN = fileEnv.ORIGIN;
 
 module.exports = {
     apps: [

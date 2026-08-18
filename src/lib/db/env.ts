@@ -3,6 +3,12 @@ export interface EnvVars {
 	TURSO_AUTH_TOKEN: string;
 	BETTER_AUTH_URL: string;
 	BETTER_AUTH_SECRET: string;
+	GITHUB_APP_ID: string;
+	GITHUB_CLIENT_ID: string;
+	GITHUB_CLIENT_SECRET: string;
+	GITHUB_PRIVATE_KEY: string;
+	GITHUB_WEBHOOK_SECRET: string;
+	GITHUB_APP_SLUG: string;
 }
 
 let cached: EnvVars | null = null;
@@ -14,6 +20,12 @@ export function getEnv(): EnvVars {
 	let TURSO_AUTH_TOKEN = '';
 	let BETTER_AUTH_URL = '';
 	let BETTER_AUTH_SECRET = '';
+	let GITHUB_APP_ID = '';
+	let GITHUB_CLIENT_ID = '';
+	let GITHUB_CLIENT_SECRET = '';
+	let GITHUB_PRIVATE_KEY = '';
+	let GITHUB_WEBHOOK_SECRET = '';
+	let GITHUB_APP_SLUG = '';
 
 	// Try SvelteKit's $env/dynamic/private first (works in server runtime)
 	try {
@@ -23,19 +35,37 @@ export function getEnv(): EnvVars {
 		TURSO_AUTH_TOKEN = env.TURSO_AUTH_TOKEN || '';
 		BETTER_AUTH_URL = env.BETTER_AUTH_URL || '';
 		BETTER_AUTH_SECRET = env.BETTER_AUTH_SECRET || '';
+		GITHUB_APP_ID = env.GITHUB_APP_ID || '';
+		GITHUB_CLIENT_ID = env.GITHUB_CLIENT_ID || '';
+		GITHUB_CLIENT_SECRET = env.GITHUB_CLIENT_SECRET || '';
+		GITHUB_PRIVATE_KEY = env.GITHUB_PRIVATE_KEY || '';
+		GITHUB_WEBHOOK_SECRET = env.GITHUB_WEBHOOK_SECRET || '';
+		GITHUB_APP_SLUG = env.GITHUB_APP_SLUG || '';
 	} catch {
 		// Fallback for tests and non-SvelteKit contexts
 		TURSO_DATABASE_URL = process.env.TURSO_DATABASE_URL || '';
 		TURSO_AUTH_TOKEN = process.env.TURSO_AUTH_TOKEN || '';
 		BETTER_AUTH_URL = process.env.BETTER_AUTH_URL || '';
 		BETTER_AUTH_SECRET = process.env.BETTER_AUTH_SECRET || '';
+		GITHUB_APP_ID = process.env.GITHUB_APP_ID || '';
+		GITHUB_CLIENT_ID = process.env.GITHUB_CLIENT_ID || '';
+		GITHUB_CLIENT_SECRET = process.env.GITHUB_CLIENT_SECRET || '';
+		GITHUB_PRIVATE_KEY = process.env.GITHUB_PRIVATE_KEY || '';
+		GITHUB_WEBHOOK_SECRET = process.env.GITHUB_WEBHOOK_SECRET || '';
+		GITHUB_APP_SLUG = process.env.GITHUB_APP_SLUG || '';
 	}
 
 	cached = {
 		TURSO_DATABASE_URL,
 		TURSO_AUTH_TOKEN,
 		BETTER_AUTH_URL,
-		BETTER_AUTH_SECRET
+		BETTER_AUTH_SECRET,
+		GITHUB_APP_ID,
+		GITHUB_CLIENT_ID,
+		GITHUB_CLIENT_SECRET,
+		GITHUB_PRIVATE_KEY,
+		GITHUB_WEBHOOK_SECRET,
+		GITHUB_APP_SLUG
 	};
 
 	return cached;

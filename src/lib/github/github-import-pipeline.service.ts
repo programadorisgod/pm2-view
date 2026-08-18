@@ -1,0 +1,491 @@
+import { spawn } from 'child_process';
+import { existsSync, readFileSync } from 'fs';
+import { join } from 'path';
+import { readdir } from 'fs/promises';
+import type { PackageManager } from '$lib/deploy/deploy.types';
+
+const LOCK_FILES: Record<string, PackageManager> = {
+	'pnpm-lock.yaml': 'pnpm',
+	'bun.lockb': 'bun',
+	'bun.lock': 'bun',
+};
+
+const ECOSYSTEM_FILES = [
+	'ecosystem.cjs',
+	'ecosystem.config.js',
+	'ecosystem.config.ts',
+	'pm2.config.js',
+	'pm2.config.cjs',
+	'ecosystem.json',
+] as const;
+
+type EcosystemFile = (typeof ECOSYSTEM_FILES)[number];
+
+/** Environment map passed to spawned child processes */
+type EnvMap = Record<string, string | undefined>;
+
+function detectPackageManager(dir: string): PackageManager {
+	const pkgPath = join(dir, 'package.json');
+	if (existsSync(pkgPath)) {
+		try {
+			const pkg = JSON.parse(readFileSync(pkgPath, 'utf-8'));
+			if (pkg.packageManager) {
+				const [pm] = pkg.packageManager.split('@');
+				if (pm === 'pnpm' || pm === 'bun') return pm;
+			}
+		} catch {
+			// ignore parse errors
+		}
+	}
+
+	for (const [file, pm] of Object.entries(LOCK_FILES)) {
+		if (existsSync(join(dir, file))) return pm;
+	}
+
+	// Default to npm if no lock file found
+	return 'npm';
+}
+
+function readPackageScripts(dir: string): Record<string, string> | null {
+	const pkgPath = join(dir, 'package.json');
+	if (!existsSync(pkgPath)) return null;
+	try {
+		const pkg = JSON.parse(readFileSync(pkgPath, 'utf-8'));
+		return pkg.scripts ?? null;
+	} catch {
+		return null;
+	}
+}
+
+function runCommand(
+	cwd: string,
+	command: string,
+	args: string[],
+	onLine: (line: string, isError: boolean) => void,
+	env?: EnvMap,
+): Promise<number> {
+	return new Promise((resolve) => {
+		const proc = spawn(command, args, {
+			cwd,
+			shell: false,
+			env: env ?? { ...process.env },
+		});
+
+		const bufferOut: string[] = [];
+		const bufferErr: string[] = [];
+
+		proc.stdout.on('data', (chunk: Buffer) => {
+			bufferOut.push(chunk.toString());
+			flushBuffer(bufferOut, (l) => onLine(l, false));
+		});
+
+		proc.stderr.on('data', (chunk: Buffer) => {
+			bufferErr.push(chunk.toString());
+			flushBuffer(bufferErr, (l) => onLine(l, true));
+		});
+
+		proc.on('close', (code) => {
+			flushBuffer(bufferOut, (l) => onLine(l, false), true);
+			flushBuffer(bufferErr, (l) => onLine(l, true), true);
+			resolve(code ?? 1);
+		});
+
+		proc.on('error', (err) => {
+			onLine(`Command failed to start: ${err.message}`, true);
+			resolve(1);
+		});
+	});
+}
+
+function flushBuffer(
+	buffer: string[],
+	onLine: (line: string) => void,
+	flushAll = false,
+): void {
+	const full = buffer.join('');
+	buffer.length = 0;
+	if (!full) return;
+
+	const lines = full.split('\n');
+	if (full.endsWith('\n')) {
+		lines.forEach((l) => l && onLine(l));
+	} else if (flushAll) {
+		lines.forEach((l) => l && onLine(l));
+	} else {
+		lines.slice(0, -1).forEach((l) => l && onLine(l));
+		buffer.push(lines[lines.length - 1]);
+	}
+}
+
+async function findEcosystemFiles(dir: string): Promise<string[]> {
+	const found: string[] = [];
+
+	try {
+		const entries = await readdir(dir, { withFileTypes: true });
+		for (const entry of entries) {
+			if (entry.isFile()) {
+				const name = entry.name.toLowerCase();
+				if (ECOSYSTEM_FILES.some((ef) => name === ef)) {
+					found.push(entry.name);
+				}
+			}
+		}
+	} catch {
+		// Directory read error - return empty
+	}
+
+	return found;
+}
+
+/**
+ * Log callback type for streaming output
+ */
+export type ImportLogCallback = (step: ImportStep, line: string, isError: boolean) => void;
+
+/**
+ * Steps for the import pipeline
+ */
+export const IMPORT_STEPS = ['clone', 'install', 'build', 'ecosystem', 'pm2-start'] as const;
+export type ImportStep = (typeof IMPORT_STEPS)[number];
+
+/**
+ * Result of Phase 1 (Clone + Install + Build + Detect)
+ */
+export interface Phase1Result {
+	success: boolean;
+	targetPath: string;
+	processName: string;
+	ecosystemFiles: string[];
+	error?: string;
+}
+
+/**
+ * Result of Phase 2 (PM2 Start)
+ */
+export interface Phase2Result {
+	success: boolean;
+	error?: string;
+}
+
+/**
+ * GitHubImportPipelineService handles the full import pipeline for GitHub repositories.
+ *
+ * Phase 1: git clone → detect package manager → install → build → detect ecosystem files
+ * Phase 2: pm2 start with selected ecosystem file
+ */
+export class GitHubImportPipelineService {
+	/**
+	 * Phase 1: Clone the repository, install dependencies, build, and detect ecosystem files.
+	 *
+	 * @param cloneUrl - The git clone URL (with embedded token if needed)
+	 * @param targetPath - Absolute path where the repository should be cloned
+	 * @param processName - Name for the PM2 process
+	 * @param onLog - Callback for streaming log output
+	 * @param options - Optional custom install/build commands
+	 */
+	async runPhase1(
+		cloneUrl: string,
+		targetPath: string,
+		processName: string,
+		onLog: ImportLogCallback,
+		options?: { installCommand?: string; buildCommand?: string },
+	): Promise<Phase1Result> {
+		const log = (step: ImportStep, line: string, isError: boolean) => {
+			onLog(step, line, isError);
+		};
+
+		// Step 1: Clone
+		log('clone', '─── Starting: git clone ───', false);
+		let cloneSuccess = false;
+
+		try {
+			// Ensure target directory exists (parent must exist)
+			const parentDir = join(targetPath, '..');
+			if (!existsSync(parentDir)) {
+				log('clone', `Parent directory does not exist: ${parentDir}`, true);
+				return {
+					success: false,
+					targetPath,
+					processName,
+					ecosystemFiles: [],
+					error: `Parent directory does not exist: ${parentDir}`,
+				};
+			}
+
+			const cloneExitCode = await runCommand(
+				parentDir,
+				'git',
+				['clone', '--depth', '1', cloneUrl, targetPath],
+				(line, isError) => log('clone', line, isError),
+			);
+			cloneSuccess = cloneExitCode === 0;
+
+			if (!cloneSuccess) {
+				log('clone', `─── Failed: git clone (exit ${cloneExitCode}) ───`, true);
+				return {
+					success: false,
+					targetPath,
+					processName,
+					ecosystemFiles: [],
+					error: `Git clone failed with exit code ${cloneExitCode}`,
+				};
+			}
+
+			log('clone', '─── Completed: git clone ───', false);
+		} catch (err) {
+			log('clone', `─── Failed: git clone (${err instanceof Error ? err.message : 'Unknown error'}) ───`, true);
+			return {
+				success: false,
+				targetPath,
+				processName,
+				ecosystemFiles: [],
+				error: err instanceof Error ? err.message : 'Git clone failed',
+			};
+		}
+
+		// Verify targetPath now exists
+		if (!existsSync(targetPath)) {
+			return {
+				success: false,
+				targetPath,
+				processName,
+				ecosystemFiles: [],
+				error: 'Clone succeeded but target directory not found',
+			};
+		}
+
+		// Detect package manager
+		let packageManager: PackageManager;
+		try {
+			packageManager = detectPackageManager(targetPath);
+			log('install', `Detected package manager: ${packageManager}`, false);
+		} catch (err) {
+			log('install', `Could not detect package manager: ${err instanceof Error ? err.message : 'Unknown'}`, true);
+			packageManager = 'npm';
+		}
+
+		// Step 2: Install
+		log('install', '─── Starting: install ───', false);
+
+		try {
+			let installExitCode: number;
+
+			if (options?.installCommand) {
+				const tokens = options.installCommand.trim().split(/\s+/);
+				const bin = tokens[0];
+				const args = tokens.slice(1);
+				installExitCode = await runCommand(targetPath, bin, args, (line, isError) =>
+					log('install', line, isError),
+				);
+			} else {
+				installExitCode = await this.runInstall(targetPath, packageManager, (line, isError) =>
+					log('install', line, isError),
+				);
+			}
+
+			if (installExitCode !== 0) {
+				log('install', `─── Failed: install (exit ${installExitCode}) ───`, true);
+				return {
+					success: false,
+					targetPath,
+					processName,
+					ecosystemFiles: [],
+					error: `Install failed with exit code ${installExitCode}`,
+				};
+			}
+
+			log('install', '─── Completed: install ───', false);
+		} catch (err) {
+			log('install', `─── Failed: install (${err instanceof Error ? err.message : 'Unknown error'}) ───`, true);
+			return {
+				success: false,
+				targetPath,
+				processName,
+				ecosystemFiles: [],
+				error: err instanceof Error ? err.message : 'Install failed',
+			};
+		}
+
+		// Step 3: Build (optional - only if build script exists or custom command provided)
+		const scripts = readPackageScripts(targetPath);
+		const hasBuild = !!scripts?.build;
+
+		if (options?.buildCommand) {
+			log('build', '─── Starting: build (custom) ───', false);
+			try {
+				const tokens = options.buildCommand.trim().split(/\s+/);
+				const bin = tokens[0];
+				const args = tokens.slice(1);
+				const buildExitCode = await runCommand(targetPath, bin, args, (line, isError) =>
+					log('build', line, isError),
+				);
+
+				if (buildExitCode !== 0) {
+					log('build', `─── Failed: build (exit ${buildExitCode}) ───`, true);
+					return {
+						success: false,
+						targetPath,
+						processName,
+						ecosystemFiles: [],
+						error: `Build failed with exit code ${buildExitCode}`,
+					};
+				}
+				log('build', '─── Completed: build (custom) ───', false);
+			} catch (err) {
+				log('build', `─── Failed: build (${err instanceof Error ? err.message : 'Unknown error'}) ───`, true);
+				return {
+					success: false,
+					targetPath,
+					processName,
+					ecosystemFiles: [],
+					error: err instanceof Error ? err.message : 'Build failed',
+				};
+			}
+		} else if (hasBuild) {
+			log('build', '─── Starting: build ───', false);
+			try {
+				const buildExitCode = await this.runBuild(targetPath, packageManager, (line, isError) =>
+					log('build', line, isError),
+				);
+
+				if (buildExitCode !== 0) {
+					log('build', `─── Failed: build (exit ${buildExitCode}) ───`, true);
+					return {
+						success: false,
+						targetPath,
+						processName,
+						ecosystemFiles: [],
+						error: `Build failed with exit code ${buildExitCode}`,
+					};
+				}
+				log('build', '─── Completed: build ───', false);
+			} catch (err) {
+				log('build', `─── Failed: build (${err instanceof Error ? err.message : 'Unknown error'}) ───`, true);
+				return {
+					success: false,
+					targetPath,
+					processName,
+					ecosystemFiles: [],
+					error: err instanceof Error ? err.message : 'Build failed',
+				};
+			}
+		} else {
+			log('build', '─── Skipped: no build script in package.json ───', false);
+		}
+
+		// Step 4: Detect ecosystem files
+		log('ecosystem', '─── Detecting ecosystem files ───', false);
+		const ecosystemFiles = await findEcosystemFiles(targetPath);
+
+		if (ecosystemFiles.length === 0) {
+			log('ecosystem', 'No ecosystem files found in repository', false);
+		} else {
+			log('ecosystem', `Found ecosystem files: ${ecosystemFiles.join(', ')}`, false);
+		}
+
+		return {
+			success: true,
+			targetPath,
+			processName,
+			ecosystemFiles,
+		};
+	}
+
+	/**
+	 * Phase 2: Start the application with PM2 using the selected ecosystem file.
+	 *
+	 * @param targetPath - Absolute path where the repository was cloned
+	 * @param processName - Name for the PM2 process
+	 * @param ecosystemFile - Path to the ecosystem file (relative to targetPath)
+	 * @param onLog - Callback for streaming log output
+	 */
+	async runPhase2(
+		targetPath: string,
+		processName: string,
+		ecosystemFile: string,
+		onLog: ImportLogCallback,
+	): Promise<Phase2Result> {
+		const log = (step: 'pm2-start', line: string, isError: boolean) => {
+			onLog(step, line, isError);
+		};
+
+		// Validate ecosystem file exists
+		const fullEcosystemPath = join(targetPath, ecosystemFile);
+		if (!existsSync(fullEcosystemPath)) {
+			log('pm2-start', `Ecosystem file not found: ${fullEcosystemPath}`, true);
+			return {
+				success: false,
+				error: `Ecosystem file not found: ${ecosystemFile}`,
+			};
+		}
+
+		log('pm2-start', '─── Starting: pm2 start ───', false);
+
+		try {
+			const exitCode = await runCommand(
+				targetPath,
+				'pm2',
+				['start', ecosystemFile, '--update-env'],
+				(line, isError) => log('pm2-start', line, isError),
+			);
+
+			if (exitCode !== 0) {
+				log('pm2-start', `─── Failed: pm2 start (exit ${exitCode}) ───`, true);
+				return {
+					success: false,
+					error: `PM2 start failed with exit code ${exitCode}`,
+				};
+			}
+
+			log('pm2-start', '─── Completed: pm2 start ───', false);
+
+			// Rename the process if needed
+			if (processName) {
+				await runCommand(
+					targetPath,
+					'pm2',
+					['restart', ecosystemFile, '--update-env', '--name', processName],
+					(line, isError) => log('pm2-start', line, isError),
+				);
+			}
+
+			return { success: true };
+		} catch (err) {
+			log('pm2-start', `─── Failed: pm2 start (${err instanceof Error ? err.message : 'Unknown error'}) ───`, true);
+			return {
+				success: false,
+				error: err instanceof Error ? err.message : 'PM2 start failed',
+			};
+		}
+	}
+
+	private async runInstall(
+		cwd: string,
+		pm: PackageManager,
+		onLine: (line: string, isError: boolean) => void,
+	): Promise<number> {
+		switch (pm) {
+			case 'bun':
+				return runCommand(cwd, 'bun', ['install'], onLine);
+			case 'pnpm':
+				return runCommand(cwd, 'pnpm', ['install'], onLine);
+			default:
+				return runCommand(cwd, 'npm', ['install'], onLine);
+		}
+	}
+
+	private async runBuild(
+		cwd: string,
+		pm: PackageManager,
+		onLine: (line: string, isError: boolean) => void,
+	): Promise<number> {
+		switch (pm) {
+			case 'bun':
+				return runCommand(cwd, 'bun', ['run', 'build'], onLine);
+			case 'pnpm':
+				return runCommand(cwd, 'pnpm', ['run', 'build'], onLine);
+			default:
+				return runCommand(cwd, 'npm', ['run', 'build'], onLine);
+		}
+	}
+}

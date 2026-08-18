@@ -47,7 +47,9 @@
     </p>
   </div>
 
-  <FeedbackBanner {feedback} />
+  {#if feedback}
+    <FeedbackBanner type={feedback.type} message={feedback.text} onDismiss={() => (feedback = null)} />
+  {/if}
 
   {#if data.connected}
     <Card>

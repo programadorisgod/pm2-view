@@ -3,6 +3,7 @@ import { GitHubInstallationRepository } from '$lib/db/repositories/github-instal
 import { GitHubAppClient } from '$lib/github/infrastructure/github-app-client';
 import { GitHubSetupService } from '$lib/github/github-setup.service';
 import { GitHubRepositoriesService } from '$lib/github/github-repositories.service';
+import { GitHubInstallationRevoked } from '$lib/github/github.types';
 import { logger } from '$lib/logger';
 
 export const load: PageServerLoad = async ({ locals }) => {
@@ -34,7 +35,27 @@ export const load: PageServerLoad = async ({ locals }) => {
 	}
 
 	const reposService = new GitHubRepositoriesService(installationRepo, appClient);
-	const repositories = await reposService.listRepositories(user.id);
+
+	let repositories;
+	try {
+		repositories = await reposService.listRepositories(user.id);
+	} catch (err) {
+		if (err instanceof GitHubInstallationRevoked) {
+			// Installation was revoked or no longer exists on GitHub
+			logger.warn('[github-page] Installation revoked, cleaning up DB', {
+				userId: user.id,
+				installationId: installation.installationId,
+			});
+			await setupService.revokeInstallation(installation.installationId);
+			return {
+				connected: false,
+				installation: null,
+				repositories: [],
+				installUrl: appClient.getInstallUrl(),
+			};
+		}
+		throw err;
+	}
 
 	return {
 		connected: true,

@@ -112,6 +112,12 @@ export const POST: RequestHandler = async ({ params, request, getClientAddress }
 		});
 
 		const cloneUrl = `https://x-access-token:${token}@github.com/${repo.fullName}.git`;
+		logger.info('GitHub clone URL generated', {
+			userId: session.user.id,
+			repoFullName: repo.fullName,
+			tokenLength: token?.length,
+			hasToken: !!token,
+		});
 
 		// Run the import pipeline
 		const pipeline = new GitHubImportPipelineService();

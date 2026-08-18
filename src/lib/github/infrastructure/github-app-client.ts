@@ -1,7 +1,7 @@
 import { Octokit } from 'octokit';
 import { createAppAuth } from '@octokit/auth-app';
 import { getEnv } from '$lib/db/env';
-import { GitHubAuthenticationFailed } from '../github.types';
+import { GitHubAuthenticationFailed, GitHubInstallationRevoked } from '../github.types';
 import { logger } from '$lib/logger';
 
 export class GitHubAppClient {
@@ -102,6 +102,9 @@ export class GitHubAppClient {
 				}))
 			};
 		} catch (err: any) {
+			if (err.status === 404) {
+				throw new GitHubInstallationRevoked('Installation not found or revoked on GitHub');
+			}
 			if (err.status === 403) {
 				const resetDate = err.response?.headers?.['x-ratelimit-reset'];
 				const resetTimestamp = resetDate ? Number(resetDate) * 1000 : Date.now();

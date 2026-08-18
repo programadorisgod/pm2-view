@@ -11,9 +11,9 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 	}
 
 	const installationId = url.searchParams.get('installation_id');
-	const action = url.searchParams.get('action');
+	const setupAction = url.searchParams.get('setup_action');
 
-	if (!installationId || action !== 'install') {
+	if (!installationId || setupAction !== 'install') {
 		return { success: false, message: 'Invalid setup parameters' };
 	}
 

@@ -196,6 +196,7 @@ export class GitHubImportPipelineService {
 
 		// Step 1: Clone
 		log('clone', '─── Starting: git clone ───', false);
+		log('clone', `Target: ${targetPath}`, false);
 		let cloneSuccess = false;
 
 		try {
@@ -211,6 +212,10 @@ export class GitHubImportPipelineService {
 					error: `Parent directory does not exist: ${parentDir}`,
 				};
 			}
+
+			// Log redacted clone URL for debugging
+			const redactedUrl = cloneUrl.replace(/x-access-token:[^@]+@/, 'x-access-token:***@');
+			log('clone', `git clone --depth 1 ${redactedUrl} ${targetPath}`, false);
 
 			const cloneExitCode = await runCommand(
 				parentDir,

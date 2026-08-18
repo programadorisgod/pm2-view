@@ -125,9 +125,9 @@ export const POST: RequestHandler = async ({ params, request, getClientAddress }
 			cloneUrl,
 			targetPath,
 			sanitizedProcessName,
-			(_step, _line, _isError) => {
-				// For now, we don't stream logs in this endpoint
-				// The frontend will use the start endpoint for streaming
+			(step, line, isError) => {
+				// Log pipeline output server-side for debugging
+				logger.info(`[github-import][${step}]`, { line, isError });
 			},
 			{ installCommand, buildCommand }
 		);

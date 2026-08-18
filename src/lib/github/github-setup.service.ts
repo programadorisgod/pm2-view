@@ -62,7 +62,8 @@ export class GitHubSetupService {
 	async revokeInstallation(installationId: number): Promise<void> {
 		const existing = await this.installationRepo.getByInstallationId(installationId);
 		if (!existing) {
-			throw new GitHubInstallationNotFound();
+			// Already deleted — idempotent
+			return;
 		}
 		await this.installationRepo.delete(installationId);
 		logger.info('GitHub installation revoked', { installationId });

@@ -41,12 +41,12 @@ export const load: PageServerLoad = async ({ locals }) => {
 		repositories = await reposService.listRepositories(user.id);
 	} catch (err) {
 		if (err instanceof GitHubInstallationRevoked) {
-			// Installation was revoked or no longer exists on GitHub
-			logger.warn('[github-page] Installation revoked, cleaning up DB', {
+			// Installation was revoked or no longer exists on GitHub.
+			// listRepositories already cleaned up the stale DB record.
+			logger.warn('[github-page] Installation revoked', {
 				userId: user.id,
 				installationId: installation.installationId,
 			});
-			await setupService.revokeInstallation(installation.installationId);
 			return {
 				connected: false,
 				installation: null,

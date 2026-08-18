@@ -20,6 +20,7 @@ A beautiful, modern visual dashboard for managing PM2 processes. Monitor CPU, RA
 - **Efficient Log Reading** — Uses `tail -n` for fast log loading, "Load more" button for history
 - **Real-time Metrics** — Push-based CPU/RAM updates every 10s via SSE
 - **Environment Variables** — View, edit, add, and delete env vars (applied on next deploy)
+- **GitHub Integration** — Connect a GitHub App, list accessible repositories, and import them (see [GitHub Integration](#github-integration))
 - **Teams** — Manage teams, invite members, assign roles (team_owner, team_admin, team_member), team-based project access
 - **Project Sharing** — Invite users to projects with viewer/editor/owner roles
 - **Metrics Dashboard** — Visual CPU/RAM bars, aggregated stats
@@ -295,6 +296,23 @@ npx drizzle-kit push
 # Generate migrations
 npx drizzle-kit generate
 ```
+
+## GitHub Integration
+
+Connect a **GitHub App** to let users import repositories. Requires one GitHub App (not a PAT, not an OAuth App) and 6 environment variables:
+
+```env
+GITHUB_APP_ID=1234567
+GITHUB_APP_SLUG=your-app-slug
+GITHUB_CLIENT_ID=your-client-id
+GITHUB_CLIENT_SECRET=your-client-secret
+GITHUB_WEBHOOK_SECRET=your-webhook-secret
+GITHUB_PRIVATE_KEY=-----BEGIN RSA PRIVATE KEY-----\nMIIEpAIBAAKCAQEA...\n-----END RSA PRIVATE KEY-----
+```
+
+There's one database table to create (`github_installations`) — run `pnpm db:migrate`.
+
+> **Full step-by-step setup** (creating the GitHub App, callback URLs, webhook, permissions, key format, migration, and troubleshooting): see [docs/github-integration.md](docs/github-integration.md).
 
 ## PM2 System Operations
 

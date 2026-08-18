@@ -1,5 +1,5 @@
 import { spawn } from 'child_process';
-import { existsSync, readFileSync } from 'fs';
+import { existsSync, readFileSync, readdirSync } from 'fs';
 import { join } from 'path';
 import { readdir } from 'fs/promises';
 import type { PackageManager } from '$lib/deploy/deploy.types';
@@ -196,17 +196,32 @@ export class GitHubImportPipelineService {
 
 		// Step 1: Clone
 		log('clone', '─── Starting: git clone ───', false);
-		log('clone', `Target: ${targetPath}`, false);
 		let cloneSuccess = false;
 
 		try {
-			// Ensure target directory exists (parent must exist)
-			const parentDir = join(targetPath, '..');
+			// Extract repo name from clone URL for fallback path
+			const urlParts = cloneUrl.split('/');
+			const repoName = urlParts[urlParts.length - 1].replace(/\.git$/, '');
+
+			// If targetPath already exists and is not empty, clone into a subdirectory
+			let actualTargetPath = targetPath;
+			if (existsSync(targetPath)) {
+				const entries = readdirSync(targetPath);
+				if (entries.length > 0) {
+					actualTargetPath = join(targetPath, repoName);
+					log('clone', `Target path exists and is not empty. Cloning into: ${actualTargetPath}`, false);
+				}
+			}
+
+			log('clone', `Target: ${actualTargetPath}`, false);
+
+			// Ensure parent directory exists
+			const parentDir = join(actualTargetPath, '..');
 			if (!existsSync(parentDir)) {
 				log('clone', `Parent directory does not exist: ${parentDir}`, true);
 				return {
 					success: false,
-					targetPath,
+					targetPath: actualTargetPath,
 					processName,
 					ecosystemFiles: [],
 					error: `Parent directory does not exist: ${parentDir}`,
@@ -215,12 +230,12 @@ export class GitHubImportPipelineService {
 
 			// Log redacted clone URL for debugging
 			const redactedUrl = cloneUrl.replace(/x-access-token:[^@]+@/, 'x-access-token:***@');
-			log('clone', `git clone --depth 1 ${redactedUrl} ${targetPath}`, false);
+			log('clone', `git clone --depth 1 ${redactedUrl} ${actualTargetPath}`, false);
 
 			const cloneExitCode = await runCommand(
 				parentDir,
 				'git',
-				['clone', '--depth', '1', cloneUrl, targetPath],
+				['clone', '--depth', '1', cloneUrl, actualTargetPath],
 				(line, isError) => log('clone', line, isError),
 			);
 			cloneSuccess = cloneExitCode === 0;
@@ -229,7 +244,7 @@ export class GitHubImportPipelineService {
 				log('clone', `─── Failed: git clone (exit ${cloneExitCode}) ───`, true);
 				return {
 					success: false,
-					targetPath,
+					targetPath: actualTargetPath,
 					processName,
 					ecosystemFiles: [],
 					error: `Git clone failed with exit code ${cloneExitCode}`,
@@ -241,7 +256,7 @@ export class GitHubImportPipelineService {
 			log('clone', `─── Failed: git clone (${err instanceof Error ? err.message : 'Unknown error'}) ───`, true);
 			return {
 				success: false,
-				targetPath,
+				targetPath: actualTargetPath,
 				processName,
 				ecosystemFiles: [],
 				error: err instanceof Error ? err.message : 'Git clone failed',
@@ -249,10 +264,10 @@ export class GitHubImportPipelineService {
 		}
 
 		// Verify targetPath now exists
-		if (!existsSync(targetPath)) {
+		if (!existsSync(actualTargetPath)) {
 			return {
 				success: false,
-				targetPath,
+				targetPath: actualTargetPath,
 				processName,
 				ecosystemFiles: [],
 				error: 'Clone succeeded but target directory not found',
@@ -262,7 +277,7 @@ export class GitHubImportPipelineService {
 		// Detect package manager
 		let packageManager: PackageManager;
 		try {
-			packageManager = detectPackageManager(targetPath);
+			packageManager = detectPackageManager(actualTargetPath);
 			log('install', `Detected package manager: ${packageManager}`, false);
 		} catch (err) {
 			log('install', `Could not detect package manager: ${err instanceof Error ? err.message : 'Unknown'}`, true);
@@ -279,11 +294,11 @@ export class GitHubImportPipelineService {
 				const tokens = options.installCommand.trim().split(/\s+/);
 				const bin = tokens[0];
 				const args = tokens.slice(1);
-				installExitCode = await runCommand(targetPath, bin, args, (line, isError) =>
+				installExitCode = await runCommand(actualTargetPath, bin, args, (line, isError) =>
 					log('install', line, isError),
 				);
 			} else {
-				installExitCode = await this.runInstall(targetPath, packageManager, (line, isError) =>
+				installExitCode = await this.runInstall(actualTargetPath, packageManager, (line, isError) =>
 					log('install', line, isError),
 				);
 			}
@@ -292,7 +307,7 @@ export class GitHubImportPipelineService {
 				log('install', `─── Failed: install (exit ${installExitCode}) ───`, true);
 				return {
 					success: false,
-					targetPath,
+					targetPath: actualTargetPath,
 					processName,
 					ecosystemFiles: [],
 					error: `Install failed with exit code ${installExitCode}`,
@@ -304,7 +319,7 @@ export class GitHubImportPipelineService {
 			log('install', `─── Failed: install (${err instanceof Error ? err.message : 'Unknown error'}) ───`, true);
 			return {
 				success: false,
-				targetPath,
+				targetPath: actualTargetPath,
 				processName,
 				ecosystemFiles: [],
 				error: err instanceof Error ? err.message : 'Install failed',
@@ -312,7 +327,7 @@ export class GitHubImportPipelineService {
 		}
 
 		// Step 3: Build (optional - only if build script exists or custom command provided)
-		const scripts = readPackageScripts(targetPath);
+		const scripts = readPackageScripts(actualTargetPath);
 		const hasBuild = !!scripts?.build;
 
 		if (options?.buildCommand) {
@@ -321,7 +336,7 @@ export class GitHubImportPipelineService {
 				const tokens = options.buildCommand.trim().split(/\s+/);
 				const bin = tokens[0];
 				const args = tokens.slice(1);
-				const buildExitCode = await runCommand(targetPath, bin, args, (line, isError) =>
+				const buildExitCode = await runCommand(actualTargetPath, bin, args, (line, isError) =>
 					log('build', line, isError),
 				);
 
@@ -329,7 +344,7 @@ export class GitHubImportPipelineService {
 					log('build', `─── Failed: build (exit ${buildExitCode}) ───`, true);
 					return {
 						success: false,
-						targetPath,
+						targetPath: actualTargetPath,
 						processName,
 						ecosystemFiles: [],
 						error: `Build failed with exit code ${buildExitCode}`,
@@ -340,7 +355,7 @@ export class GitHubImportPipelineService {
 				log('build', `─── Failed: build (${err instanceof Error ? err.message : 'Unknown error'}) ───`, true);
 				return {
 					success: false,
-					targetPath,
+					targetPath: actualTargetPath,
 					processName,
 					ecosystemFiles: [],
 					error: err instanceof Error ? err.message : 'Build failed',
@@ -349,7 +364,7 @@ export class GitHubImportPipelineService {
 		} else if (hasBuild) {
 			log('build', '─── Starting: build ───', false);
 			try {
-				const buildExitCode = await this.runBuild(targetPath, packageManager, (line, isError) =>
+				const buildExitCode = await this.runBuild(actualTargetPath, packageManager, (line, isError) =>
 					log('build', line, isError),
 				);
 
@@ -357,7 +372,7 @@ export class GitHubImportPipelineService {
 					log('build', `─── Failed: build (exit ${buildExitCode}) ───`, true);
 					return {
 						success: false,
-						targetPath,
+						targetPath: actualTargetPath,
 						processName,
 						ecosystemFiles: [],
 						error: `Build failed with exit code ${buildExitCode}`,
@@ -368,7 +383,7 @@ export class GitHubImportPipelineService {
 				log('build', `─── Failed: build (${err instanceof Error ? err.message : 'Unknown error'}) ───`, true);
 				return {
 					success: false,
-					targetPath,
+					targetPath: actualTargetPath,
 					processName,
 					ecosystemFiles: [],
 					error: err instanceof Error ? err.message : 'Build failed',
@@ -380,7 +395,7 @@ export class GitHubImportPipelineService {
 
 		// Step 4: Detect ecosystem files
 		log('ecosystem', '─── Detecting ecosystem files ───', false);
-		const ecosystemFiles = await findEcosystemFiles(targetPath);
+		const ecosystemFiles = await findEcosystemFiles(actualTargetPath);
 
 		if (ecosystemFiles.length === 0) {
 			log('ecosystem', 'No ecosystem files found in repository', false);
@@ -390,7 +405,7 @@ export class GitHubImportPipelineService {
 
 		return {
 			success: true,
-			targetPath,
+			targetPath: actualTargetPath,
 			processName,
 			ecosystemFiles,
 		};

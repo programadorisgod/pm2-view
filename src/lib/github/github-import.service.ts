@@ -38,13 +38,13 @@ export class GitHubImportService {
 		}
 
 		// 3. Generate a fresh access token
+		// Don't request specific permissions — use whatever was granted during installation.
 		const octokit = await this.appClient.getInstallationOctokit(installation.installationId);
 		const {
 			data: { token }
 		} = await octokit.rest.apps.createInstallationAccessToken({
 			installation_id: installation.installationId,
 			repository_ids: [repositoryId],
-			permissions: { contents: 'read' }
 		});
 
 		// 4. Create temp workspace and clone

@@ -101,13 +101,14 @@ export const POST: RequestHandler = async ({ params, request, getClientAddress }
 		}
 
 		// Generate access token for cloning
+		// Don't request specific permissions — use whatever was granted during installation.
+		// If the app lacks 'contents: read', the clone will fail with a clear error.
 		const octokit = await appClient.getInstallationOctokit(installation.installationId);
 		const {
 			data: { token }
 		} = await octokit.rest.apps.createInstallationAccessToken({
 			installation_id: installation.installationId,
 			repository_ids: [repositoryId],
-			permissions: { contents: 'read' }
 		});
 
 		const cloneUrl = `https://x-access-token:${token}@github.com/${repo.fullName}.git`;

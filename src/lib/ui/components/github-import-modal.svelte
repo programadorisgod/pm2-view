@@ -1,8 +1,9 @@
 <script lang="ts">
-	import { base } from '$app/paths';
-	import { cn } from '$lib/motion-core/utils/cn';
-	import { invalidateAll } from '$app/navigation';
-	import type { GitHubRepoDTO } from '$lib/github/github.types';
+import { base } from '$app/paths';
+import { cn } from '$lib/motion-core/utils/cn';
+import { invalidateAll } from '$app/navigation';
+import { browser } from '$app/environment';
+import type { GitHubRepoDTO } from '$lib/github/github.types';
 
 	let {
 		open = false,
@@ -311,7 +312,7 @@
 	}
 </script>
 
-{#if open && repository}
+{#if browser && open && repository}
 	<dialog
 		bind:this={dialogRef}
 		class="fixed inset-0 z-50 flex items-center justify-center p-4"

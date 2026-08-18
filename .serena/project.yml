@@ -1,0 +1,2 @@
+project_name: "pm2-view"
+languages: ["typescript", "svelte"]

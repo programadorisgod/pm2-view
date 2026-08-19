@@ -354,14 +354,14 @@
     stopModal.open = true;
   }
 
-  async function confirmDelete() {
+  async function confirmDelete(deleteFiles = false) {
     deleteModal.open = false;
     feedback = null;
     try {
       const res = await fetch(`${base}/projects/api?action=delete`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ pm_id: process.pm_id.toString() }),
+        body: JSON.stringify({ pm_id: process.pm_id.toString(), deleteFiles }),
       });
       const result = await res.json();
       if (res.ok) {

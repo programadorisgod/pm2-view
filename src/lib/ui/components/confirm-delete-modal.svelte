@@ -8,17 +8,19 @@
 	}: {
 		open: boolean;
 		itemName: string;
-		onConfirm: () => void;
+		onConfirm: (deleteFiles: boolean) => void;
 		onCancel: () => void;
 	} = $props();
 
 	let input = $state('');
+	let deleteFiles = $state(false);
 	let dialogRef = $state<HTMLDialogElement | undefined>();
 	let inputRef = $state<HTMLInputElement | undefined>();
 
 	$effect(() => {
 		if (open) {
 			input = '';
+			deleteFiles = false;
 			dialogRef?.showModal();
 			inputRef?.focus();
 		} else {
@@ -86,6 +88,23 @@
 				onkeydown={(e) => { if (e.key === 'Escape' && !matches) onCancel(); }}
 			/>
 
+			<!-- Delete files option -->
+			<label class="flex items-start gap-sm p-sm rounded-lg cursor-pointer mb-lg" style="background: rgba(255, 82, 82, 0.05); border: 1px solid rgba(255, 82, 82, 0.2);">
+				<input
+					type="checkbox"
+					bind:checked={deleteFiles}
+					class="w-4 h-4 mt-0.5"
+				/>
+				<div>
+					<p class="text-body-sm font-medium" style="color: var(--text-primary);">
+						Delete project files from disk
+					</p>
+					<p class="text-caption-xs" style="color: var(--text-muted);">
+						Removes the cloned repository folder and all its contents. This cannot be undone.
+					</p>
+				</div>
+			</label>
+
 			<!-- Actions -->
 			<div class="flex gap-sm justify-end">
 				<button
@@ -101,7 +120,7 @@
 					disabled={!matches}
 					class:opacity-40={!matches}
 					class:cursor-not-allowed={!matches}
-					onclick={onConfirm}
+					onclick={() => onConfirm(deleteFiles)}
 				>
 					Delete
 				</button>

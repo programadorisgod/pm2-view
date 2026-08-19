@@ -8,7 +8,8 @@ import { z } from 'zod';
 import type { RequestHandler } from './$types';
 
 const actionSchema = z.object({
-	pm_id: z.string().min(1, 'Process ID is required')
+	pm_id: z.string().min(1, 'Process ID is required'),
+	deleteFiles: z.boolean().optional().default(false),
 });
 
 function getZodErrorMessage(result: any): string {
@@ -51,7 +52,7 @@ export const POST: RequestHandler = async ({ request, url, getClientAddress }) =
       response = await pm2Service.startProcess(pm_id);
       break;
     case 'delete':
-      response = await pm2Service.deleteProcess(pm_id);
+      response = await pm2Service.deleteProcess(pm_id, body.deleteFiles);
       break;
     default:
       return json({ error: 'Invalid action' }, { status: 400 });

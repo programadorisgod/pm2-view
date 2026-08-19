@@ -1,6 +1,7 @@
 import { exec } from 'child_process';
 import { promisify } from 'util';
 import { existsSync } from 'fs';
+import { rm } from 'fs/promises';
 import { truncate } from 'fs/promises';
 import type { IPM2Repository, PM2Process, PM2Log } from './pm2.types';
 import { normalizePagination, type PaginationParams, type PaginatedResult } from '$lib/pagination';
@@ -61,6 +62,11 @@ export class PM2Repository implements IPM2Repository {
 	async delete(name: string): Promise<void> {
 		const safeName = escapeShellArg(name);
 		await execAsync(`pm2 delete ${safeName}`);
+	}
+
+	async deleteFiles(cwd: string): Promise<void> {
+		if (!existsSync(cwd)) return;
+		await rm(cwd, { recursive: true, force: true });
 	}
 
 	async getLogs(name: string, lines: number = 100): Promise<PM2Log[]> {

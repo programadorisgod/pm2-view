@@ -74,9 +74,16 @@ export class PM2Service {
 		}
 	}
 
-	async deleteProcess(id: string): Promise<{ success: boolean; message: string }> {
+	async deleteProcess(id: string, deleteFiles = false): Promise<{ success: boolean; message: string }> {
 		try {
+			const process = await this.repository.describe(id);
 			await this.repository.delete(id);
+
+			if (deleteFiles && process?.pm2_env?.pm_cwd) {
+				await this.repository.deleteFiles(process.pm2_env.pm_cwd);
+				return { success: true, message: `Process ${id} and project files deleted successfully` };
+			}
+
 			return { success: true, message: `Process ${id} deleted successfully` };
 		} catch (error) {
 			return {

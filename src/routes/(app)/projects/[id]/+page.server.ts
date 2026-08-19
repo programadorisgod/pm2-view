@@ -8,10 +8,9 @@ import { eq } from 'drizzle-orm';
 import { projects } from '$lib/db/schema';
 import { error } from '@sveltejs/kit';
 import type { PageServerLoad } from './$types';
-import type { EnvVar } from '$lib/env-vars/env-var.types';
 
 export const load: PageServerLoad = async ({ params, request }) => {
-	const { pm2Service, envVarService } = createServices();
+	const { pm2Service } = createServices();
 	const { id } = params;
 
 	const process = await pm2Service.getProcessById(id);
@@ -75,20 +74,9 @@ export const load: PageServerLoad = async ({ params, request }) => {
 		// Non-critical: deploy config fetch failure
 	}
 
-	// Get DB-managed environment variables
-	let envVars: EnvVar[] = [];
-	if (projectInternalId) {
-		try {
-			envVars = await envVarService.getEnvVars(projectInternalId);
-		} catch {
-			// Non-critical: env vars fetch failure
-		}
-	}
-
 	return {
 		process,
 		logs,
-		envVars,
 		isFavorite,
 		deployConfig,
 		projectInternalId,

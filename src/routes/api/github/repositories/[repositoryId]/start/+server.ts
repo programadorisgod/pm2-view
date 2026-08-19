@@ -128,9 +128,11 @@ export const POST: RequestHandler = async ({ request, getClientAddress }) => {
 					ecosystemFile,
 				});
 			} catch (err) {
+				const errorMessage = err instanceof Error ? err.message : String(err) || 'Unknown error';
+				const errorStack = err instanceof Error ? err.stack : '';
 				safeEnqueue(JSON.stringify({
 					step: 'complete',
-					line: `Error: ${err instanceof Error ? err.message : 'Unknown error'}`,
+					line: `Error: ${errorMessage}`,
 					isError: true,
 					isComplete: true,
 					success: false,
@@ -140,7 +142,8 @@ export const POST: RequestHandler = async ({ request, getClientAddress }) => {
 					targetPath,
 					processName: sanitizedProcessName,
 					ecosystemFile,
-					error: err,
+					errorMessage,
+					errorStack,
 				});
 			} finally {
 				closed = true;

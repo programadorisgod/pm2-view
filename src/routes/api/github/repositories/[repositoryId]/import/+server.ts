@@ -2,12 +2,10 @@ import { json, type RequestHandler } from '@sveltejs/kit';
 import { auth } from '$lib/auth';
 import { GitHubInstallationRepository } from '$lib/db/repositories/github-installation-repository.impl';
 import { GitHubAppClient } from '$lib/github/infrastructure/github-app-client';
-import { GitHubImportService } from '$lib/github/github-import.service';
-import { GitHubImportPipelineService } from '$lib/github/github-import-pipeline.service';
+import { GitHubImportPipelineService, type ImportStep } from '$lib/github/github-import-pipeline.service';
 import {
 	GitHubInstallationNotFound,
 	GitHubRepositoryNotAccessible,
-	GitHubImportFailed
 } from '$lib/github/github.types';
 import { rateLimiter } from '$lib/rate-limiter';
 import { logger } from '$lib/logger';
@@ -83,12 +81,13 @@ export const POST: RequestHandler = async ({ params, request, getClientAddress }
 		return json({ error: 'Invalid process name' }, { status: 400 });
 	}
 
+	// GitHub API calls (fast, before streaming)
+	let cloneUrl: string;
+	let repoFullName: string;
 	try {
 		const installationRepo = new GitHubInstallationRepository();
 		const appClient = new GitHubAppClient();
-		const importService = new GitHubImportService(installationRepo, appClient);
 
-		// Get repository info and create access token
 		const installation = await installationRepo.getByUserId(session.user.id);
 		if (!installation) {
 			throw new GitHubInstallationNotFound();
@@ -100,9 +99,6 @@ export const POST: RequestHandler = async ({ params, request, getClientAddress }
 			throw new GitHubRepositoryNotAccessible();
 		}
 
-		// Generate access token for cloning
-		// Don't request specific permissions — use whatever was granted during installation.
-		// If the app lacks 'contents: read', the clone will fail with a clear error.
 		const octokit = await appClient.getInstallationOctokit(installation.installationId);
 		const {
 			data: { token }
@@ -111,50 +107,14 @@ export const POST: RequestHandler = async ({ params, request, getClientAddress }
 			repository_ids: [repositoryId],
 		});
 
-		const cloneUrl = `https://x-access-token:${token}@github.com/${repo.fullName}.git`;
+		cloneUrl = `https://x-access-token:${token}@github.com/${repo.fullName}.git`;
+		repoFullName = repo.fullName;
+
 		logger.info('GitHub clone URL generated', {
 			userId: session.user.id,
-			repoFullName: repo.fullName,
+			repoFullName,
 			tokenLength: token?.length,
 			hasToken: !!token,
-		});
-
-		// Run the import pipeline
-		const pipeline = new GitHubImportPipelineService();
-		const result = await pipeline.runPhase1(
-			cloneUrl,
-			targetPath,
-			sanitizedProcessName,
-			(step, line, isError) => {
-				// Log pipeline output server-side for debugging
-				logger.info(`[github-import][${step}]`, { line, isError });
-			},
-			{ installCommand, buildCommand }
-		);
-
-		if (!result.success) {
-			return json(
-				{ error: result.error || 'Import failed' },
-				{ status: 500 }
-			);
-		}
-
-		logger.info('Repository imported', {
-			userId: session.user.id,
-			repositoryId,
-			repoFullName: repo.fullName,
-			targetPath: result.targetPath,
-			processName: result.processName,
-		});
-
-		return json({
-			success: true,
-			ecosystemFiles: result.ecosystemFiles,
-			targetPath: result.targetPath,
-			processName: result.processName,
-			message: result.ecosystemFiles.length > 0
-				? 'Clone completed. Select an ecosystem file to start.'
-				: 'Clone completed. No ecosystem files found.',
 		});
 	} catch (err: any) {
 		if (err instanceof GitHubInstallationNotFound) {
@@ -163,14 +123,114 @@ export const POST: RequestHandler = async ({ params, request, getClientAddress }
 		if (err instanceof GitHubRepositoryNotAccessible) {
 			return json({ error: 'Repository not accessible' }, { status: 404 });
 		}
-		if (err instanceof GitHubImportFailed) {
-			return json({ error: 'Failed to import repository' }, { status: 500 });
-		}
-		logger.error('Failed to import repository', {
+		const errorMessage = err?.message || String(err) || 'Unknown error';
+		logger.error('Failed to prepare GitHub import', {
 			userId: session.user.id,
 			repositoryId,
-			error: err
+			errorMessage,
 		});
-		return json({ error: 'Failed to import repository' }, { status: 500 });
+		return json({ error: `Import failed: ${errorMessage}` }, { status: 500 });
 	}
+
+	// Stream Phase 1 (clone + install + build + ecosystem detection) as NDJSON
+	const encoder = new TextEncoder();
+	const pipeline = new GitHubImportPipelineService();
+
+	const stream = new ReadableStream({
+		async start(controller) {
+			let closed = false;
+			const safeEnqueue = (data: string) => {
+				if (closed) return;
+				try {
+					controller.enqueue(encoder.encode(data + '\n'));
+				} catch {
+					// Stream already closed, ignore
+				}
+			};
+
+			try {
+				const result = await pipeline.runPhase1(
+					cloneUrl,
+					targetPath,
+					sanitizedProcessName,
+					(step: ImportStep, line: string, isError: boolean) => {
+						safeEnqueue(JSON.stringify({ step, line, isError, isComplete: false }));
+						// Also log server-side for debugging
+						logger.info(`[github-import][${step}]`, { line, isError });
+					},
+					{ installCommand, buildCommand }
+				);
+
+			if (result.needsApproval) {
+				safeEnqueue(JSON.stringify({
+					step: 'install',
+					line: result.error || 'Package manager requires approval for native builds',
+					isError: true,
+					isComplete: true,
+					needsApproval: true,
+					pendingPackages: result.pendingPackages ?? [],
+					targetPath: result.targetPath,
+					success: false,
+				}));
+			} else if (result.success) {
+				safeEnqueue(JSON.stringify({
+					step: 'complete',
+					line: result.ecosystemFiles.length > 0
+						? `Clone completed. Found ${result.ecosystemFiles.length} ecosystem file(s).`
+						: 'Clone completed. No ecosystem files found.',
+					isError: false,
+					isComplete: true,
+					success: true,
+					ecosystemFiles: result.ecosystemFiles,
+					targetPath: result.targetPath,
+					processName: result.processName,
+				}));
+			} else {
+				safeEnqueue(JSON.stringify({
+					step: 'complete',
+					line: result.error || 'Import failed',
+					isError: true,
+					isComplete: true,
+					success: false,
+				}));
+			}
+
+				logger.info('Repository imported', {
+					userId: session.user.id,
+					repositoryId,
+					repoFullName,
+					targetPath: result.targetPath,
+					processName: result.processName,
+				});
+			} catch (err) {
+				const errorMessage = err instanceof Error ? err.message : String(err) || 'Unknown error';
+				const errorStack = err instanceof Error ? err.stack : '';
+				safeEnqueue(JSON.stringify({
+					step: 'complete',
+					line: `Error: ${errorMessage}`,
+					isError: true,
+					isComplete: true,
+					success: false,
+				}));
+				logger.error('Import pipeline failed', {
+					userId: session.user.id,
+					repositoryId,
+					errorMessage,
+					errorStack,
+				});
+			} finally {
+				closed = true;
+				controller.close();
+			}
+		},
+	});
+
+	return new Response(stream, {
+		headers: {
+			'Content-Type': 'application/x-ndjson',
+			'Cache-Control': 'no-cache',
+			Connection: 'keep-alive',
+			'X-Accel-Buffering': 'no',
+		},
+	});
 };

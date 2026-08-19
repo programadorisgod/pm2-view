@@ -13,11 +13,48 @@ const LOCK_FILES: Record<string, PackageManager> = {
 const ECOSYSTEM_FILES = [
 	'ecosystem.cjs',
 	'ecosystem.config.js',
+	'ecosystem.config.cjs',
 	'ecosystem.config.ts',
 	'pm2.config.js',
 	'pm2.config.cjs',
 	'ecosystem.json',
 ] as const;
+
+const APPROVAL_INDICATORS = /requires approval|needs to be built|approve-builds|ERR_PNPM_IGNORED_BUILDS/i;
+const PACKAGE_LINE = /^\s*-\s+(.+)$/;
+const IGNORED_BUILDS_LINE = /Ignored build scripts:\s*(.+)/i;
+
+function extractPendingPackages(output: string[]): string[] {
+	const packages: string[] = [];
+	let inApprovalSection = false;
+
+	for (const line of output) {
+		// New pnpm format: "[ERR_PNPM_IGNORED_BUILDS] Ignored build scripts: @swc/core@1.15.43"
+		const ignoredMatch = line.match(IGNORED_BUILDS_LINE);
+		if (ignoredMatch) {
+			const pkgList = ignoredMatch[1].trim();
+			// Could be single package or comma-separated
+			const pkgs = pkgList.split(',').map((p) => p.trim()).filter(Boolean);
+			packages.push(...pkgs);
+			continue;
+		}
+
+		if (APPROVAL_INDICATORS.test(line)) {
+			inApprovalSection = true;
+			continue;
+		}
+		if (inApprovalSection) {
+			const match = line.match(PACKAGE_LINE);
+			if (match) {
+				packages.push(match[1].trim());
+			} else if (line.trim() && !line.startsWith('-')) {
+				inApprovalSection = false;
+			}
+		}
+	}
+
+	return packages;
+}
 
 type EcosystemFile = (typeof ECOSYSTEM_FILES)[number];
 
@@ -145,7 +182,7 @@ export type ImportLogCallback = (step: ImportStep, line: string, isError: boolea
 /**
  * Steps for the import pipeline
  */
-export const IMPORT_STEPS = ['clone', 'install', 'build', 'ecosystem', 'pm2-start'] as const;
+export const IMPORT_STEPS = ['clone', 'install', 'build', 'ecosystem', 'pm2-start', 'approve'] as const;
 export type ImportStep = (typeof IMPORT_STEPS)[number];
 
 /**
@@ -157,6 +194,8 @@ export interface Phase1Result {
 	processName: string;
 	ecosystemFiles: string[];
 	error?: string;
+	needsApproval?: boolean;
+	pendingPackages?: string[];
 }
 
 /**
@@ -188,23 +227,24 @@ export class GitHubImportPipelineService {
 		targetPath: string,
 		processName: string,
 		onLog: ImportLogCallback,
-		options?: { installCommand?: string; buildCommand?: string },
+		options?: { installCommand?: string; buildCommand?: string; skipClone?: boolean },
 	): Promise<Phase1Result> {
 		const log = (step: ImportStep, line: string, isError: boolean) => {
 			onLog(step, line, isError);
 		};
 
-		// Step 1: Clone
-		log('clone', '─── Starting: git clone ───', false);
-		let cloneSuccess = false;
+		let actualTargetPath = targetPath;
 
-		try {
+		if (!options?.skipClone) {
+			// Step 1: Clone
+			log('clone', '─── Starting: git clone ───', false);
+			let cloneSuccess = false;
+
 			// Extract repo name from clone URL for fallback path
 			const urlParts = cloneUrl.split('/');
 			const repoName = urlParts[urlParts.length - 1].replace(/\.git$/, '');
 
 			// If targetPath already exists and is not empty, clone into a subdirectory
-			let actualTargetPath = targetPath;
 			if (existsSync(targetPath)) {
 				const entries = readdirSync(targetPath);
 				if (entries.length > 0) {
@@ -213,65 +253,67 @@ export class GitHubImportPipelineService {
 				}
 			}
 
-			log('clone', `Target: ${actualTargetPath}`, false);
+			try {
+				log('clone', `Target: ${actualTargetPath}`, false);
 
-			// Ensure parent directory exists
-			const parentDir = join(actualTargetPath, '..');
-			if (!existsSync(parentDir)) {
-				log('clone', `Parent directory does not exist: ${parentDir}`, true);
+				// Ensure parent directory exists
+				const parentDir = join(actualTargetPath, '..');
+				if (!existsSync(parentDir)) {
+					log('clone', `Parent directory does not exist: ${parentDir}`, true);
+					return {
+						success: false,
+						targetPath: actualTargetPath,
+						processName,
+						ecosystemFiles: [],
+						error: `Parent directory does not exist: ${parentDir}`,
+					};
+				}
+
+				// Log redacted clone URL for debugging
+				const redactedUrl = cloneUrl.replace(/x-access-token:[^@]+@/, 'x-access-token:***@');
+				log('clone', `git clone --depth 1 ${redactedUrl} ${actualTargetPath}`, false);
+
+				const cloneExitCode = await runCommand(
+					parentDir,
+					'git',
+					['clone', '--depth', '1', cloneUrl, actualTargetPath],
+					(line, isError) => log('clone', line, isError),
+				);
+				cloneSuccess = cloneExitCode === 0;
+
+				if (!cloneSuccess) {
+					log('clone', `─── Failed: git clone (exit ${cloneExitCode}) ───`, true);
+					return {
+						success: false,
+						targetPath: actualTargetPath,
+						processName,
+						ecosystemFiles: [],
+						error: `Git clone failed with exit code ${cloneExitCode}`,
+					};
+				}
+
+				log('clone', '─── Completed: git clone ───', false);
+			} catch (err) {
+				log('clone', `─── Failed: git clone (${err instanceof Error ? err.message : 'Unknown error'}) ───`, true);
 				return {
 					success: false,
 					targetPath: actualTargetPath,
 					processName,
 					ecosystemFiles: [],
-					error: `Parent directory does not exist: ${parentDir}`,
+					error: err instanceof Error ? err.message : 'Git clone failed',
 				};
 			}
 
-			// Log redacted clone URL for debugging
-			const redactedUrl = cloneUrl.replace(/x-access-token:[^@]+@/, 'x-access-token:***@');
-			log('clone', `git clone --depth 1 ${redactedUrl} ${actualTargetPath}`, false);
-
-			const cloneExitCode = await runCommand(
-				parentDir,
-				'git',
-				['clone', '--depth', '1', cloneUrl, actualTargetPath],
-				(line, isError) => log('clone', line, isError),
-			);
-			cloneSuccess = cloneExitCode === 0;
-
-			if (!cloneSuccess) {
-				log('clone', `─── Failed: git clone (exit ${cloneExitCode}) ───`, true);
+			// Verify targetPath now exists
+			if (!existsSync(actualTargetPath)) {
 				return {
 					success: false,
 					targetPath: actualTargetPath,
 					processName,
 					ecosystemFiles: [],
-					error: `Git clone failed with exit code ${cloneExitCode}`,
+					error: 'Clone succeeded but target directory not found',
 				};
 			}
-
-			log('clone', '─── Completed: git clone ───', false);
-		} catch (err) {
-			log('clone', `─── Failed: git clone (${err instanceof Error ? err.message : 'Unknown error'}) ───`, true);
-			return {
-				success: false,
-				targetPath: actualTargetPath,
-				processName,
-				ecosystemFiles: [],
-				error: err instanceof Error ? err.message : 'Git clone failed',
-			};
-		}
-
-		// Verify targetPath now exists
-		if (!existsSync(actualTargetPath)) {
-			return {
-				success: false,
-				targetPath: actualTargetPath,
-				processName,
-				ecosystemFiles: [],
-				error: 'Clone succeeded but target directory not found',
-			};
 		}
 
 		// Detect package manager
@@ -288,29 +330,50 @@ export class GitHubImportPipelineService {
 		log('install', '─── Starting: install ───', false);
 
 		try {
-			let installExitCode: number;
+			let installResult: { exitCode: number; output: string[] };
 
 			if (options?.installCommand) {
 				const tokens = options.installCommand.trim().split(/\s+/);
 				const bin = tokens[0];
 				const args = tokens.slice(1);
-				installExitCode = await runCommand(actualTargetPath, bin, args, (line, isError) =>
-					log('install', line, isError),
-				);
+				const output: string[] = [];
+				const exitCode = await runCommand(actualTargetPath, bin, args, (line, isError) => {
+					output.push(line);
+					log('install', line, isError);
+				});
+				installResult = { exitCode, output };
 			} else {
-				installExitCode = await this.runInstall(actualTargetPath, packageManager, (line, isError) =>
+				installResult = await this.runInstall(actualTargetPath, packageManager, (line, isError) =>
 					log('install', line, isError),
 				);
 			}
 
-			if (installExitCode !== 0) {
-				log('install', `─── Failed: install (exit ${installExitCode}) ───`, true);
+			// Check if pnpm requires approval for native builds
+			if (packageManager === 'pnpm') {
+				const pendingPackages = extractPendingPackages(installResult.output);
+				if (pendingPackages.length > 0) {
+					log('install', '─── Pending approval for native builds ───', false);
+					log('install', `─── Failed: install (exit ${installResult.exitCode}) ───`, true);
+					return {
+						success: false,
+						targetPath: actualTargetPath,
+						processName,
+						ecosystemFiles: [],
+						needsApproval: true,
+						pendingPackages,
+						error: `Package manager requires approval for: ${pendingPackages.join(', ')}`,
+					};
+				}
+			}
+
+			if (installResult.exitCode !== 0) {
+				log('install', `─── Failed: install (exit ${installResult.exitCode}) ───`, true);
 				return {
 					success: false,
 					targetPath: actualTargetPath,
 					processName,
 					ecosystemFiles: [],
-					error: `Install failed with exit code ${installExitCode}`,
+					error: `Install failed with exit code ${installResult.exitCode}`,
 				};
 			}
 
@@ -483,6 +546,19 @@ export class GitHubImportPipelineService {
 		cwd: string,
 		pm: PackageManager,
 		onLine: (line: string, isError: boolean) => void,
+	): Promise<{ exitCode: number; output: string[] }> {
+		const output: string[] = [];
+		const exitCode = await this.runInstallCommand(cwd, pm, (line, isError) => {
+			output.push(line);
+			onLine(line, isError);
+		});
+		return { exitCode, output };
+	}
+
+	private async runInstallCommand(
+		cwd: string,
+		pm: PackageManager,
+		onLine: (line: string, isError: boolean) => void,
 	): Promise<number> {
 		switch (pm) {
 			case 'bun':
@@ -506,6 +582,40 @@ export class GitHubImportPipelineService {
 				return runCommand(cwd, 'pnpm', ['run', 'build'], onLine);
 			default:
 				return runCommand(cwd, 'npm', ['run', 'build'], onLine);
+		}
+	}
+
+	/**
+	 * Run pnpm approve-builds --all in the target directory.
+	 */
+	async approveBuilds(
+		targetPath: string,
+		onLog: ImportLogCallback,
+	): Promise<{ success: boolean; error?: string }> {
+		const log = (step: 'approve', line: string, isError: boolean) => {
+			onLog(step, line, isError);
+		};
+
+		log('approve', '─── Starting: approve-builds ───', false);
+
+		try {
+			const exitCode = await runCommand(
+				targetPath,
+				'pnpm',
+				['approve-builds', '--all'],
+				(line, isError) => log('approve', line, isError),
+			);
+
+			if (exitCode !== 0) {
+				log('approve', `─── Failed: approve-builds (exit ${exitCode}) ───`, true);
+				return { success: false, error: `approve-builds failed with exit code ${exitCode}` };
+			}
+
+			log('approve', '─── Completed: approve-builds ───', false);
+			return { success: true };
+		} catch (err) {
+			log('approve', `─── Failed: approve-builds (${err instanceof Error ? err.message : 'Unknown error'}) ───`, true);
+			return { success: false, error: err instanceof Error ? err.message : 'approve-builds failed' };
 		}
 	}
 }

@@ -60,12 +60,21 @@ export class GitHubAppClient {
 			const { data } = await octokit.rest.apps.getInstallation({
 				installation_id: installationId
 			});
+
+			if (!data.account) {
+				throw new GitHubAuthenticationFailed('Installation has no account');
+			}
+
+			const account = data.account;
+			const login = 'login' in account ? account.login : account.name ?? '';
+			const type = 'type' in account ? account.type : 'Organization';
+
 			return {
 				id: data.id,
 				account: {
-					login: data.account.login,
-					type: data.account.type,
-					avatarUrl: data.account.avatar_url ?? null
+					login,
+					type,
+					avatarUrl: account.avatar_url ?? null
 				}
 			};
 		} catch (err: any) {
@@ -127,7 +136,6 @@ export class GitHubAppClient {
 		defaultBranch: string;
 		cloneUrl: string;
 		description: string | null;
-		owner: { login: string };
 	} | null> {
 		const octokit = await this.getInstallationOctokit(installationId);
 		try {

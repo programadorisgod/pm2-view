@@ -17,7 +17,6 @@
   let {
     process,
     logs: initialLogs,
-    envVars: initialEnvVars,
     isFavorite: initialIsFavorite,
     deployConfig,
   } = $derived(data);
@@ -260,23 +259,42 @@
   interface EnvRow {
     key: string;
     value: string;
-    isSecret: boolean;
   }
 
   let envRows = $state<EnvRow[]>([]);
+  let envVars = $state<Record<string, string>>({});
+  let envLoaded = $state(false);
   let envDirty = $state(false);
   let envSaving = $state(false);
-  let envFeedback = $state<{ type: "success" | "error"; text: string } | null>(
-    null,
-  );
+  let envLoading = $state(false);
+  let envFeedback = $state<{ type: "success" | "error"; text: string } | null>(null);
+  let envPath = $state<string | null>(null);
+  let envRestarting = $state(false);
 
+  // Load env vars from .env file on mount
+  async function loadEnvVars() {
+    envLoading = true;
+    try {
+      const res = await fetch(`${base}/api/projects/${process.pm_id}/env`);
+      if (res.ok) {
+        const data = await res.json();
+        envVars = data.envVars || {};
+        envPath = data.envPath;
+        envRows = Object.entries(envVars).map(([key, value]) => ({ key, value }));
+        envDirty = false;
+        envLoaded = true;
+      }
+    } catch {
+      // Non-critical
+    } finally {
+      envLoading = false;
+    }
+  }
+
+  // Load when env tab is first activated
   $effect(() => {
-    if (Array.isArray(initialEnvVars)) {
-      envRows = initialEnvVars.map((env) => ({
-        key: env.key,
-        value: env.value,
-        isSecret: env.isSecret,
-      }));
+    if (activeTab === 'env' && !envLoaded && !envLoading) {
+      loadEnvVars();
     }
   });
 
@@ -379,27 +397,28 @@
   });
 
   function addEnvRow() {
-    envRows = [...envRows, { key: "", value: "", isSecret: false }];
+    envRows = [...envRows, { key: "", value: "" }];
     envDirty = true;
   }
 
-  function removeEnvRow(index: number) {
+  async function removeEnvRow(index: number) {
+    const removed = envRows[index];
     envRows = envRows.filter((_, i) => i !== index);
     envDirty = true;
+    // Immediately save to .env file
+    if (removed && removed.key.trim()) {
+      await saveEnvVars(false);
+    }
   }
 
-  function updateEnvRow(
-    index: number,
-    field: "key" | "value" | "isSecret",
-    value: string | boolean,
-  ) {
+  function updateEnvRow(index: number, field: "key" | "value", value: string) {
     envRows = envRows.map((row, i) =>
       i === index ? { ...row, [field]: value } : row,
     );
     envDirty = true;
   }
 
-  async function saveEnvVars() {
+  async function saveEnvVars(restart = false) {
     const invalid = envRows.find((row) => !row.key.trim());
     if (invalid) {
       envFeedback = { type: "error", text: "Every variable needs a key" };
@@ -409,28 +428,38 @@
     envSaving = true;
     envFeedback = null;
     try {
-      const res = await fetch(
-        `${base}/api/env-vars/${data.projectInternalId ?? ""}`,
-        {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            envVars: envRows.map((row) => ({
-              key: row.key.trim(),
-              value: row.value,
-              isSecret: row.isSecret,
-            })),
-          }),
-        },
-      );
+      const envVarsObj: Record<string, string> = {};
+      for (const row of envRows) {
+        if (row.key.trim()) {
+          envVarsObj[row.key.trim()] = row.value;
+        }
+      }
+
+      const res = await fetch(`${base}/api/projects/${process.pm_id}/env`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          envVars: envVarsObj,
+          restart,
+          processName: process.name,
+        }),
+      });
       const result = await res.json();
       if (res.ok) {
         envDirty = false;
-        envFeedback = {
-          type: "success",
-          text: "Environment variables saved. They will be applied on the next deploy.",
-        };
-        await invalidateAll();
+        envPath = result.envPath;
+        if (result.restarted) {
+          envFeedback = {
+            type: "success",
+            text: `Environment variables saved and process restarted.`,
+          };
+          await invalidateAll();
+        } else {
+          envFeedback = {
+            type: "success",
+            text: `Environment variables saved. Process is not running, no restart needed.`,
+          };
+        }
       } else {
         envFeedback = { type: "error", text: result.error || "Failed to save" };
       }
@@ -441,6 +470,30 @@
       };
     } finally {
       envSaving = false;
+    }
+  }
+
+  async function importFromEnvFile() {
+    envLoading = true;
+    envFeedback = null;
+    try {
+      const res = await fetch(`${base}/api/projects/${process.pm_id}/env`);
+      if (res.ok) {
+        const data = await res.json();
+        envVars = data.envVars || {};
+        envPath = data.envPath;
+        envRows = Object.entries(envVars).map(([key, value]) => ({ key, value }));
+        envDirty = false;
+        envLoaded = true;
+        envFeedback = { type: "success", text: `Loaded ${Object.keys(envVars).length} variables from .env` };
+      } else {
+        const result = await res.json();
+        envFeedback = { type: "error", text: result.error || "Failed to load .env" };
+      }
+    } catch {
+      envFeedback = { type: "error", text: "Failed to load .env file" };
+    } finally {
+      envLoading = false;
     }
   }
 </script>
@@ -792,16 +845,20 @@
               Environment Variables
             </h2>
             <div class="flex items-center gap-sm">
-              {#if envFeedback}
-                <FeedbackBanner
-                  type={envFeedback.type}
-                  message={envFeedback.text}
-                  onDismiss={() => (envFeedback = null)}
-                />
-              {/if}
+              <button
+                class="btn-secondary px-3 py-1.5 text-body-sm inline-flex items-center gap-1"
+                onclick={importFromEnvFile}
+                disabled={envLoading}
+              >
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/>
+                </svg>
+                Import from .env
+              </button>
               <button
                 class="btn-secondary px-3 py-1.5 text-body-sm inline-flex items-center gap-1"
                 onclick={addEnvRow}
+                disabled={envLoading || !envLoaded}
               >
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
@@ -810,24 +867,44 @@
               </button>
               <button
                 class="btn-primary px-3 py-1.5 text-body-sm"
-                onclick={saveEnvVars}
-                disabled={envSaving || !envDirty || !data.projectInternalId}
+                onclick={() => saveEnvVars(true)}
+                disabled={envSaving || !envDirty}
               >
-                {envSaving ? "Saving..." : "Save Changes"}
+                {envSaving ? "Saving & Restarting..." : "Save & Restart"}
+              </button>
+              <button
+                class="btn-secondary px-3 py-1.5 text-body-sm"
+                onclick={() => saveEnvVars(false)}
+                disabled={envSaving || !envDirty}
+              >
+                {envSaving ? "Saving..." : "Save"}
               </button>
             </div>
           </div>
 
-          <p class="text-body-sm mb-md" style="color: var(--text-secondary);">
-            These variables are injected during the next deploy, alongside the
-            project's <code class="font-mono">.env</code> file. A deploy is
-            required for changes to take effect.
-          </p>
+          {#if envPath}
+            <p class="text-caption-xs mb-md" style="color: var(--text-muted);">
+              File: <code class="font-mono">{envPath}</code>
+            </p>
+          {/if}
 
-          {#if envRows.length === 0}
+          {#if envFeedback}
+            <div class="mb-md">
+              <FeedbackBanner
+                type={envFeedback.type}
+                message={envFeedback.text}
+                onDismiss={() => (envFeedback = null)}
+              />
+            </div>
+          {/if}
+
+          {#if envLoading}
             <p class="text-center py-xl" style="color: var(--text-muted);">
-              No environment variables configured. Click "Add Variable" to get
-              started.
+              Loading environment variables...
+            </p>
+          {:else if envRows.length === 0}
+            <p class="text-center py-xl" style="color: var(--text-muted);">
+              No environment variables found. Click "Import from .env" to load existing variables or "Add Variable" to create new ones.
             </p>
           {:else}
             <div class="space-y-xs">
@@ -852,17 +929,6 @@
                     spellcheck="false"
                     oninput={(e) => updateEnvRow(i, "value", e.currentTarget.value)}
                   />
-                  <label
-                    class="flex items-center gap-xs text-caption shrink-0"
-                    style="color: var(--text-secondary);"
-                  >
-                    <input
-                      type="checkbox"
-                      checked={env.isSecret}
-                      onchange={(e) => updateEnvRow(i, "isSecret", e.currentTarget.checked)}
-                    />
-                    Secret
-                  </label>
                   <button
                     class="shrink-0 p-1.5 rounded"
                     style="color: #FF5252;"
@@ -879,7 +945,8 @@
             </div>
           {/if}
         </Card>
-      {:else if activeTab === "sharing"}
+
+{:else if activeTab === "sharing"}
         <Card>
           <h2
             class="text-h3 font-semibold mb-md"

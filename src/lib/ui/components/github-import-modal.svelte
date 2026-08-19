@@ -29,7 +29,7 @@ import type { GitHubRepoDTO } from '$lib/github/github.types';
 	}
 
 	// View states: config → cloning → selecting → starting
-	let view = $state<'config' | 'cloning' | 'selecting' | 'starting'>('config');
+	let view = $state<'config' | 'cloning' | 'selecting' | 'env' | 'starting'>('config');
 	let targetPath = $state('');
 	let processName = $state('');
 	let installCommand = $state<string | undefined>(undefined);
@@ -42,6 +42,12 @@ import type { GitHubRepoDTO } from '$lib/github/github.types';
 	let isRunning = $state(false);
 	let importSuccess = $state<boolean | null>(null);
 	let startSuccess = $state<boolean | null>(null);
+	let approvalPending = $state(false);
+	let approvalPackages = $state<string[]>([]);
+	let envMode = $state<'upload' | 'paste'>('paste');
+	let envText = $state('');
+	let envVars = $state<Record<string, string>>({});
+	let envFileCount = $state(0);
 
 	$effect(() => {
 		if (open && repository) {
@@ -58,6 +64,12 @@ import type { GitHubRepoDTO } from '$lib/github/github.types';
 			isRunning = false;
 			importSuccess = null;
 			startSuccess = null;
+		approvalPending = false;
+		approvalPackages = [];
+		envMode = 'paste';
+		envText = '';
+		envVars = {};
+		envFileCount = 0;
 			dialogRef?.showModal();
 		} else {
 			dialogRef?.close();
@@ -128,12 +140,12 @@ import type { GitHubRepoDTO } from '$lib/github/github.types';
 				body: JSON.stringify(body),
 			});
 
-			const result = await res.json();
-
+			// Handle validation/auth errors (still JSON responses)
 			if (!res.ok) {
+				const error = await res.json();
 				lines = [{
 					step: 'error',
-					line: result.error || 'Import failed',
+					line: error.error || 'Import failed',
 					isError: true,
 					isComplete: true,
 				}];
@@ -142,33 +154,68 @@ import type { GitHubRepoDTO } from '$lib/github/github.types';
 				return;
 			}
 
-			// Success - show ecosystem file selection
-			ecosystemFiles = result.ecosystemFiles || [];
-			lines = [{
-				step: 'complete',
-				line: result.message || 'Clone completed successfully',
-				isError: false,
-				isComplete: true,
-				success: true,
-			}];
-
-			if (ecosystemFiles.length > 0) {
-				selectedEcosystemFile = ecosystemFiles[0];
-				view = 'selecting';
-			} else {
-				// No ecosystem files - show start view anyway with a default
-				lines = [...lines, {
-					step: 'ecosystem',
-					line: 'No ecosystem files found. You can still try to start the application.',
-					isError: false,
+			// Read NDJSON stream
+			const reader = res.body?.getReader();
+			if (!reader) {
+				lines = [{
+					step: 'error',
+					line: 'Streaming not supported',
+					isError: true,
 					isComplete: true,
 				}];
-				selectedEcosystemFile = '';
-				view = 'selecting';
+				isRunning = false;
+				importSuccess = false;
+				return;
 			}
 
-			isRunning = false;
-			importSuccess = true;
+			const decoder = new TextDecoder();
+			let buffer = '';
+
+			while (true) {
+				const { done, value } = await reader.read();
+				if (done) break;
+
+				buffer += decoder.decode(value, { stream: true });
+				const lineEnd = buffer.lastIndexOf('\n');
+				if (lineEnd === -1) continue;
+
+				const chunk = buffer.slice(0, lineEnd);
+				buffer = buffer.slice(lineEnd + 1);
+
+				for (const rawLine of chunk.split('\n')) {
+					if (!rawLine.trim()) continue;
+					try {
+						const data = JSON.parse(rawLine);
+						lines = [...lines, data];
+
+						if (data.isComplete) {
+							if (data.needsApproval) {
+								targetPath = data.targetPath || targetPath;
+								approvalPending = true;
+								approvalPackages = data.pendingPackages ?? [];
+								isRunning = false;
+							} else {
+								isRunning = false;
+								importSuccess = data.success ?? false;
+
+								if (data.success) {
+									targetPath = data.targetPath || targetPath;
+									ecosystemFiles = data.ecosystemFiles || [];
+									if (ecosystemFiles.length > 0) {
+										selectedEcosystemFile = ecosystemFiles[0];
+										view = 'selecting';
+									} else {
+										selectedEcosystemFile = '';
+										view = 'selecting';
+									}
+								}
+							}
+						}
+					} catch {
+						// Ignore parse errors
+					}
+				}
+			}
 		} catch (err) {
 			lines = [{
 				step: 'error',
@@ -178,6 +225,193 @@ import type { GitHubRepoDTO } from '$lib/github/github.types';
 			}];
 			isRunning = false;
 			importSuccess = false;
+		}
+	}
+
+	async function handleApproveAndContinue() {
+		approvalPending = false;
+		view = 'cloning';
+		isRunning = true;
+		lines = [];
+
+		try {
+			const res = await fetch(`${base}/api/github/repositories/${repository!.id}/approve-builds`, {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({
+					targetPath,
+					processName,
+					installCommand,
+					buildCommand,
+				}),
+			});
+
+			if (!res.ok) {
+				const error = await res.json();
+				lines = [{
+					step: 'error',
+					line: `Approval failed: ${error.error || 'Unknown error'}`,
+					isError: true,
+					isComplete: true,
+				}];
+				isRunning = false;
+				importSuccess = false;
+				return;
+			}
+
+			// Read NDJSON stream
+			const reader = res.body?.getReader();
+			if (!reader) {
+				lines = [{
+					step: 'error',
+					line: 'Streaming not supported',
+					isError: true,
+					isComplete: true,
+				}];
+				isRunning = false;
+				importSuccess = false;
+				return;
+			}
+
+			const decoder = new TextDecoder();
+			let buffer = '';
+
+			while (true) {
+				const { done, value } = await reader.read();
+				if (done) break;
+
+				buffer += decoder.decode(value, { stream: true });
+				const lineEnd = buffer.lastIndexOf('\n');
+				if (lineEnd === -1) continue;
+
+				const chunk = buffer.slice(0, lineEnd);
+				buffer = buffer.slice(lineEnd + 1);
+
+				for (const rawLine of chunk.split('\n')) {
+					if (!rawLine.trim()) continue;
+					try {
+						const data = JSON.parse(rawLine);
+						lines = [...lines, data];
+
+						if (data.isComplete) {
+							isRunning = false;
+							importSuccess = data.success ?? false;
+
+							if (data.success) {
+								targetPath = data.targetPath || targetPath;
+								ecosystemFiles = data.ecosystemFiles || [];
+								if (ecosystemFiles.length > 0) {
+									selectedEcosystemFile = ecosystemFiles[0];
+									view = 'selecting';
+								} else {
+									selectedEcosystemFile = '';
+									view = 'selecting';
+								}
+							}
+						}
+					} catch {
+						// Ignore parse errors
+					}
+				}
+			}
+		} catch (err) {
+			lines = [{
+				step: 'error',
+				line: `Connection error: ${err instanceof Error ? err.message : 'Unknown error'}`,
+				isError: true,
+				isComplete: true,
+			}];
+			isRunning = false;
+			importSuccess = false;
+		}
+	}
+
+	function handleFileUpload(event: Event) {
+		const input = event.target as HTMLInputElement;
+		const file = input.files?.[0];
+		if (!file) return;
+
+		const reader = new FileReader();
+		reader.onload = () => {
+			envText = reader.result as string;
+			envFileCount = 1;
+		};
+		reader.readAsText(file);
+	}
+
+	async function handleWriteEnv() {
+		if (!repository) return;
+
+		// Parse env vars from text
+		const parsed: Record<string, string> = {};
+		for (const rawLine of envText.split('\n')) {
+			const line = rawLine.trim();
+			if (!line || line.startsWith('#')) continue;
+			const eqIndex = line.indexOf('=');
+			if (eqIndex === -1) continue;
+			const key = line.slice(0, eqIndex).trim();
+			if (!key) continue;
+			let value = line.slice(eqIndex + 1).trim();
+			// Remove quotes
+			if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
+				value = value.slice(1, -1);
+			}
+			parsed[key] = value;
+		}
+
+		// Merge with uploaded file vars
+		const merged = { ...envVars, ...parsed };
+
+		view = 'cloning';
+		isRunning = true;
+		lines = [];
+
+		try {
+			const res = await fetch(`${base}/api/github/repositories/${repository.id}/write-env`, {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({
+					targetPath,
+					envVars: merged,
+				}),
+			});
+
+			const result = await res.json();
+
+			if (!res.ok) {
+				lines = [{
+					step: 'error',
+					line: result.error || 'Failed to write env file',
+					isError: true,
+					isComplete: true,
+				}];
+				isRunning = false;
+				importSuccess = false;
+				view = 'env';
+				return;
+			}
+
+			lines = [{
+				step: 'complete',
+				line: `Wrote ${result.varCount} environment variables to .env`,
+				isError: false,
+				isComplete: true,
+				success: true,
+			}];
+
+			// Continue to PM2 start
+			isRunning = false;
+			await handleStartPM2();
+		} catch (err) {
+			lines = [{
+				step: 'error',
+				line: `Connection error: ${err instanceof Error ? err.message : 'Unknown error'}`,
+				isError: true,
+				isComplete: true,
+			}];
+			isRunning = false;
+			importSuccess = false;
+			view = 'env';
 		}
 	}
 
@@ -280,8 +514,10 @@ import type { GitHubRepoDTO } from '$lib/github/github.types';
 		const labels: Record<string, string> = {
 			'clone': 'Clone',
 			'install': 'Install',
+			'approve': 'Approve',
 			'build': 'Build',
 			'ecosystem': 'Ecosystem',
+			'env': 'Env',
 			'pm2-start': 'PM2 Start',
 			'complete': 'Complete',
 			'error': 'Error',
@@ -498,7 +734,7 @@ import type { GitHubRepoDTO } from '$lib/github/github.types';
 			{#if view === 'cloning' || view === 'starting'}
 				<!-- Step indicators -->
 				<div class="flex gap-sm px-lg pt-md">
-					{#each ['clone', 'install', 'build', 'ecosystem'] as step}
+					{#each ['clone', 'install', 'approve', 'build', 'ecosystem'] as step}
 						<div
 							class="flex items-center gap-xs px-sm py-2xs rounded-md text-caption font-medium"
 							class:rounded-md={true}
@@ -553,6 +789,37 @@ import type { GitHubRepoDTO } from '$lib/github/github.types';
 				</div>
 			{/if}
 
+			<!-- Approval Pending View -->
+			{#if approvalPending}
+				<div class="px-lg pt-md">
+					<div
+						class="rounded-lg p-md"
+						style="background: rgba(255, 215, 64, 0.1); border: 1px solid rgba(255, 215, 64, 0.3);"
+					>
+						<p class="text-caption font-semibold" style="color: #FFD740; margin-bottom: 8px;">
+							Native builds require approval
+						</p>
+						<p class="text-caption" style="color: var(--text-secondary); margin-bottom: 12px;">
+							These packages need to compile native code. Approve to continue:
+						</p>
+						<ul class="pl-lg list-disc" style="color: var(--text-primary); margin-bottom: 16px;">
+							{#each approvalPackages as pkg}
+								<li class="font-mono text-code">{pkg}</li>
+							{/each}
+						</ul>
+						<div class="flex gap-sm">
+							<button
+								class="btn-primary px-4 py-2 text-caption font-semibold"
+								style="background: #FFD740; color: #1a1a2e;"
+								onclick={handleApproveAndContinue}
+							>
+								Approve & Continue
+							</button>
+						</div>
+					</div>
+				</div>
+			{/if}
+
 			<!-- Selecting Ecosystem View -->
 			{#if view === 'selecting' && !isRunning}
 				<div class="p-lg space-y-md">
@@ -583,17 +850,17 @@ import type { GitHubRepoDTO } from '$lib/github/github.types';
 							</div>
 						</div>
 					{:else}
-						<div
-							class="p-md rounded-lg text-center"
-							style="background: rgba(255, 215, 64, 0.1); border: 1px solid rgba(255, 215, 64, 0.3);"
-						>
-							<p class="text-caption" style="color: #FFD740;">
-								No ecosystem files were detected in the repository.
-							</p>
-							<p class="text-caption-xs mt-xs" style="color: var(--text-muted);">
-								You can try specifying a file manually or the application may use a different startup method.
-							</p>
-						</div>
+					<div
+						class="p-md rounded-lg text-center"
+						style="background: rgba(255, 215, 64, 0.1); border: 1px solid rgba(255, 215, 64, 0.3);"
+					>
+						<p class="text-caption" style="color: #FFD740;">
+							No ecosystem files were detected in the repository.
+						</p>
+						<p class="text-caption-xs mt-xs" style="color: var(--text-muted);">
+							Create an ecosystem.config.js or pm2.config.js in the repository root to use PM2 start.
+						</p>
+					</div>
 					{/if}
 				</div>
 
@@ -610,10 +877,124 @@ import type { GitHubRepoDTO } from '$lib/github/github.types';
 						type="button"
 						class="btn-primary px-4 py-2 text-caption font-semibold"
 						style="background: #38CDFF; color: #1a1a2e;"
-						onclick={handleStartPM2}
-						disabled={ecosystemFiles.length > 0 && !selectedEcosystemFile}
+						onclick={() => { view = 'env'; }}
+						disabled={!selectedEcosystemFile}
+						title={!selectedEcosystemFile ? 'No ecosystem file selected' : ''}
 					>
 						Start with PM2
+					</button>
+				</div>
+			{/if}
+
+			<!-- Environment Variables View -->
+			{#if view === 'env'}
+				<div class="p-lg space-y-md">
+					<p class="text-caption" style="color: var(--text-secondary);">
+						Add environment variables before starting PM2. This step is optional.
+					</p>
+
+					<!-- Mode Toggle -->
+					<div class="flex gap-sm">
+						<button
+							type="button"
+							class="flex-1 px-3 py-2 text-caption rounded-lg border"
+							style={cn(
+								envMode === 'paste' ? 'background: rgba(56, 205, 255, 0.1); border-color: #38CDFF; color: #38CDFF;' : 'background: var(--bg-base); border-color: var(--border-color); color: var(--text-secondary);'
+							)}
+							onclick={() => envMode = 'paste'}
+						>
+							Paste Variables
+						</button>
+						<button
+							type="button"
+							class="flex-1 px-3 py-2 text-caption rounded-lg border"
+							style={cn(
+								envMode === 'upload' ? 'background: rgba(56, 205, 255, 0.1); border-color: #38CDFF; color: #38CDFF;' : 'background: var(--bg-base); border-color: var(--border-color); color: var(--text-secondary);'
+							)}
+							onclick={() => envMode = 'upload'}
+						>
+							Upload .env File
+						</button>
+					</div>
+
+					<!-- Paste Mode -->
+					{#if envMode === 'paste'}
+						<textarea
+							bind:value={envText}
+							placeholder="DB_HOST=localhost&#10;DB_PORT=5432&#10;API_KEY=secret"
+							class="w-full h-48 p-md rounded-lg font-mono text-code resize-y"
+							style="background: var(--bg-base); border: 1px solid var(--border-color); color: var(--text-primary);"
+							spellcheck="false"
+						></textarea>
+					{/if}
+
+					<!-- Upload Mode -->
+					{#if envMode === 'upload'}
+						<div
+							class="p-lg rounded-lg text-center border-2 border-dashed"
+							style="border-color: var(--border-color);"
+						>
+							<input
+								type="file"
+								accept=".env,.env.*"
+								onchange={handleFileUpload}
+								class="block w-full text-caption"
+								style="color: var(--text-secondary);"
+							/>
+							{#if envFileCount > 0}
+								<p class="text-caption mt-sm" style="color: #00E676;">
+									✓ File loaded — variables appear above in paste mode
+								</p>
+							{/if}
+						</div>
+					{/if}
+
+					<!-- Log output (if any) -->
+					{#if lines.length > 0}
+						<div
+							class="rounded-lg p-md font-mono text-code max-h-[200px] overflow-y-auto"
+							style="background: var(--bg-base); border: 1px solid var(--border-color);"
+						>
+							{#each lines as log}
+								<div
+									class="py-2xs"
+									style={cn(
+										'color: var(--text-secondary);',
+										log.isError ? 'color: #FF5252;' : '',
+										log.line.includes('Wrote') ? 'color: #00E676; font-weight: 600;' : ''
+									)}
+								>
+									{log.line}
+								</div>
+							{/each}
+						</div>
+					{/if}
+				</div>
+
+				<!-- Env Actions -->
+				<div class="flex justify-end gap-sm p-lg pt-0">
+					<button
+						type="button"
+						class="btn-secondary px-4 py-2 text-caption"
+						onclick={() => { view = 'selecting'; }}
+					>
+						Back
+					</button>
+					<button
+						type="button"
+						class="btn-secondary px-4 py-2 text-caption"
+						onclick={async () => { view = 'starting'; await handleStartPM2(); }}
+					>
+						Skip &amp; Start
+					</button>
+					<button
+						type="button"
+						class="btn-primary px-4 py-2 text-caption font-semibold"
+						style="background: #38CDFF; color: #1a1a2e;"
+						onclick={handleWriteEnv}
+						disabled={!envText.trim() && Object.keys(envVars).length === 0}
+					>
+						Write .env &amp; Start
 					</button>
 				</div>
 			{/if}
@@ -622,7 +1003,7 @@ import type { GitHubRepoDTO } from '$lib/github/github.types';
 			{#if view === 'starting'}
 				<!-- Additional step indicator for PM2 Start -->
 				<div class="flex gap-sm px-lg pt-md">
-					{#each ['clone', 'install', 'build', 'ecosystem'] as step}
+					{#each ['clone', 'install', 'approve', 'build', 'ecosystem'] as step}
 						<div
 							class="flex items-center gap-xs px-sm py-2xs rounded-md text-caption font-medium"
 							style={cn(

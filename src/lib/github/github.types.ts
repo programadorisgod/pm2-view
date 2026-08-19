@@ -25,6 +25,7 @@ export interface GitHubRepoDTO {
 	fullName: string;
 	private: boolean;
 	defaultBranch: string;
+	updatedAt: string;
 }
 
 export interface GitHubInstallationInfo {

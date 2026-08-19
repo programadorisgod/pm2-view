@@ -65,6 +65,17 @@ export class GitHubSetupService {
 			// Already deleted — idempotent
 			return;
 		}
+
+		// First delete from GitHub, then remove local record
+		try {
+			await this.appClient.deleteInstallation(installationId);
+		} catch (err) {
+			logger.warn('[github-setup] Failed to delete installation on GitHub, removing local record anyway', {
+				installationId,
+				error: err,
+			});
+		}
+
 		await this.installationRepo.delete(installationId);
 		logger.info('GitHub installation revoked', { installationId });
 	}

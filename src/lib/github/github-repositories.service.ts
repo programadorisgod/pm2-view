@@ -25,7 +25,8 @@ export class GitHubRepositoriesService {
 				name: repo.name,
 				fullName: repo.fullName,
 				private: repo.private,
-				defaultBranch: repo.defaultBranch
+				defaultBranch: repo.defaultBranch,
+				updatedAt: repo.updatedAt
 			}));
 		} catch (err) {
 			if (err instanceof GitHubInstallationRevoked) {

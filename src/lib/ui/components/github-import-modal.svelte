@@ -49,7 +49,8 @@ import type { GitHubRepoDTO } from '$lib/github/github.types';
 	let envMode = $state<'upload' | 'paste'>('paste');
 	let envText = $state('');
 	let envVars = $state<Record<string, string>>({});
-	let envFileCount = $state(0);
+	let envFileName = $state('');
+	let envFileInput = $state<HTMLInputElement | undefined>();
 
 	$effect(() => {
 		if (open && repository) {
@@ -71,7 +72,7 @@ import type { GitHubRepoDTO } from '$lib/github/github.types';
 		envMode = 'paste';
 		envText = '';
 		envVars = {};
-		envFileCount = 0;
+		envFileName = '';
 			dialogRef?.showModal();
 		} else {
 			dialogRef?.close();
@@ -343,7 +344,7 @@ import type { GitHubRepoDTO } from '$lib/github/github.types';
 		const reader = new FileReader();
 		reader.onload = () => {
 			envText = reader.result as string;
-			envFileCount = 1;
+			envFileName = file.name;
 		};
 		reader.readAsText(file);
 	}
@@ -576,7 +577,7 @@ import type { GitHubRepoDTO } from '$lib/github/github.types';
 
 		<!-- Modal content -->
 		<div
-			class="relative w-full max-w-2xl rounded-xl shadow-2xl"
+			class="relative w-full max-w-2xl max-h-[85vh] overflow-y-auto scrollbar-thin rounded-xl shadow-2xl"
 			style="background: var(--bg-surface); border: 1px solid var(--border-color);"
 		>
 			<!-- Header -->
@@ -944,15 +945,32 @@ import type { GitHubRepoDTO } from '$lib/github/github.types';
 							style="border-color: var(--border-color);"
 						>
 							<input
+								bind:this={envFileInput}
 								type="file"
 								accept=".env,.env.*"
 								onchange={handleFileUpload}
-								class="block w-full text-caption"
-								style="color: var(--text-secondary);"
+								class="hidden"
 							/>
-							{#if envFileCount > 0}
-								<p class="text-caption mt-sm" style="color: #00E676;">
-									✓ File loaded — variables appear above in paste mode
+							<svg class="w-8 h-8 mx-auto mb-sm" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="color: var(--text-muted);">
+								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M7 16a4 4 0 01-.88-7.9A5 5 0 1115.9 6H16a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/>
+							</svg>
+							<button
+								type="button"
+								class="btn-secondary px-4 py-2 text-caption"
+								onclick={() => envFileInput?.click()}
+							>
+								Choose .env file
+							</button>
+							{#if envFileName}
+								<p class="font-mono text-caption mt-md" style="color: var(--text-primary);">
+									<span style="color: #00E676;">✓</span> {envFileName}
+								</p>
+								<p class="text-caption-xs mt-xs" style="color: var(--text-muted);">
+									Variables loaded — switch to Paste mode to review or edit them
+								</p>
+							{:else}
+								<p class="text-caption-xs mt-sm" style="color: var(--text-muted);">
+									Accepted: .env, .env.local, .env.production, etc.
 								</p>
 							{/if}
 						</div>

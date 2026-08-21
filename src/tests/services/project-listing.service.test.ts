@@ -25,6 +25,7 @@ function createMockProjectRepo(overrides: Partial<IProjectRepository> = {}): IPr
 	return {
 		getAll: vi.fn().mockResolvedValue([]),
 		getById: vi.fn().mockResolvedValue(null),
+		getByGithubRepo: vi.fn().mockResolvedValue([]),
 		create: vi.fn(),
 		update: vi.fn(),
 		delete: vi.fn(),
@@ -80,6 +81,9 @@ function createDBProject(overrides: Partial<Project> = {}): Project {
 		pm2Name: 'test-app',
 		description: null,
 		targetPath: null,
+		githubRepo: null,
+		deployBranch: 'main',
+		autoDeployEnabled: false,
 		createdAt: new Date(),
 		...overrides
 	};

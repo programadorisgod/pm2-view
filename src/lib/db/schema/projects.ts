@@ -16,6 +16,9 @@ export const projects = sqliteTable('projects', {
 	pm2Name: text('pm2_name').notNull(),
 	description: text('description'),
 	targetPath: text('target_path'),
+	githubRepo: text('github_repo'),
+	deployBranch: text('deploy_branch').notNull().default('main'),
+	autoDeployEnabled: integer('auto_deploy_enabled', { mode: 'boolean' }).notNull().default(false),
 	createdAt: integer('created_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`)
 });
 

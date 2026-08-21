@@ -50,6 +50,13 @@
       "when": 1777325000000,
       "tag": "0006_add_target_path_to_projects",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "6",
+      "when": 1787325000000,
+      "tag": "0007_add_auto_deploy",
+      "breakpoints": true
     }
   ]
 }

@@ -11,3 +11,4 @@ export { teams, teamsRelations, teamMembers, teamMembersRelations, type Team, ty
 export { auditLogs, auditLogsRelations, type AuditLog, type NewAuditLog } from './audit-logs';
 export { deployCommands, type DeployCommand, type NewDeployCommand } from './deploy-commands';
 export { githubInstallations, githubInstallationsRelations, type GitHubInstallation, type NewGitHubInstallation } from './github-installations';
+export { deployments, DEPLOYMENT_STATUSES, type Deployment, type NewDeployment, type DeploymentStatus } from './deployments';

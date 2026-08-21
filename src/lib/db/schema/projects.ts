@@ -15,6 +15,7 @@ export const projects = sqliteTable('projects', {
 	name: text('name').notNull(),
 	pm2Name: text('pm2_name').notNull(),
 	description: text('description'),
+	targetPath: text('target_path'),
 	createdAt: integer('created_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`)
 });
 

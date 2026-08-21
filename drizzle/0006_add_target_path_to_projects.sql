@@ -1,0 +1,1 @@
+ALTER TABLE `projects` ADD `target_path` text;

@@ -22,12 +22,14 @@
     name: "",
     pm_id: "",
   });
+  let deleteLoading = $state(false);
   let favoritesExpanded = $state(true);
   let othersExpanded = $state(true);
   let systemModal = $state<{ open: boolean; mode: "save" | "startup" }>({
     open: false,
     mode: "startup",
   });
+  let startingProject = $state<string | null>(null);
 
   let favoriteProcesses = $derived(processes.filter((p) => p.isFavorite));
   let nonFavoriteProcesses = $derived(processes.filter((p) => !p.isFavorite));
@@ -43,6 +45,29 @@
         return "error";
       default:
         return "offline";
+    }
+  }
+
+  async function handleStartFromDB(projectName: string, ecosystemFile: string) {
+    startingProject = projectName;
+    feedback = null;
+    try {
+      const res = await fetch(`${base}/api/projects/start-from-db`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ projectName, ecosystemFile }),
+      });
+      const result = await res.json();
+      if (res.ok && result.success) {
+        feedback = { type: "success", text: result.message || "Process started" };
+        await invalidateAll();
+      } else {
+        feedback = { type: "error", text: result.error || "Failed to start" };
+      }
+    } catch {
+      feedback = { type: "error", text: "Failed to start process" };
+    } finally {
+      startingProject = null;
     }
   }
 
@@ -89,7 +114,7 @@
   }
 
   async function confirmDelete(deleteFiles = false) {
-    deleteModal.open = false;
+    deleteLoading = true;
     feedback = null;
     try {
       const res = await fetch(`${base}/projects/api?action=delete`, {
@@ -103,12 +128,15 @@
           type: "success",
           text: result.message || "Delete successful",
         };
+        deleteModal.open = false;
         await invalidateAll();
       } else {
         feedback = { type: "error", text: result.error || "Delete failed" };
       }
     } catch {
       feedback = { type: "error", text: "Failed to delete" };
+    } finally {
+      deleteLoading = false;
     }
   }
 </script>
@@ -155,7 +183,11 @@
   </div>
 
   {#if feedback}
-    <FeedbackBanner type={feedback.type} message={feedback.text} />
+    <FeedbackBanner
+      type={feedback.type}
+      message={feedback.text}
+      onDismiss={() => (feedback = null)}
+    />
   {/if}
 
   <!-- Favorites collapsible header -->
@@ -286,36 +318,47 @@
 
                 <!-- Actions -->
                 <div class="flex gap-xs flex-wrap">
-                  <a
-                    href="{base}/projects/{process.pm_id}"
-                    class="btn-secondary px-3 py-1 text-caption flex-1 text-center"
-                  >
-                    Details
-                  </a>
+                  {#if process.pm_id === -1 && process.ecosystemFiles?.length}
+                    <!-- Offline project with ecosystem file -->
+                    <button
+                      class="btn-primary px-3 py-1 text-caption flex-1"
+                      disabled={startingProject === process.name}
+                      onclick={() => handleStartFromDB(process.name, process.ecosystemFiles![0])}
+                    >
+                      {startingProject === process.name ? "Starting..." : "Start"}
+                    </button>
+                  {:else}
+                    <a
+                      href="{base}/projects/{process.pm_id}"
+                      class="btn-secondary px-3 py-1 text-caption flex-1 text-center"
+                    >
+                      Details
+                    </a>
 
-                  {#if process.status === "online"}
-                    <button
-                      class="btn-secondary px-3 py-1 text-caption"
-                      onclick={() =>
-                        handleAction(process.pm_id.toString(), "restart")}
-                    >
-                      Restart
-                    </button>
-                    <button
-                      class="btn-secondary px-3 py-1 text-caption"
-                      onclick={() =>
-                        handleAction(process.pm_id.toString(), "stop")}
-                    >
-                      Stop
-                    </button>
-                  {:else if process.status === "stopped"}
-                    <button
-                      class="btn-secondary px-3 py-1 text-caption"
-                      onclick={() =>
-                        handleAction(process.pm_id.toString(), "restart")}
-                    >
-                      Start
-                    </button>
+                    {#if process.status === "online"}
+                      <button
+                        class="btn-secondary px-3 py-1 text-caption"
+                        onclick={() =>
+                          handleAction(process.pm_id.toString(), "restart")}
+                      >
+                        Restart
+                      </button>
+                      <button
+                        class="btn-secondary px-3 py-1 text-caption"
+                        onclick={() =>
+                          handleAction(process.pm_id.toString(), "stop")}
+                      >
+                        Stop
+                      </button>
+                    {:else if process.status === "stopped"}
+                      <button
+                        class="btn-secondary px-3 py-1 text-caption"
+                        onclick={() =>
+                          handleAction(process.pm_id.toString(), "restart")}
+                      >
+                        Start
+                      </button>
+                    {/if}
                   {/if}
 
                   <button
@@ -416,36 +459,47 @@
 
               <!-- Actions -->
               <div class="flex gap-xs flex-wrap">
-                <a
-                  href="{base}/projects/{process.pm_id}"
-                  class="btn-secondary px-3 py-1 text-caption flex-1 text-center"
-                >
-                  Details
-                </a>
+                {#if process.pm_id === -1 && process.ecosystemFiles?.length}
+                  <!-- Offline project with ecosystem file -->
+                  <button
+                    class="btn-primary px-3 py-1 text-caption flex-1"
+                    disabled={startingProject === process.name}
+                    onclick={() => handleStartFromDB(process.name, process.ecosystemFiles![0])}
+                  >
+                    {startingProject === process.name ? "Starting..." : "Start"}
+                  </button>
+                {:else}
+                  <a
+                    href="{base}/projects/{process.pm_id}"
+                    class="btn-secondary px-3 py-1 text-caption flex-1 text-center"
+                  >
+                    Details
+                  </a>
 
-                {#if process.status === "online"}
-                  <button
-                    class="btn-secondary px-3 py-1 text-caption"
-                    onclick={() =>
-                      handleAction(process.pm_id.toString(), "restart")}
-                  >
-                    Restart
-                  </button>
-                  <button
-                    class="btn-secondary px-3 py-1 text-caption"
-                    onclick={() =>
-                      handleAction(process.pm_id.toString(), "stop")}
-                  >
-                    Stop
-                  </button>
-                {:else if process.status === "stopped"}
-                  <button
-                    class="btn-secondary px-3 py-1 text-caption"
-                    onclick={() =>
-                      handleAction(process.pm_id.toString(), "restart")}
-                  >
-                    Start
-                  </button>
+                  {#if process.status === "online"}
+                    <button
+                      class="btn-secondary px-3 py-1 text-caption"
+                      onclick={() =>
+                        handleAction(process.pm_id.toString(), "restart")}
+                    >
+                      Restart
+                    </button>
+                    <button
+                      class="btn-secondary px-3 py-1 text-caption"
+                      onclick={() =>
+                        handleAction(process.pm_id.toString(), "stop")}
+                    >
+                      Stop
+                    </button>
+                  {:else if process.status === "stopped"}
+                    <button
+                      class="btn-secondary px-3 py-1 text-caption"
+                      onclick={() =>
+                        handleAction(process.pm_id.toString(), "restart")}
+                    >
+                      Start
+                    </button>
+                  {/if}
                 {/if}
 
                 <button
@@ -467,6 +521,7 @@
 <ConfirmDeleteModal
   open={deleteModal.open}
   itemName={deleteModal.name}
+  loading={deleteLoading}
   onConfirm={confirmDelete}
   onCancel={() => {
     deleteModal.open = false;

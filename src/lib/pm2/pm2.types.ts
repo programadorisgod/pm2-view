@@ -22,6 +22,11 @@ export interface PM2Log {
 	type: 'out' | 'err';
 	data: string;
 	timestamp: Date;
+	/**
+	 * False when the log line carried no embedded timestamp and `timestamp`
+	 * is a placeholder (Unix epoch) used only for stable sorting.
+	 */
+	hasTimestamp: boolean;
 	level: 'info' | 'warn' | 'error';
 }
 

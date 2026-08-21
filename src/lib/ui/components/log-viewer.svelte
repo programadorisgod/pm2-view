@@ -14,6 +14,7 @@
       type: 'out' | 'err';
       data: string;
       timestamp: Date | string;
+      hasTimestamp?: boolean;
       level: 'info' | 'warn' | 'error';
     }>;
   } = $props();
@@ -23,6 +24,7 @@
     type: 'out' | 'err';
     data: string;
     timestamp: Date;
+    hasTimestamp: boolean;
     level: 'info' | 'warn' | 'error';
     dismissed: boolean;
   };
@@ -31,6 +33,7 @@
     type: 'out' | 'err';
     data: string;
     timestamp: Date | string;
+    hasTimestamp?: boolean;
     level: 'info' | 'warn' | 'error';
   };
 
@@ -61,6 +64,7 @@
         type: raw.type,
         data: raw.data,
         timestamp: ts,
+        hasTimestamp: raw.hasTimestamp ?? ts.getTime() > 0,
         level: raw.level,
         dismissed: false,
       };
@@ -204,7 +208,7 @@
       const url = `${base}/projects/${pmId}/logs?lines=${lines}`;
       const res = await fetch(url);
       const text = await res.text();
-      let result: { success: boolean; logs: Array<{ type: 'out' | 'err'; data: string; timestamp: Date | string; level: 'info' | 'warn' | 'error' }> };
+      let result: { success: boolean; logs: Array<{ type: 'out' | 'err'; data: string; timestamp: Date | string; hasTimestamp?: boolean; level: 'info' | 'warn' | 'error' }> };
       try {
         result = JSON.parse(text);
       } catch {
@@ -546,7 +550,7 @@
                 {log.level}
               </span>
               <span class="shrink-0 text-xs ml-3 whitespace-nowrap font-medium" style="color: var(--text-secondary);">
-                {formatTimestamp(log.timestamp)}
+                {log.hasTimestamp ? formatTimestamp(log.timestamp) : '—'}
               </span>
               <span
                 class="shrink-0 text-[11px] uppercase ml-3 font-medium"
@@ -625,7 +629,7 @@
                 class="py-1"
                 style="color: var(--text-primary);"
               >
-                <span class="text-xs mr-2 font-medium" style="color: var(--text-secondary);">{formatTimestamp(log.timestamp)}</span>
+                <span class="text-xs mr-2 font-medium" style="color: var(--text-secondary);">{log.hasTimestamp ? formatTimestamp(log.timestamp) : '—'}</span>
                 {stripTimestamp(log.data)}
               </div>
             {/each}
@@ -682,7 +686,7 @@
                 {#if isNew}
                   <span class="shrink-0 text-[10px] font-bold uppercase mr-2 mt-0.5 px-1.5 py-0.5 rounded" style="background: rgba(255, 215, 64, 0.15); color: #FFD740;">NEW</span>
                 {/if}
-                <span class="text-xs mr-2 font-medium" style="color: var(--text-secondary);">{formatTimestamp(log.timestamp)}</span>
+                <span class="text-xs mr-2 font-medium" style="color: var(--text-secondary);">{log.hasTimestamp ? formatTimestamp(log.timestamp) : '—'}</span>
                 <span class="flex-1 min-w-0 whitespace-pre-wrap break-all">{stripTimestamp(log.data)}</span>
                 {#if log.dismissed && showDismissed}
                   <button

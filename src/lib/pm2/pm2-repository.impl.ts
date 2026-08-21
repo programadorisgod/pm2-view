@@ -92,14 +92,16 @@ export class PM2Repository implements IPM2Repository {
 		if (paths.out && existsSync(paths.out)) {
 			const logLines = await this.readLogFile(paths.out, lines);
 			for (const line of logLines) {
-				result.push({ type: 'out', data: line, timestamp: parseTimestamp(line), level: classifyLogLevel(line, 'out') });
+				const ts = parseTimestamp(line);
+				result.push({ type: 'out', data: line, timestamp: ts ?? new Date(0), hasTimestamp: ts !== null, level: classifyLogLevel(line, 'out') });
 			}
 		}
 
 		if (paths.err && existsSync(paths.err)) {
 			const logLines = await this.readLogFile(paths.err, lines);
 			for (const line of logLines) {
-				result.push({ type: 'err', data: line, timestamp: parseTimestamp(line), level: classifyLogLevel(line, 'err') });
+				const ts = parseTimestamp(line);
+				result.push({ type: 'err', data: line, timestamp: ts ?? new Date(0), hasTimestamp: ts !== null, level: classifyLogLevel(line, 'err') });
 			}
 		}
 
@@ -137,9 +139,10 @@ export class PM2Repository implements IPM2Repository {
 /**
  * Extracts timestamp from a PM2 log line.
  * PM2 format: "2026-04-28 15:02:14: message..." or "[out] 2026-04-28 15:02:14: ..."
- * Falls back to Unix epoch if no timestamp is found.
+ * Returns null if no timestamp is found (PM2 only prefixes timestamps when
+ * the process is started with the `--time` option).
  */
-function parseTimestamp(line: string): Date {
+function parseTimestamp(line: string): Date | null {
 	// Match YYYY-MM-DD HH:MM:SS pattern (with optional leading prefix like "[out] ")
 	const match = line.match(/(\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2})/);
 	if (match) {
@@ -148,8 +151,7 @@ function parseTimestamp(line: string): Date {
 			return parsed;
 		}
 	}
-	// Fallback: epoch (will sort before any real timestamp)
-	return new Date(0);
+	return null;
 }
 
 /**

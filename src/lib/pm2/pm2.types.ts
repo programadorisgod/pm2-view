@@ -22,6 +22,7 @@ export interface PM2Log {
 	type: 'out' | 'err';
 	data: string;
 	timestamp: Date;
+	level: 'info' | 'warn' | 'error';
 }
 
 export interface ProcessWithStatus extends PM2Process {

@@ -11,6 +11,7 @@ export interface FindByAccessOptions {
 export interface IProjectRepository {
 	getAll(): Promise<Project[]>;
 	getById(id: string): Promise<Project | null>;
+	getByGithubRepo(githubRepo: string): Promise<Project[]>;
 	create(project: Omit<NewProject, 'id' | 'createdAt'>): Promise<Project>;
 	update(id: string, data: Partial<Omit<NewProject, 'id' | 'createdAt'>>): Promise<Project>;
 	delete(id: string): Promise<void>;

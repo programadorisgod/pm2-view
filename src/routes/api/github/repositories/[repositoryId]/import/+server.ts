@@ -182,6 +182,7 @@ export const POST: RequestHandler = async ({ params, request, getClientAddress }
 					isComplete: true,
 					success: true,
 					ecosystemFiles: result.ecosystemFiles,
+					ecosystemAppNames: result.ecosystemAppNames,
 					targetPath: result.targetPath,
 					processName: result.processName,
 				}));

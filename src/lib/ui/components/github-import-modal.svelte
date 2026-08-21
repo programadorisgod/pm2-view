@@ -8,11 +8,13 @@ import type { GitHubRepoDTO } from '$lib/github/github.types';
 	let {
 		open = false,
 		repository,
+		reposPath = '/opt/repos',
 		onClose,
 		onSuccess,
 	}: {
 		open: boolean;
 		repository: GitHubRepoDTO | null;
+		reposPath?: string;
 		onClose: () => void;
 		onSuccess?: (processName: string) => void;
 	} = $props();
@@ -52,7 +54,7 @@ import type { GitHubRepoDTO } from '$lib/github/github.types';
 	$effect(() => {
 		if (open && repository) {
 			// Initialize defaults
-			targetPath = `/opt/repos/${repository.name}`;
+			targetPath = `${reposPath}/${repository.name}`;
 			processName = repository.name;
 			lines = [];
 			ecosystemFiles = [];
@@ -201,6 +203,13 @@ import type { GitHubRepoDTO } from '$lib/github/github.types';
 								if (data.success) {
 									targetPath = data.targetPath || targetPath;
 									ecosystemFiles = data.ecosystemFiles || [];
+
+									// Use ecosystem app name as default process name if available
+									const ecosystemAppNames = data.ecosystemAppNames || [];
+									if (ecosystemAppNames.length > 0) {
+										processName = ecosystemAppNames[0];
+									}
+
 									if (ecosystemFiles.length > 0) {
 										selectedEcosystemFile = ecosystemFiles[0];
 										view = 'selecting';

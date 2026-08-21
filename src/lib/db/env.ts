@@ -9,6 +9,7 @@ export interface EnvVars {
 	GITHUB_PRIVATE_KEY: string;
 	GITHUB_WEBHOOK_SECRET: string;
 	GITHUB_APP_SLUG: string;
+	REPOS_PATH: string;
 }
 
 let cached: EnvVars | null = null;
@@ -26,6 +27,7 @@ export function getEnv(): EnvVars {
 	let GITHUB_PRIVATE_KEY = '';
 	let GITHUB_WEBHOOK_SECRET = '';
 	let GITHUB_APP_SLUG = '';
+	let REPOS_PATH = '/opt/repos';
 
 	// Try SvelteKit's $env/dynamic/private first (works in server runtime)
 	try {
@@ -41,6 +43,7 @@ export function getEnv(): EnvVars {
 		GITHUB_PRIVATE_KEY = env.GITHUB_PRIVATE_KEY || '';
 		GITHUB_WEBHOOK_SECRET = env.GITHUB_WEBHOOK_SECRET || '';
 		GITHUB_APP_SLUG = env.GITHUB_APP_SLUG || '';
+		REPOS_PATH = env.REPOS_PATH || '/opt/repos';
 	} catch {
 		// Fallback for tests and non-SvelteKit contexts
 		TURSO_DATABASE_URL = process.env.TURSO_DATABASE_URL || '';
@@ -53,6 +56,7 @@ export function getEnv(): EnvVars {
 		GITHUB_PRIVATE_KEY = process.env.GITHUB_PRIVATE_KEY || '';
 		GITHUB_WEBHOOK_SECRET = process.env.GITHUB_WEBHOOK_SECRET || '';
 		GITHUB_APP_SLUG = process.env.GITHUB_APP_SLUG || '';
+		REPOS_PATH = process.env.REPOS_PATH || '/opt/repos';
 	}
 
 	cached = {
@@ -65,7 +69,8 @@ export function getEnv(): EnvVars {
 		GITHUB_CLIENT_SECRET,
 		GITHUB_PRIVATE_KEY,
 		GITHUB_WEBHOOK_SECRET,
-		GITHUB_APP_SLUG
+		GITHUB_APP_SLUG,
+		REPOS_PATH
 	};
 
 	return cached;

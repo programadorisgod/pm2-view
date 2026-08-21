@@ -1,5 +1,8 @@
 import { json, type RequestHandler } from '@sveltejs/kit';
 import { auth } from '$lib/auth';
+import { db } from '$lib/db';
+import { projects } from '$lib/db/schema';
+import { eq } from 'drizzle-orm';
 import { rateLimiter } from '$lib/rate-limiter';
 import { logger } from '$lib/logger';
 import { GitHubImportPipelineService, type ImportStep } from '$lib/github/github-import-pipeline.service';
@@ -104,6 +107,57 @@ export const POST: RequestHandler = async ({ request, getClientAddress }) => {
 				);
 
 				if (result.success) {
+					// Save project with targetPath to DB
+					try {
+						// First check if a project with this targetPath already exists (consolidate)
+						let project = await db.query.projects.findFirst({
+							where: eq(projects.targetPath, targetPath),
+							columns: { id: true, pm2Name: true }
+						});
+
+						if (project) {
+							// Update existing project with new pm2Name and targetPath
+							await db.update(projects)
+								.set({
+									pm2Name: sanitizedProcessName,
+									name: sanitizedProcessName,
+									targetPath,
+								})
+								.where(eq(projects.id, project.id));
+						} else {
+							// Check by pm2Name as fallback
+							project = await db.query.projects.findFirst({
+								where: eq(projects.pm2Name, sanitizedProcessName),
+								columns: { id: true }
+							});
+
+							if (!project) {
+								// Create new project record
+								await db.insert(projects).values({
+									id: crypto.randomUUID(),
+									userId: session.user.id,
+									name: sanitizedProcessName,
+									pm2Name: sanitizedProcessName,
+									description: `PM2 process: ${sanitizedProcessName}`,
+									targetPath,
+								});
+							} else {
+								// Update existing project with targetPath
+								await db.update(projects)
+									.set({ targetPath })
+									.where(eq(projects.id, project.id));
+							}
+						}
+					} catch (err) {
+						// Non-critical: log but don't fail the start
+						logger.error('Failed to save project targetPath', {
+							userId: session.user.id,
+							processName: sanitizedProcessName,
+							targetPath,
+							error: err,
+						});
+					}
+
 					safeEnqueue(JSON.stringify({
 						step: 'complete',
 						line: 'Process started successfully',

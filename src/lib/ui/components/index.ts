@@ -12,3 +12,5 @@ export { default as DeployConfigForm } from './deploy-config-form.svelte';
 export { default as CommandSelector } from './command-selector.svelte';
 export { default as PM2SystemModal } from './pm2-system-modal.svelte';
 export { default as GitHubImportModal } from './github-import-modal.svelte';
+export { default as LogViewer } from './log-viewer.svelte';
+export { default as DateTimePicker } from './date-time-picker.svelte';

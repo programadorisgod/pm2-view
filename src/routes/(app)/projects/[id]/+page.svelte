@@ -7,6 +7,7 @@
     FeedbackBanner,
     DeployModal,
     DeployConfigForm,
+    LogViewer,
   } from "$lib/ui/components";
   import { base } from "$app/paths";
   import type { PageData } from "./$types";
@@ -16,7 +17,6 @@
 
   let {
     process,
-    logs: initialLogs,
     isFavorite: initialIsFavorite,
     deployConfig,
   } = $derived(data);
@@ -34,6 +34,7 @@
     null,
   );
   let deleteModal = $state({ open: false });
+  let deleteLoading = $state(false);
   let restartModal = $state({ open: false });
   let stopModal = $state({ open: false });
   let deployModal = $state({ open: false });
@@ -55,206 +56,6 @@
       // Silent fail
     }
   }
-
-  type LogEntry = { type: "out" | "err"; data: string; timestamp: Date };
-
-  // JSON (polling/load-more) serializes Date timestamps as ISO strings,
-  // while SSR (devalue) preserves them as Date objects. Normalize so
-  // timestamp.getTime() always works.
-  function toLogEntry(raw: {
-    type: "out" | "err";
-    data: string;
-    timestamp: Date | string;
-  }): LogEntry {
-    return {
-      type: raw.type,
-      data: raw.data,
-      timestamp:
-        raw.timestamp instanceof Date ? raw.timestamp : new Date(raw.timestamp),
-    };
-  }
-
-  let logs = $state<LogEntry[]>([]);
-  let loadedLines = $state(50);
-  let loadingMore = $state(false);
-  let logPollIntervalMs = 3000;
-  let logPollTimer: ReturnType<typeof setInterval> | null = null;
-  let errBaseline = $state<number | null>(null);
-  let clearingErrLogs = $state(false);
-
-  $effect(() => {
-    if (initialLogs && initialLogs.length > 0) {
-      logs = initialLogs.map(toLogEntry);
-    }
-  });
-
-  async function loadMoreLogs() {
-    loadingMore = true;
-    const newCount = loadedLines + 200;
-    try {
-      const res = await fetch(
-        `${base}/projects/${process.pm_id}/logs?lines=${newCount}`,
-      );
-      const result = await res.json();
-      if (result.success) {
-        logs = result.logs.map(toLogEntry);
-        loadedLines = newCount;
-      }
-    } catch {
-      // Silent fail
-    } finally {
-      loadingMore = false;
-    }
-  }
-
-  async function pollLogs() {
-    if (loadingMore) return;
-    try {
-      const res = await fetch(
-        `${base}/projects/${process.pm_id}/logs?lines=${loadedLines}`,
-      );
-      const result = await res.json();
-      if (result.success) {
-        logs = result.logs.map(toLogEntry);
-      }
-    } catch {
-      // Silent fail
-    }
-  }
-
-  // Derived: split logs by type (repository already sorts chronologically)
-  let outLogs = $derived(logs.filter((l) => l.type === "out"));
-  let errLogs = $derived(logs.filter((l) => l.type === "err"));
-  let newErrLogs = $derived(
-    errLogs.filter(
-      (l) => errBaseline !== null && l.timestamp.getTime() > errBaseline,
-    ),
-  );
-
-  function errSeenKey() {
-    return `pm2view:err:seen:${process.pm_id}`;
-  }
-
-  // Sets the "seen" baseline for errors: the first time the Logs tab is
-  // opened, current errors become the baseline; afterwards only errors newer
-  // than the baseline are highlighted as new.
-  function ensureErrBaseline() {
-    if (errBaseline !== null) return;
-    try {
-      const stored = sessionStorage.getItem(errSeenKey());
-      if (stored !== null) {
-        const parsed = Number(stored);
-        if (!Number.isNaN(parsed)) {
-          errBaseline = parsed;
-          return;
-        }
-      }
-    } catch {
-      // Storage unavailable — fall through to fresh baseline
-    }
-    const maxTs = errLogs.reduce(
-      (max, l) => Math.max(max, l.timestamp.getTime()),
-      0,
-    );
-    errBaseline = maxTs;
-    try {
-      sessionStorage.setItem(errSeenKey(), String(maxTs));
-    } catch {
-      // Storage unavailable — ignore
-    }
-  }
-
-  function markErrorsSeen() {
-    const maxTs = errLogs.reduce(
-      (max, l) => Math.max(max, l.timestamp.getTime()),
-      0,
-    );
-    errBaseline = maxTs;
-    try {
-      sessionStorage.setItem(errSeenKey(), String(maxTs));
-    } catch {
-      // Storage unavailable — ignore
-    }
-  }
-
-  async function clearErrLogs() {
-    clearingErrLogs = true;
-    try {
-      const res = await fetch(
-        `${base}/projects/${process.pm_id}/logs?stream=err`,
-        { method: "DELETE" },
-      );
-      const result = await res.json();
-      if (res.ok && result.success) {
-        logs = logs.filter((l) => l.type !== "err");
-        markErrorsSeen();
-      } else {
-        feedback = {
-          type: "error",
-          text: result.message || "Failed to clear error logs",
-        };
-      }
-    } catch {
-      feedback = { type: "error", text: "Failed to clear error logs" };
-    } finally {
-      clearingErrLogs = false;
-    }
-  }
-
-  // Scroll containers
-  let outContainer: HTMLDivElement | undefined = $state();
-  let errContainer: HTMLDivElement | undefined = $state();
-
-  // Track if user has scrolled up (for showing scroll-to-bottom buttons)
-  let outIsScrolledUp = $state(false);
-  let errIsScrolledUp = $state(false);
-
-  function checkScrollPosition(container: HTMLDivElement) {
-    const isScrolledUp = container.scrollTop + container.clientHeight < container.scrollHeight - 20;
-    return isScrolledUp;
-  }
-
-  function onOutScroll() {
-    if (outContainer) outIsScrolledUp = checkScrollPosition(outContainer);
-  }
-
-  function onErrScroll() {
-    if (errContainer) errIsScrolledUp = checkScrollPosition(errContainer);
-  }
-
-  function autoScrollToBottom() {
-    if (outContainer) {
-      const shouldScroll = outContainer.scrollTop + outContainer.clientHeight >= outContainer.scrollHeight - 20;
-      if (shouldScroll) outContainer.scrollTop = outContainer.scrollHeight;
-    }
-    if (errContainer) {
-      const shouldScroll = errContainer.scrollTop + errContainer.clientHeight >= errContainer.scrollHeight - 20;
-      if (shouldScroll) errContainer.scrollTop = errContainer.scrollHeight;
-    }
-  }
-
-  function forceScrollToBottom() {
-    if (outContainer) outContainer.scrollTop = outContainer.scrollHeight;
-    if (errContainer) errContainer.scrollTop = errContainer.scrollHeight;
-  }
-
-  // Auto-scroll when logs change
-  let logsTabFirstRender = $state(true);
-  $effect(() => {
-    if (activeTab === "logs" && logs.length > 0) {
-      requestAnimationFrame(() => {
-        if (logsTabFirstRender) {
-          forceScrollToBottom();
-          logsTabFirstRender = false;
-        } else {
-          autoScrollToBottom();
-        }
-      });
-    }
-    if (activeTab !== "logs") {
-      logsTabFirstRender = true;
-    }
-  });
 
   interface EnvRow {
     key: string;
@@ -355,7 +156,7 @@
   }
 
   async function confirmDelete(deleteFiles = false) {
-    deleteModal.open = false;
+    deleteLoading = true;
     feedback = null;
     try {
       const res = await fetch(`${base}/projects/api?action=delete`, {
@@ -375,26 +176,10 @@
       }
     } catch {
       feedback = { type: "error", text: "Failed to delete" };
+    } finally {
+      deleteLoading = false;
     }
   }
-
-  // Real-time logs via polling while Logs tab is active
-  $effect(() => {
-    if (activeTab !== "logs") {
-      if (logPollTimer) clearInterval(logPollTimer);
-      logPollTimer = null;
-      return;
-    }
-
-    pollLogs();
-    ensureErrBaseline();
-    logPollTimer = setInterval(pollLogs, logPollIntervalMs);
-
-    return () => {
-      if (logPollTimer) clearInterval(logPollTimer);
-      logPollTimer = null;
-    };
-  });
 
   function addEnvRow() {
     envRows = [...envRows, { key: "", value: "" }];
@@ -523,7 +308,11 @@
 
   {#if feedback}
     <div class="mb-md">
-      <FeedbackBanner type={feedback.type} message={feedback.text} />
+      <FeedbackBanner
+        type={feedback.type}
+        message={feedback.text}
+        onDismiss={() => (feedback = null)}
+      />
     </div>
   {/if}
 
@@ -594,6 +383,11 @@
           class="btn-success px-3 py-1.5 text-caption"
           onclick={() => handleAction("start")}>Start</button
         >
+      {:else if process.status === "error"}
+        <button
+          class="btn-secondary px-3 py-1.5 text-caption"
+          onclick={requestRestart}>Restart</button
+        >
       {/if}
       <button
         class="btn-danger px-3 py-1.5 text-caption"
@@ -623,7 +417,6 @@
   </div>
 
   <!-- Tab Content -->
-  {#key activeTab}
     <div class="tab-content">
       {#if activeTab === "overview"}
         <!-- Stats -->
@@ -695,146 +488,11 @@
           </div>
         </Card>
       {:else if activeTab === "logs"}
-        <div class="flex items-center justify-between mb-md">
-          <p class="text-caption" style="color: var(--text-muted);">
-            Showing last {loadedLines} lines · Real-time updates active
-          </p>
-          <button
-            class="btn-secondary px-3 py-1.5 text-caption"
-            onclick={loadMoreLogs}
-            disabled={loadingMore}
-          >
-            {loadingMore ? "Loading..." : "Load more"}
-          </button>
-        </div>
-        <div class="grid grid-cols-1 lg:grid-cols-2 gap-md">
-          <!-- OUT Panel -->
-          <Card>
-            <div class="flex items-center justify-between mb-md">
-              <h2 class="text-h3 font-semibold" style="color: #00E676;">
-                <span
-                  class="inline-block w-2 h-2 rounded-full mr-2"
-                  style="background: #00E676;"
-                ></span>
-                OUT
-              </h2>
-              {#if outIsScrolledUp}
-                <button
-                  class="btn-secondary px-2 py-1 text-xs flex items-center gap-1"
-                  onclick={forceScrollToBottom}
-                  title="Scroll to bottom"
-                >
-                  <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
-                  </svg>
-                  Scroll to bottom
-                </button>
-              {/if}
-            </div>
-            {#if outLogs.length === 0}
-              <p class="text-center py-xl" style="color: var(--text-muted);">
-                No output logs
-              </p>
-            {:else}
-              <div
-                bind:this={outContainer}
-                onscroll={onOutScroll}
-                class="rounded-lg p-md font-mono text-code overflow-x-auto max-h-[500px] overflow-y-auto scrollbar-thin"
-                style="background: var(--bg-base); border: 1px solid var(--border-color);"
-              >
-                {#each outLogs as log}
-                  <div class="py-2xs" style="color: #00E676;">
-                    {log.data}
-                  </div>
-                {/each}
-              </div>
-            {/if}
-          </Card>
-
-          <!-- ERRORS Panel -->
-          <Card>
-            <div class="flex items-center justify-between mb-md">
-              <h2 class="text-h3 font-semibold" style="color: #FF5252;">
-                <span
-                  class="inline-block w-2 h-2 rounded-full mr-2"
-                  style="background: #FF5252;"
-                ></span>
-                ERRORS
-              </h2>
-              <div class="flex items-center gap-sm">
-                {#if newErrLogs.length > 0}
-                  <span
-                    class="px-2 py-1 text-xs rounded-full font-medium"
-                    style="background: rgba(255, 82, 82, 0.15); color: #FF5252;"
-                    title="Errors newer than your last view"
-                  >
-                    +{newErrLogs.length} new
-                  </span>
-                  <button
-                    class="btn-secondary px-2 py-1 text-xs"
-                    onclick={markErrorsSeen}
-                    title="Mark all visible errors as seen"
-                  >
-                    Mark seen
-                  </button>
-                {/if}
-                <button
-                  class="btn-secondary px-2 py-1 text-xs flex items-center gap-1"
-                  onclick={clearErrLogs}
-                  disabled={clearingErrLogs}
-                  title="Clear error logs (like cls/clear in a terminal)"
-                >
-                  {clearingErrLogs
-                    ? "Clearing..."
-                    : "Clear"}
-                </button>
-                {#if errIsScrolledUp}
-                  <button
-                    class="btn-secondary px-2 py-1 text-xs flex items-center gap-1"
-                    onclick={forceScrollToBottom}
-                    title="Scroll to bottom"
-                  >
-                    <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
-                    </svg>
-                    Scroll to bottom
-                  </button>
-                {/if}
-              </div>
-            </div>
-            {#if errLogs.length === 0}
-              <p class="text-center py-xl" style="color: var(--text-muted);">
-                No error logs
-              </p>
-            {:else}
-              <div
-                bind:this={errContainer}
-                onscroll={onErrScroll}
-                class="rounded-lg p-md font-mono text-code overflow-x-auto max-h-[500px] overflow-y-auto scrollbar-thin"
-                style="background: var(--bg-base); border: 1px solid var(--border-color);"
-              >
-                {#each errLogs as log}
-                  {@const isNew = errBaseline !== null && log.timestamp.getTime() > errBaseline}
-                  <div
-                    class="py-2xs"
-                    style="color: #FF5252;{isNew
-                      ? ' background: rgba(255, 82, 82, 0.12); border-left: 3px solid #FF5252; padding-left: 4px;'
-                      : ''}"
-                  >
-                    {#if isNew}
-                      <span
-                        class="inline-block text-[10px] font-bold uppercase mr-1 align-middle"
-                        style="color: #FFD740;"
-                        >NEW</span
-                      >
-                    {/if}
-                    {log.data}
-                  </div>
-                {/each}
-              </div>
-            {/if}
-          </Card>
-        </div>
+        <LogViewer
+          processName={process.name}
+          pmId={process.pm_id}
+          initialLogs={data.logs ?? []}
+        />
       {:else if activeTab === "env"}
         <Card>
           <div class="flex items-center justify-between mb-md">
@@ -985,12 +643,12 @@
         />
       {/if}
     </div>
-  {/key}
 </div>
 
 <ConfirmDeleteModal
   open={deleteModal.open}
   itemName={process.name}
+  loading={deleteLoading}
   onConfirm={confirmDelete}
   onCancel={() => {
     deleteModal.open = false;

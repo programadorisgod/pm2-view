@@ -7,6 +7,8 @@
     FeedbackBanner,
     DeployModal,
     DeployConfigForm,
+    AutoDeployCard,
+    DeploymentHistory,
     LogViewer,
   } from "$lib/ui/components";
   import { base } from "$app/paths";
@@ -637,10 +639,17 @@
           </a>
         </Card>
       {:else if activeTab === "config"}
-        <DeployConfigForm
-          projectId={data.projectInternalId ?? ''}
-          initialConfig={data.deployConfig}
-        />
+        <div class="space-y-lg">
+          <AutoDeployCard
+            projectId={data.projectInternalId ?? ''}
+            initialSettings={data.autoDeploySettings}
+          />
+          <DeployConfigForm
+            projectId={data.projectInternalId ?? ''}
+            initialConfig={data.deployConfig}
+          />
+          <DeploymentHistory projectId={data.projectInternalId ?? ''} />
+        </div>
       {/if}
     </div>
 </div>

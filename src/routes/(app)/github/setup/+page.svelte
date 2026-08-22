@@ -20,6 +20,13 @@
         </a>
       </div>
     </Card>
+  {:else if data.isOAuthRequest}
+    <Card>
+      <div class="text-center py-lg">
+        <p class="text-body text-muted mb-md">Conectando con GitHub...</p>
+        <p class="text-sm text-muted">Serás redirigido en un momento.</p>
+      </div>
+    </Card>
   {:else}
     <Card>
       <div class="text-center py-lg">

@@ -23,9 +23,14 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 
 	logger.info('[github-setup] params', { installationId, setupAction });
 
+	if (setupAction === 'request' && !installationId) {
+		logger.info('[github-setup] OAuth authorization step', { setupAction });
+		return { success: false, message: 'pending', isOAuthRequest: true };
+	}
+
 	if (!installationId || setupAction !== 'install') {
 		logger.warn('[github-setup] Invalid setup parameters', { installationId, setupAction });
-		return { success: false, message: 'Invalid setup parameters' };
+		return { success: false, message: 'Invalid setup parameters', isOAuthRequest: false };
 	}
 
 	const parsedId = Number(installationId);

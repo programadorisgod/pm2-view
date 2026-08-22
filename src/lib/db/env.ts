@@ -9,6 +9,7 @@ export interface EnvVars {
 	GITHUB_PRIVATE_KEY: string;
 	GITHUB_WEBHOOK_SECRET: string;
 	GITHUB_APP_SLUG: string;
+	APP_BASE_PATH: string;
 	REPOS_PATH: string;
 }
 
@@ -27,6 +28,7 @@ export function getEnv(): EnvVars {
 	let GITHUB_PRIVATE_KEY = '';
 	let GITHUB_WEBHOOK_SECRET = '';
 	let GITHUB_APP_SLUG = '';
+	let APP_BASE_PATH = '';
 	let REPOS_PATH = '/opt/repos';
 
 	// Try SvelteKit's $env/dynamic/private first (works in server runtime)
@@ -43,6 +45,7 @@ export function getEnv(): EnvVars {
 		GITHUB_PRIVATE_KEY = env.GITHUB_PRIVATE_KEY || '';
 		GITHUB_WEBHOOK_SECRET = env.GITHUB_WEBHOOK_SECRET || '';
 		GITHUB_APP_SLUG = env.GITHUB_APP_SLUG || '';
+		APP_BASE_PATH = env.APP_BASE_PATH || '';
 		REPOS_PATH = env.REPOS_PATH || '/opt/repos';
 	} catch {
 		// Fallback for tests and non-SvelteKit contexts
@@ -56,6 +59,7 @@ export function getEnv(): EnvVars {
 		GITHUB_PRIVATE_KEY = process.env.GITHUB_PRIVATE_KEY || '';
 		GITHUB_WEBHOOK_SECRET = process.env.GITHUB_WEBHOOK_SECRET || '';
 		GITHUB_APP_SLUG = process.env.GITHUB_APP_SLUG || '';
+		APP_BASE_PATH = process.env.APP_BASE_PATH || '';
 		REPOS_PATH = process.env.REPOS_PATH || '/opt/repos';
 	}
 
@@ -70,6 +74,7 @@ export function getEnv(): EnvVars {
 		GITHUB_PRIVATE_KEY,
 		GITHUB_WEBHOOK_SECRET,
 		GITHUB_APP_SLUG,
+		APP_BASE_PATH,
 		REPOS_PATH
 	};
 

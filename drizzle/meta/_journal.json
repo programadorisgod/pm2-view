@@ -57,6 +57,13 @@
       "when": 1787325000000,
       "tag": "0007_add_auto_deploy",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "6",
+      "when": 1787369000000,
+      "tag": "0008_add_notify_email",
+      "breakpoints": true
     }
   ]
 }

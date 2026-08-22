@@ -6,17 +6,7 @@ CREATE TABLE `env_vars` (
 	`is_secret` integer DEFAULT (0) NOT NULL,
 	FOREIGN KEY (`project_id`) REFERENCES `projects`(`id`) ON UPDATE no action ON DELETE no action
 );
---> statement-breakpoint
-CREATE TABLE `metrics` (
-	`id` text PRIMARY KEY NOT NULL,
-	`project_id` text NOT NULL,
-	`cpu` integer,
-	`memory` integer,
-	`uptime` integer,
-	`status` text,
-	`recorded_at` integer DEFAULT (unixepoch()) NOT NULL,
-	FOREIGN KEY (`project_id`) REFERENCES `projects`(`id`) ON UPDATE no action ON DELETE no action
-);
+
 --> statement-breakpoint
 CREATE TABLE `projects` (
 	`id` text PRIMARY KEY NOT NULL,

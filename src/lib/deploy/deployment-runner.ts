@@ -11,6 +11,7 @@ import {
 } from './process-runner';
 import { loadProjectEnv, readPackageScripts } from './deploy.service';
 import type { GitAuthTokenProvider } from './git-auth.provider';
+import type { DeploymentNotifier, DeploymentOutcome } from './deployment-notifier';
 import { logger } from '$lib/logger';
 
 const INSTALL_BUILD_TIMEOUT_MS = 600_000;
@@ -31,6 +32,8 @@ export interface DeploymentRunnerDeps {
 	) => Promise<number>;
 	/** Provides short-lived git credentials per repository; null falls back to remote defaults. */
 	gitAuth: GitAuthTokenProvider;
+	/** Sends the deploy result email to the project owner; failures never affect the deployment itself. */
+	notifier?: DeploymentNotifier;
 	verifyAttempts?: number;
 	verifyDelayMs?: number;
 }
@@ -84,6 +87,22 @@ export class DeploymentRunner {
 				finishedAt,
 				finishedAt.getTime() - startedAt.getTime()
 			);
+			if (this.deps.notifier) {
+				const outcome: DeploymentOutcome = {
+					status: 'failed',
+					stage: currentStage,
+					error: message,
+					durationMs: finishedAt.getTime() - startedAt.getTime()
+				};
+				try {
+					await this.deps.notifier.notifyResult(deployment, project, outcome);
+				} catch (err) {
+					logger.error('Deployment notifier threw unexpectedly', {
+						deploymentId: deployment.id,
+						error: err
+					});
+				}
+			}
 		};
 
 		log(`Starting deployment of ${deployment.repository}@${deployment.branch}`);
@@ -244,11 +263,23 @@ export class DeploymentRunner {
 			log('Deployment completed successfully');
 			await flushLogs();
 			const finishedAt = new Date();
-			await this.deps.deploymentRepo.markSuccess(
-				deployment.id,
-				finishedAt,
-				finishedAt.getTime() - startedAt.getTime()
-			);
+			const durationMs = finishedAt.getTime() - startedAt.getTime();
+			await this.deps.deploymentRepo.markSuccess(deployment.id, finishedAt, durationMs);
+			if (this.deps.notifier) {
+				const outcome: DeploymentOutcome = {
+					status: 'success',
+					commitSha: deployedSha,
+					durationMs
+				};
+				try {
+					await this.deps.notifier.notifyResult(deployment, project, outcome);
+				} catch (err) {
+					logger.error('Deployment notifier threw unexpectedly', {
+						deploymentId: deployment.id,
+						error: err
+					});
+				}
+			}
 		} catch (err) {
 			if (err instanceof GitCommandError) {
 				await fail(err.message);

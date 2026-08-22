@@ -130,6 +130,7 @@ describe('DeploymentRunner', () => {
 			},
 			runPm2Restart: vi.fn().mockResolvedValue(0),
 			gitAuth: { getToken: vi.fn().mockResolvedValue(null) },
+			notifier: { notifyResult: vi.fn().mockResolvedValue(undefined) },
 			verifyAttempts: 3,
 			verifyDelayMs: 1
 		};
@@ -323,6 +324,50 @@ describe('DeploymentRunner', () => {
 			expect.any(Date),
 			expect.any(Number)
 		);
+	});
+
+	it('15. notifies success to the project owner after a completed deployment', async () => {
+		const deps = makeRunnerDeps();
+		const project = { ...TEST_PROJECT, targetPath: workingDir };
+		const runner = new DeploymentRunner(deps as any);
+
+		await runner.run(makeDeployment(), project);
+
+		expect(deps.notifier.notifyResult).toHaveBeenCalledTimes(1);
+		const [, notifiedProject, outcome] = deps.notifier.notifyResult.mock.calls[0];
+		expect(notifiedProject.id).toBe('project-1');
+		expect(outcome.status).toBe('success');
+		expect(outcome.commitSha).toBe('b'.repeat(40));
+		expect(outcome.durationMs).toEqual(expect.any(Number));
+	});
+
+	it('16. notifies failure with stage and error when a stage fails', async () => {
+		const deps = makeRunnerDeps({}, ['online'], {
+			install: ['node', '-e', 'process.exit(0)'],
+			build: ['node', '-e', 'process.exit(1)']
+		});
+		const project = { ...TEST_PROJECT, targetPath: workingDir };
+		const runner = new DeploymentRunner(deps as any);
+
+		await runner.run(makeDeployment(), project);
+
+		expect(deps.notifier.notifyResult).toHaveBeenCalledTimes(1);
+		const [, , outcome] = deps.notifier.notifyResult.mock.calls[0];
+		expect(outcome.status).toBe('failed');
+		expect(outcome.stage).toBe('build');
+		expect(outcome.error).toContain('exit code 1');
+	});
+
+	it('17. completes deployment bookkeeping even if the notifier throws', async () => {
+		const deps = makeRunnerDeps();
+		deps.notifier.notifyResult = vi.fn().mockRejectedValue(new Error('email down'));
+		const project = { ...TEST_PROJECT, targetPath: workingDir };
+		const runner = new DeploymentRunner(deps as any);
+
+		await runner.run(makeDeployment(), project);
+
+		expect(deps.deploymentRepo.mocks.markSuccess).toHaveBeenCalled();
+		expect(deps.deploymentRepo.mocks.markFailed).not.toHaveBeenCalled();
 	});
 });
 

@@ -2,6 +2,8 @@ import { env } from '$env/dynamic/private';
 import { createNotificationProvider } from './factory';
 import type { EmailMessage, NotificationProvider } from './provider.interface';
 
+export type { EmailMessage };
+
 let cachedProviders: NotificationProvider[] | null = null;
 
 export function getNotificationProviders(): NotificationProvider[] {

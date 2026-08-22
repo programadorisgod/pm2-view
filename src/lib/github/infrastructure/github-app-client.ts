@@ -8,8 +8,8 @@ import { logger } from '$lib/logger';
 export class GitHubAppClient {
 	private appId: number;
 	private privateKey: string;
-	private clientId: string;
-	private clientSecret: string;
+	readonly clientId: string;
+	readonly clientSecret: string;
 
 	constructor() {
 		const env = getEnv();

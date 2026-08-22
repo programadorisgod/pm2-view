@@ -9,8 +9,6 @@ export default defineConfig(({ mode }) => {
         .map((h) => h.trim())
         .filter(Boolean);
 
-    console.log(allowedHosts);
-
     return {
         plugins: [sveltekit()],
         resolve: {

@@ -41,6 +41,7 @@ export interface GitHubInstallationInfo {
 export interface IGitHubInstallationRepository {
 	getByUserId(userId: string): Promise<GitHubInstallationRecord | null>;
 	getByInstallationId(installationId: number): Promise<GitHubInstallationRecord | null>;
+	getByAccountLogin(accountLogin: string): Promise<GitHubInstallationRecord | null>;
 	create(data: {
 		userId: string;
 		installationId: number;

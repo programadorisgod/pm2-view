@@ -18,6 +18,13 @@ export class GitHubInstallationRepository implements IGitHubInstallationReposito
 		return installation ?? null;
 	}
 
+	async getByAccountLogin(accountLogin: string): Promise<GitHubInstallationRecord | null> {
+		const installation = await db.query.githubInstallations.findFirst({
+			where: eq(githubInstallations.accountLogin, accountLogin)
+		});
+		return installation ?? null;
+	}
+
 	async create(data: {
 		userId: string;
 		installationId: number;

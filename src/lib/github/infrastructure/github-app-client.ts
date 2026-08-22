@@ -52,6 +52,24 @@ export class GitHubAppClient {
 		}
 	}
 
+	/**
+	 * Mints a short-lived installation access token (expires in ~1 hour).
+	 * Used for git HTTPS operations (fetch/pull) during auto-deployments.
+	 */
+	async createInstallationToken(installationId: number): Promise<string> {
+		try {
+			const auth = createAppAuth({
+				appId: this.appId,
+				privateKey: this.privateKey
+			});
+			const { token } = await auth({ type: 'installation', installationId });
+			return token;
+		} catch (err) {
+			logger.error('Failed to create installation token', { installationId, error: err });
+			throw new GitHubAuthenticationFailed();
+		}
+	}
+
 	async getInstallationInfo(installationId: number): Promise<{
 		id: number;
 		account: { login: string; type: string; avatarUrl: string | null };

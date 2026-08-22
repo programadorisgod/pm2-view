@@ -15,6 +15,55 @@
       "when": 1714412400000,
       "tag": "0001_sturdy_frost",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1714412500000,
+      "tag": "0002_add_team_id_to_projects",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1714412600000,
+      "tag": "0003_add_project_favorites",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1714412700000,
+      "tag": "0004_add_deploy_commands",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "6",
+      "when": 1714412800000,
+      "tag": "0005_add_github_installations",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1777325000000,
+      "tag": "0006_add_target_path_to_projects",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "6",
+      "when": 1787325000000,
+      "tag": "0007_add_auto_deploy",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "6",
+      "when": 1787369000000,
+      "tag": "0008_add_notify_email",
+      "breakpoints": true
     }
   ]
 }

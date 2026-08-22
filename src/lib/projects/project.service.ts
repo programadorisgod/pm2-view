@@ -39,6 +39,11 @@ export class ProjectService {
 			name: pm2Process.name,
 			description: `PM2 process: ${pm2Process.name}`,
 			userId: '', // Not available from PM2 directly
+			teamId: null,
+			targetPath: null,
+			githubRepo: null,
+			deployBranch: 'main',
+			autoDeployEnabled: false,
 			createdAt: new Date(),
 			pm2Status: pm2Process.status,
 			cpu: pm2Process.cpu,

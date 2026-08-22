@@ -15,6 +15,12 @@ export const projects = sqliteTable('projects', {
 	name: text('name').notNull(),
 	pm2Name: text('pm2_name').notNull(),
 	description: text('description'),
+	targetPath: text('target_path'),
+	githubRepo: text('github_repo'),
+	deployBranch: text('deploy_branch').notNull().default('main'),
+	autoDeployEnabled: integer('auto_deploy_enabled', { mode: 'boolean' }).notNull().default(false),
+	/** Email captured from the session that last saved deployment settings; receives deploy outcome emails along with the owner. */
+	notifyEmail: text('notify_email'),
 	createdAt: integer('created_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`)
 });
 

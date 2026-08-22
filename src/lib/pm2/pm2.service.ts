@@ -1,5 +1,10 @@
 import type { IPM2Repository, PM2Process, PM2Log, ProcessWithStatus } from './pm2.types';
 import { logger } from '$lib/logger';
+import { exec } from 'child_process';
+import { promisify } from 'util';
+import { dirname } from 'path';
+
+const execAsync = promisify(exec);
 
 export interface ProcessSummary {
 	total: number;
@@ -42,11 +47,30 @@ export class PM2Service {
     try {
       await this.repository.restart(id);
       return { success: true, message: `Process ${id} restarted successfully` };
-    } catch (error) {
-      return {
-        success: false,
-        message: error instanceof Error ? error.message : 'Failed to restart process'
-      };
+    } catch (restartError) {
+      // PM2 can't restart processes in errored/waiting-restart state.
+      // Fallback: delete then start with the original config.
+      try {
+        const proc = await this.repository.describe(id);
+        if (!proc) {
+          return { success: false, message: `Process ${id} not found` };
+        }
+        const { name } = proc;
+        const scriptPath = proc.pm2_env.pm_exec_path;
+        // pm2 has no reliable --cwd start flag: cd inside the shell so the
+        // daemon snapshots the project dir as pm_cwd and the app loads its own .env
+        const dir = this.resolveProjectDir(proc);
+        await this.repository.delete(id);
+        const cdPrefix = dir ? `cd ${JSON.stringify(dir)} && ` : '';
+        await execAsync(`${cdPrefix}pm2 start ${JSON.stringify(scriptPath)} --name ${JSON.stringify(name)}`);
+        return { success: true, message: `Process ${name} restarted successfully (recreated)` };
+      } catch (fallbackError) {
+        logger.error(`Restart fallback failed for ${id}`, { error: String(fallbackError) });
+        return {
+          success: false,
+          message: restartError instanceof Error ? restartError.message : 'Failed to restart process'
+        };
+      }
     }
   }
 
@@ -78,6 +102,18 @@ export class PM2Service {
 		try {
 			const process = await this.repository.describe(id);
 			await this.repository.delete(id);
+
+			// Clean up DB record if it matches this PM2 process
+			if (process?.name) {
+				try {
+					const { db } = await import('$lib/db');
+					const { projects } = await import('$lib/db/schema');
+					const { eq } = await import('drizzle-orm');
+					await db.delete(projects).where(eq(projects.pm2Name, process.name));
+				} catch {
+					// Non-critical: DB cleanup failure doesn't affect PM2 delete
+				}
+			}
 
 			if (deleteFiles && process?.pm2_env?.pm_cwd) {
 				await this.repository.deleteFiles(process.pm2_env.pm_cwd);
@@ -120,6 +156,23 @@ export class PM2Service {
 		}
 	}
 
+	/**
+	 * Resolves the directory where the process's .env lives.
+	 * Trusts pm_cwd only when it contains the executed script; otherwise falls
+	 * back to the script's directory (fixes processes started from a wrong folder).
+	 */
+	resolveProjectDir(process: PM2Process): string {
+		const cwd = process.pm2_env?.pm_cwd || (process.pm2_env as { cwd?: string } | undefined)?.cwd || '';
+		const scriptPath = process.pm2_env?.pm_exec_path || '';
+		if (cwd && scriptPath && scriptPath.startsWith(`${cwd}/`)) {
+			return cwd;
+		}
+		if (scriptPath) {
+			return dirname(scriptPath);
+		}
+		return cwd;
+	}
+
 	getSummary(processes: ProcessWithStatus[]): ProcessSummary {
 		return {
 			total: processes.length,
@@ -150,6 +203,7 @@ export class PM2Service {
 				return 'stopped';
 			case 'errored':
 			case 'error':
+			case 'waiting restart':
 				return 'error';
 			default:
 				return 'offline';

@@ -63,7 +63,8 @@ describe('(app)/+layout.server.ts', () => {
 		const result = await load(event);
 		expect(result).toEqual({
 			user: expect.objectContaining({ role: 'user' }),
-			session: expect.any(Object)
+			session: expect.any(Object),
+			config: { reposPath: expect.any(String) }
 		});
 	});
 
@@ -89,7 +90,8 @@ describe('(app)/+layout.server.ts', () => {
 
 		expect(result).toEqual({
 			user: expect.objectContaining({ role: 'admin' }),
-			session: expect.any(Object)
+			session: expect.any(Object),
+			config: { reposPath: expect.any(String) }
 		});
 	});
 
@@ -115,7 +117,8 @@ describe('(app)/+layout.server.ts', () => {
 
 		expect(result).toEqual({
 			user: expect.objectContaining({ role: 'user' }),
-			session: expect.any(Object)
+			session: expect.any(Object),
+			config: { reposPath: expect.any(String) }
 		});
 	});
 
@@ -141,7 +144,8 @@ describe('(app)/+layout.server.ts', () => {
 		const result = await load(event);
 		expect(result).toEqual({
 			user: expect.objectContaining({ role: 'viewer' }),
-			session: expect.any(Object)
+			session: expect.any(Object),
+			config: { reposPath: expect.any(String) }
 		});
 	});
 
@@ -167,7 +171,8 @@ describe('(app)/+layout.server.ts', () => {
 
 		expect(result).toEqual({
 			user: expect.objectContaining({ role: 'admin' }),
-			session: expect.any(Object)
+			session: expect.any(Object),
+			config: { reposPath: expect.any(String) }
 		});
 	});
 });

@@ -2,12 +2,22 @@
   let {
     type = 'success',
     message,
-    onDismiss
+    onDismiss,
+    duration = 5000
   }: {
     type?: 'success' | 'error' | 'warning' | 'info';
     message: string;
     onDismiss?: () => void;
+    duration?: number;
   } = $props();
+
+  const AUTO_HIDE_TYPES = new Set(['success', 'info']);
+
+  $effect(() => {
+    if (!onDismiss || !AUTO_HIDE_TYPES.has(type) || !message) return;
+    const timer = setTimeout(onDismiss, duration);
+    return () => clearTimeout(timer);
+  });
 
   const typeConfig = {
     success: {

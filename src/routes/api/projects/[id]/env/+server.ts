@@ -31,7 +31,7 @@ export const GET: RequestHandler = async ({ params }) => {
 			return json({ error: 'Process not found' }, { status: 404 });
 		}
 
-		const cwd = process.pm2_env?.pm_cwd || process.pm2_env?.cwd;
+		const cwd = pm2Service.resolveProjectDir(process);
 		if (!cwd) {
 			return json({ error: 'Process working directory not found' }, { status: 400 });
 		}
@@ -90,7 +90,7 @@ export const PUT: RequestHandler = async ({ params, request }) => {
 			return json({ error: 'Process not found' }, { status: 404 });
 		}
 
-		const cwd = process.pm2_env?.pm_cwd || process.pm2_env?.cwd;
+		const cwd = pm2Service.resolveProjectDir(process);
 		if (!cwd) {
 			return json({ error: 'Process working directory not found' }, { status: 400 });
 		}

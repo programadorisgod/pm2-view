@@ -1,6 +1,7 @@
 	<script lang="ts">
 	import { Card, StatusIndicator } from '$lib/ui/components';
 	import { base } from '$app/paths';
+	import { invalidateAll } from '$app/navigation';
 	import type { PageData } from './$types';
 
 	let { data }: { data: PageData } = $props();
@@ -14,12 +15,37 @@
 		{ label: 'Errors', value: summary?.errored ?? 0, status: 'error' as const, icon: 'M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z' }
 	]);
 
+	let startingProject = $state<string | null>(null);
+
 	function getStatusVariant(status: string) {
 		switch (status) {
 			case 'online': return 'online';
 			case 'stopped': return 'stopped';
 			case 'error': return 'error';
 			default: return 'offline';
+		}
+	}
+
+	async function handleStart(projectName: string, ecosystemFile: string) {
+		startingProject = projectName;
+		try {
+			const response = await fetch(`${base}/api/projects/start-from-db`, {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ projectName, ecosystemFile }),
+			});
+
+			const result = await response.json();
+
+			if (response.ok && result.success) {
+				await invalidateAll();
+			} else {
+				alert(result.error || 'Failed to start process');
+			}
+		} catch {
+			alert('Failed to start process');
+		} finally {
+			startingProject = null;
 		}
 	}
 </script>
@@ -52,32 +78,55 @@
 		{/each}
 	</div>
 
-	<!-- Process List -->
+		<!-- Process List -->
 	<Card>
 		<h2 class="text-h3 font-semibold mb-md" style="color: var(--text-primary);">Processes</h2>
 
 		{#if !processes || processes.length === 0}
 			<div class="text-center py-2xl">
 				<p class="text-body" style="color: var(--text-secondary);">No PM2 processes found</p>
-				<p class="text-caption mt-xs" style="color: var(--text-muted);">Start a PM2 process to see it here</p>
+				<p class="text-caption mt-xs" style="color: var(--text-muted);">Import a GitHub repository to get started</p>
 			</div>
 		{:else}
 			<div class="space-y-xs">
 				{#each processes as process, i (process.pm_id)}
-					<a href="{base}/projects/{process.pm_id}" class="flex items-center justify-between py-sm px-md rounded-md transition-colors hover:bg-[var(--bg-surface)] cursor-pointer group stagger-item" style="--stagger-index: {i + 4};">
-						<div class="flex items-center gap-md">
-							<StatusIndicator status={getStatusVariant(process.status)} />
-							<div>
-								<p class="text-body-sm font-medium process-name group-hover:text-[#38CDFF] transition-colors" style="color: var(--text-primary);">{process.name}</p>
-								<p class="text-caption" style="color: var(--text-muted);">
-									CPU: {process.cpu}% · RAM: {process.memoryMB}MB · {process.uptimeFormatted}
-								</p>
+					{#if process.pm_id === -1 && process.ecosystemFiles?.length}
+						<!-- Offline project with ecosystem file -->
+						<div class="flex items-center justify-between py-sm px-md rounded-md transition-colors hover:bg-[var(--bg-surface)] group stagger-item" style="--stagger-index: {i + 4};">
+							<div class="flex items-center gap-md">
+								<StatusIndicator status="offline" />
+								<div>
+									<p class="text-body-sm font-medium process-name" style="color: var(--text-primary);">{process.name}</p>
+									<p class="text-caption" style="color: var(--text-muted);">
+										Offline · {process.ecosystemFiles[0]}
+									</p>
+								</div>
 							</div>
+							<button
+								onclick={() => handleStart(process.name, process.ecosystemFiles![0])}
+								disabled={startingProject === process.name}
+								class="btn-primary px-3 py-1 text-caption opacity-0 group-hover:opacity-100 transition-opacity disabled:opacity-50"
+							>
+								{startingProject === process.name ? 'Starting...' : 'Start →'}
+							</button>
 						</div>
-						<span class="btn-secondary px-3 py-1 text-caption opacity-0 group-hover:opacity-100 transition-opacity">
-							View →
-						</span>
-					</a>
+					{:else}
+						<!-- Running PM2 process -->
+						<a href="{base}/projects/{process.pm_id}" class="flex items-center justify-between py-sm px-md rounded-md transition-colors hover:bg-[var(--bg-surface)] cursor-pointer group stagger-item" style="--stagger-index: {i + 4};">
+							<div class="flex items-center gap-md">
+								<StatusIndicator status={getStatusVariant(process.status)} />
+								<div>
+									<p class="text-body-sm font-medium process-name group-hover:text-[#38CDFF] transition-colors" style="color: var(--text-primary);">{process.name}</p>
+									<p class="text-caption" style="color: var(--text-muted);">
+										CPU: {process.cpu}% · RAM: {process.memoryMB}MB · {process.uptimeFormatted}
+									</p>
+								</div>
+							</div>
+							<span class="btn-secondary px-3 py-1 text-caption opacity-0 group-hover:opacity-100 transition-opacity">
+								View →
+							</span>
+						</a>
+					{/if}
 				{/each}
 			</div>
 		{/if}

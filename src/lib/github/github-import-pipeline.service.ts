@@ -1,24 +1,14 @@
 import { spawn } from 'child_process';
 import { existsSync, readFileSync, readdirSync } from 'fs';
 import { join } from 'path';
-import { readdir } from 'fs/promises';
 import type { PackageManager } from '$lib/deploy/deploy.types';
+import { findEcosystemFiles, parseEcosystemAppNames } from '$lib/utils/ecosystem';
 
 const LOCK_FILES: Record<string, PackageManager> = {
 	'pnpm-lock.yaml': 'pnpm',
 	'bun.lockb': 'bun',
 	'bun.lock': 'bun',
 };
-
-const ECOSYSTEM_FILES = [
-	'ecosystem.cjs',
-	'ecosystem.config.js',
-	'ecosystem.config.cjs',
-	'ecosystem.config.ts',
-	'pm2.config.js',
-	'pm2.config.cjs',
-	'ecosystem.json',
-] as const;
 
 const APPROVAL_INDICATORS = /requires approval|needs to be built|approve-builds|ERR_PNPM_IGNORED_BUILDS/i;
 const PACKAGE_LINE = /^\s*-\s+(.+)$/;
@@ -55,8 +45,6 @@ function extractPendingPackages(output: string[]): string[] {
 
 	return packages;
 }
-
-type EcosystemFile = (typeof ECOSYSTEM_FILES)[number];
 
 /** Environment map passed to spawned child processes */
 type EnvMap = Record<string, string | undefined>;
@@ -154,26 +142,6 @@ function flushBuffer(
 	}
 }
 
-async function findEcosystemFiles(dir: string): Promise<string[]> {
-	const found: string[] = [];
-
-	try {
-		const entries = await readdir(dir, { withFileTypes: true });
-		for (const entry of entries) {
-			if (entry.isFile()) {
-				const name = entry.name.toLowerCase();
-				if (ECOSYSTEM_FILES.some((ef) => name === ef)) {
-					found.push(entry.name);
-				}
-			}
-		}
-	} catch {
-		// Directory read error - return empty
-	}
-
-	return found;
-}
-
 /**
  * Log callback type for streaming output
  */
@@ -193,6 +161,7 @@ export interface Phase1Result {
 	targetPath: string;
 	processName: string;
 	ecosystemFiles: string[];
+	ecosystemAppNames: string[];
 	error?: string;
 	needsApproval?: boolean;
 	pendingPackages?: string[];
@@ -466,11 +435,18 @@ export class GitHubImportPipelineService {
 			log('ecosystem', `Found ecosystem files: ${ecosystemFiles.join(', ')}`, false);
 		}
 
+		// Parse app names from ecosystem files
+		const ecosystemAppNames = parseEcosystemAppNames(actualTargetPath, ecosystemFiles);
+		if (ecosystemAppNames.length > 0) {
+			log('ecosystem', `Ecosystem app names: ${ecosystemAppNames.join(', ')}`, false);
+		}
+
 		return {
 			success: true,
 			targetPath: actualTargetPath,
 			processName,
 			ecosystemFiles,
+			ecosystemAppNames,
 		};
 	}
 

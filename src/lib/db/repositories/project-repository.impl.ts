@@ -15,6 +15,12 @@ export class ProjectRepository implements IProjectRepository {
 		return project ?? null;
 	}
 
+	async getByGithubRepo(githubRepo: string): Promise<Project[]> {
+		return await db.query.projects.findMany({
+			where: eq(projects.githubRepo, githubRepo)
+		});
+	}
+
 	async create(project: Omit<Project, 'id' | 'createdAt'>): Promise<Project> {
 		const [newProject] = await db
 			.insert(projects)

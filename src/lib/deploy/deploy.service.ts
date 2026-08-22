@@ -24,7 +24,7 @@ const PACKAGE_LINE = /^\s*-\s+(.+)$/;
 /** Environment map passed to spawned child processes (values may be undefined, like Node's process.env). */
 type EnvMap = Record<string, string | undefined>;
 
-function detectPackageManager(dir: string): PackageManager {
+export function detectPackageManager(dir: string): PackageManager {
 	const pkgPath = join(dir, 'package.json');
 	if (existsSync(pkgPath)) {
 		try {
@@ -51,7 +51,7 @@ function isGitRepo(dir: string): boolean {
 	return existsSync(join(dir, '.git'));
 }
 
-function readPackageScripts(dir: string): Record<string, string> | null {
+export function readPackageScripts(dir: string): Record<string, string> | null {
 	const pkgPath = join(dir, 'package.json');
 	if (!existsSync(pkgPath)) return null;
 	try {
@@ -66,7 +66,7 @@ function readPackageScripts(dir: string): Record<string, string> | null {
  * Loads the project's `.env*` files from the working directory.
  * Order (later wins): .env → .env.local → .env.production → .env.production.local
  */
-function loadProjectEnv(dir: string): Record<string, string> {
+export function loadProjectEnv(dir: string): Record<string, string> {
 	const files = ['.env', '.env.local', '.env.production', '.env.production.local'];
 	const env: Record<string, string> = {};
 

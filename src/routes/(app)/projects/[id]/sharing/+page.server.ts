@@ -44,7 +44,8 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 					userId: locals.user.id,
 					name: pm2Process.name,
 					pm2Name: pm2Process.name,
-					description: `PM2 process: ${pm2Process.name}`
+					description: `PM2 process: ${pm2Process.name}`,
+					targetPath: pm2Process.pm2_env.pm_cwd || null,
 				}).returning();
 				project = created;
 			}

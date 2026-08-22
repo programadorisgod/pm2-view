@@ -341,6 +341,7 @@
 <GitHubImportModal
 	open={showImportModal}
 	repository={selectedRepo}
+	reposPath={data.config?.reposPath}
 	onClose={handleModalClose}
 	onSuccess={handleModalSuccess}
 />

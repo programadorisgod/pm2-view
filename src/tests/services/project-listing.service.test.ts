@@ -4,6 +4,7 @@ import { PM2Service } from '../../lib/pm2/pm2.service';
 import type { IPM2Repository, ProcessWithStatus, PM2Process } from '../../lib/pm2/pm2.types';
 import type { IProjectRepository, Project } from '../../lib/projects/project.types';
 import type { ITeamRepository, Team } from '../../lib/db/repositories/team-repository.interface';
+import type { ProjectFavoriteRepository } from '../../lib/db/repositories/project-favorite-repository.impl';
 
 // Mock factories following existing patterns
 function createMockPM2Repo(overrides: Partial<IPM2Repository> = {}): IPM2Repository {
@@ -24,6 +25,7 @@ function createMockProjectRepo(overrides: Partial<IProjectRepository> = {}): IPr
 	return {
 		getAll: vi.fn().mockResolvedValue([]),
 		getById: vi.fn().mockResolvedValue(null),
+		getByGithubRepo: vi.fn().mockResolvedValue([]),
 		create: vi.fn(),
 		update: vi.fn(),
 		delete: vi.fn(),
@@ -50,6 +52,14 @@ function createMockTeamRepo(overrides: Partial<ITeamRepository> = {}): ITeamRepo
 	};
 }
 
+function createMockFavoriteRepo(overrides: Partial<ProjectFavoriteRepository> = {}): ProjectFavoriteRepository {
+	return {
+		getUserFavorites: vi.fn().mockResolvedValue([]),
+		isFavorite: vi.fn().mockResolvedValue(false),
+		...overrides
+	} as unknown as ProjectFavoriteRepository;
+}
+
 // Helper to create a raw PM2 process (what the repository returns)
 function createPM2Process(overrides: Partial<PM2Process> = {}): PM2Process {
 	return {
@@ -70,6 +80,10 @@ function createDBProject(overrides: Partial<Project> = {}): Project {
 		name: 'Test Project',
 		pm2Name: 'test-app',
 		description: null,
+		targetPath: null,
+		githubRepo: null,
+		deployBranch: 'main',
+		autoDeployEnabled: false,
 		createdAt: new Date(),
 		...overrides
 	};
@@ -81,18 +95,26 @@ describe('ProjectListingService', () => {
 	let mockPM2Service: PM2Service;
 	let mockProjectRepo: IProjectRepository;
 	let mockTeamRepo: ITeamRepository;
+	let mockFavoriteRepo: ProjectFavoriteRepository;
 
 	beforeEach(() => {
 		mockPM2Repo = createMockPM2Repo();
 		mockPM2Service = new PM2Service(mockPM2Repo);
 		mockProjectRepo = createMockProjectRepo();
 		mockTeamRepo = createMockTeamRepo();
-		service = new ProjectListingService(mockPM2Service, mockProjectRepo, mockTeamRepo);
+		mockFavoriteRepo = createMockFavoriteRepo();
+		service = new ProjectListingService(mockPM2Service, mockProjectRepo, mockTeamRepo, mockFavoriteRepo);
 	});
 
 	describe('getVisibleProjects', () => {
 		describe('admin user', () => {
-			it('should return all processes without filtering', async () => {
+			it('should return all PM2 processes that match DB projects', async () => {
+				const dbProjects = [
+					createDBProject({ pm2Name: 'app1', userId: 'admin-user' }),
+					createDBProject({ pm2Name: 'app2', userId: 'admin-user' }),
+				];
+				vi.mocked(mockProjectRepo.getAll).mockResolvedValue(dbProjects);
+
 				const processes = [
 					createPM2Process({ name: 'app1', pm_id: 1 }),
 					createPM2Process({ name: 'app2', pm_id: 2 })
@@ -102,11 +124,9 @@ describe('ProjectListingService', () => {
 				const result = await service.getVisibleProjects('admin-user', 'admin');
 
 				expect(result).toHaveLength(2);
-				expect(result[0].accessType).toBe('admin');
-				expect(result[1].accessType).toBe('admin');
-				// Verify no filtering was applied - getAllProcesses called once
-				expect(mockPM2Repo.list).toHaveBeenCalledTimes(1);
-				// findByAccess should NOT be called for admin
+				expect(result[0].accessType).toBe('personal');
+				expect(result[1].accessType).toBe('personal');
+				expect(mockProjectRepo.getAll).toHaveBeenCalledTimes(1);
 				expect(mockProjectRepo.findByAccess).not.toHaveBeenCalled();
 			});
 		});

@@ -126,7 +126,7 @@ describe('PM2Service', () => {
 	describe('getProcessLogs', () => {
 		it('should return logs from repository', async () => {
 			const mockLogs = [
-				{ type: 'out' as const, data: 'log line 1', timestamp: new Date() }
+				{ type: 'out' as const, data: 'log line 1', timestamp: new Date(), hasTimestamp: true, level: 'info' as const }
 			];
 			vi.mocked(mockRepo.getLogs).mockResolvedValue(mockLogs);
 

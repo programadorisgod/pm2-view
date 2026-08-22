@@ -5,7 +5,6 @@ export { verifications } from './verifications';
 export { projects, projectsRelations } from './projects';
 export { projectFavorites, projectFavoritesRelations, type ProjectFavorite } from './project-favorites';
 export { envVars } from './env-vars';
-export { metrics } from './metrics';
 export { projectMembers, projectMembersRelations, type ProjectMember } from './project-members';
 export { teams, teamsRelations, teamMembers, teamMembersRelations, type Team, type TeamMember } from './teams';
 export { auditLogs, auditLogsRelations, type AuditLog, type NewAuditLog } from './audit-logs';

@@ -58,6 +58,7 @@ export const GET: RequestHandler = async ({ params, request }) => {
 		deployBranch: project.deployBranch,
 		targetPath: project.targetPath,
 		pm2Name: project.pm2Name,
+		notifyEmail: project.notifyEmail,
 		lastDeployment: lastDeployment
 			? {
 					id: lastDeployment.id,
@@ -110,12 +111,15 @@ export const PUT: RequestHandler = async ({ params, request }) => {
 	const updated = await projectRepo.update(projectId, {
 		autoDeployEnabled: parsed.data.autoDeployEnabled,
 		githubRepo: githubRepo ?? null,
-		deployBranch: parsed.data.deployBranch
+		deployBranch: parsed.data.deployBranch,
+		// Capture who configured auto-deploy so they receive deploy outcome emails
+		notifyEmail: session.user.email ?? null
 	});
 
 	return json({
 		autoDeployEnabled: updated.autoDeployEnabled,
 		githubRepo: updated.githubRepo,
-		deployBranch: updated.deployBranch
+		deployBranch: updated.deployBranch,
+		notifyEmail: updated.notifyEmail
 	});
 };

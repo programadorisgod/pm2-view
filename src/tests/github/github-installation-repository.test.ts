@@ -7,6 +7,10 @@ vi.mock('$lib/db/db', () => ({
 			githubInstallations: {
 				findFirst: vi.fn(),
 				findMany: vi.fn()
+			},
+			githubUserInstallations: {
+				findFirst: vi.fn(),
+				findMany: vi.fn()
 			}
 		},
 		insert: vi.fn().mockReturnThis(),
@@ -49,5 +53,22 @@ describe('GitHubInstallationRepository', () => {
 
 	it('should have delete method', () => {
 		expect(typeof repo.delete).toBe('function');
+	});
+
+	// New methods for org installations
+	it('should have getInstallationIdsForUser method', () => {
+		expect(typeof repo.getInstallationIdsForUser).toBe('function');
+	});
+
+	it('should have addUserToInstallation method', () => {
+		expect(typeof repo.addUserToInstallation).toBe('function');
+	});
+
+	it('should have removeUserFromInstallation method', () => {
+		expect(typeof repo.removeUserFromInstallation).toBe('function');
+	});
+
+	it('should have userHasAccess method', () => {
+		expect(typeof repo.userHasAccess).toBe('function');
 	});
 });

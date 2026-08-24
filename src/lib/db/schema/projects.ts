@@ -14,6 +14,8 @@ export const projects = sqliteTable('projects', {
 	teamId: text('team_id').references(() => teams.id),
 	name: text('name').notNull(),
 	pm2Name: text('pm2_name').notNull(),
+	/** JSON array of PM2 process names for multi-process projects (e.g. `["atlas-backend","atlas-frontend"]`). Falls back to `pm2Name` if empty. */
+	pm2Names: text('pm2_names'),
 	description: text('description'),
 	targetPath: text('target_path'),
 	githubRepo: text('github_repo'),

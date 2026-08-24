@@ -23,12 +23,14 @@
 			autoDeployEnabled: boolean;
 			githubRepo: string | null;
 			deployBranch: string;
+			pm2Names?: string[];
 		};
 	} = $props();
 
 	let enabled = $state(initialSettings.autoDeployEnabled);
 	let repoInput = $state(initialSettings.githubRepo ?? '');
 	let branchInput = $state(initialSettings.deployBranch);
+	let pm2NamesInput = $state<string[]>(initialSettings.pm2Names ?? []);
 
 	let isSaving = $state(false);
 	let serverError = $state<string | null>(null);
@@ -70,7 +72,8 @@
 				body: JSON.stringify({
 					autoDeployEnabled: enabled,
 					githubRepo: repoInput.trim() || null,
-					deployBranch: branchInput.trim()
+					deployBranch: branchInput.trim(),
+					pm2Names: pm2NamesInput.length > 0 ? pm2NamesInput.filter((n) => n.trim()) : undefined
 				})
 			});
 			const data = await res.json().catch(() => ({}));
@@ -81,6 +84,7 @@
 			enabled = data.autoDeployEnabled ?? enabled;
 			repoInput = data.githubRepo ?? '';
 			branchInput = data.deployBranch ?? branchInput;
+			pm2NamesInput = data.pm2Names ?? pm2NamesInput;
 			savedJustNow = true;
 			setTimeout(() => (savedJustNow = false), 3000);
 		} catch {
@@ -158,6 +162,56 @@
 					class="input-base w-full h-10 px-md text-body-sm font-mono"
 				/>
 			</div>
+		</div>
+
+		<!-- PM2 Process Names -->
+		<div>
+			<div class="flex items-center justify-between mb-2xs">
+				<label class="text-caption" style="color: var(--text-muted);">
+					PM2 Processes (restart all after build)
+				</label>
+				<button
+					type="button"
+					class="text-caption px-2 py-1 rounded"
+					style="color: #38CDFF; background: transparent; border: 1px solid var(--border-color);"
+					onclick={() => { pm2NamesInput = [...pm2NamesInput, '']; }}
+				>
+					+ Add Process
+				</button>
+			</div>
+			{#if pm2NamesInput.length === 0}
+				<p class="text-caption" style="color: var(--text-muted);">
+					Uses <code class="font-mono">{initialSettings.pm2Name ?? 'pm2_name'}</code> (single process). Add more for multi-process deploys.
+				</p>
+			{:else}
+				<div class="space-y-xs">
+					{#each pm2NamesInput as name, i (i)}
+						<div class="flex items-center gap-xs">
+							<input
+								type="text"
+								bind:value={pm2NamesInput[i]}
+								placeholder="e.g. atlas-backend"
+								class="input-base flex-1 h-9 px-3 text-body-sm font-mono"
+							/>
+							<button
+								type="button"
+								class="p-2 rounded"
+								style="color: #FF5252;"
+								onclick={() => { pm2NamesInput = pm2NamesInput.filter((_, j) => j !== i); }}
+								title="Remove process"
+								aria-label="Remove process"
+							>
+								<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+									<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+								</svg>
+							</button>
+						</div>
+					{/each}
+				</div>
+				<p class="text-caption mt-2xs" style="color: var(--text-muted);">
+					All processes will be restarted sequentially after the build succeeds.
+				</p>
+			{/if}
 		</div>
 
 		<div>

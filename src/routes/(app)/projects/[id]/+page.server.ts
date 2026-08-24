@@ -40,12 +40,12 @@ export const load: PageServerLoad = async ({ params, request }) => {
 	// Get deploy configuration (auto-provisions project if not registered)
 	let deployConfig = { install: [], build: [], restart: [] };
 	let projectInternalId: string | null = null;
-	let autoDeploySettings = { autoDeployEnabled: false, githubRepo: null as string | null, deployBranch: 'main' };
+	let autoDeploySettings = { autoDeployEnabled: false, githubRepo: null as string | null, deployBranch: 'main', pm2Names: [] as string[], pm2Name: '' as string };
 	try {
 		// Find project by pm2_name to get internal ID
 		let project = await db.query.projects.findFirst({
 			where: eq(projects.pm2Name, process.name),
-			columns: { id: true, autoDeployEnabled: true, githubRepo: true, deployBranch: true }
+			columns: { id: true, autoDeployEnabled: true, githubRepo: true, deployBranch: true, pm2Name: true, pm2Names: true }
 		});
 
 		// Auto-provision: register project if it doesn't exist yet
@@ -61,7 +61,9 @@ export const load: PageServerLoad = async ({ params, request }) => {
 				id: projects.id,
 				autoDeployEnabled: projects.autoDeployEnabled,
 				githubRepo: projects.githubRepo,
-				deployBranch: projects.deployBranch
+				deployBranch: projects.deployBranch,
+				pm2Name: projects.pm2Name,
+				pm2Names: projects.pm2Names
 			});
 			project = created;
 		}
@@ -71,7 +73,9 @@ export const load: PageServerLoad = async ({ params, request }) => {
 			autoDeploySettings = {
 				autoDeployEnabled: project.autoDeployEnabled,
 				githubRepo: project.githubRepo,
-				deployBranch: project.deployBranch
+				deployBranch: project.deployBranch,
+				pm2Names: project.pm2Names ? JSON.parse(project.pm2Names) as string[] : [],
+				pm2Name: project.pm2Name
 			};
 			const deployConfigRepo = new DeployConfigRepository();
 			const commands = await deployConfigRepo.getByProjectId(project.id);

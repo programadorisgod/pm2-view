@@ -1,6 +1,6 @@
 import type { IGitHubInstallationRepository, GitHubInstallationRecord } from './github.types';
 import type { GitHubAppClient } from './infrastructure/github-app-client';
-import { GitHubInstallationNotFound, GitHubInstallationNotOwnedByUser } from './github.types';
+import { GitHubInstallationNotFound } from './github.types';
 import { logger } from '$lib/logger';
 
 export class GitHubSetupService {
@@ -9,6 +9,18 @@ export class GitHubSetupService {
 		private appClient: GitHubAppClient
 	) {}
 
+	/**
+	 * Handle the setup callback from GitHub (installation completed).
+	 *
+	 * Flow:
+	 * 1. Validate installation exists on GitHub
+	 * 2. If installation exists in DB:
+	 *    - If user doesn't have access yet → add them to the junction table (org membership)
+	 *    - Update account info if changed
+	 * 3. If installation doesn't exist:
+	 *    - Create the installation record
+	 *    - Add user to the junction table
+	 */
 	async handleSetupCallback(
 		userId: string,
 		installationId: number
@@ -25,31 +37,44 @@ export class GitHubSetupService {
 		const existing = await this.installationRepo.getByInstallationId(installationId);
 
 		if (existing) {
-			// If it belongs to another user, reject
-			if (existing.userId !== userId) {
-				throw new GitHubInstallationNotOwnedByUser();
+			// Installation exists - check if user has access
+			const hasAccess = await this.installationRepo.userHasAccess(userId, installationId);
+			if (!hasAccess) {
+				// User is accessing an org installation for the first time
+				// Add them to the junction table
+				await this.installationRepo.addUserToInstallation(userId, installationId);
+				logger.info('[github-setup] User added to existing org installation', {
+					userId,
+					installationId,
+					accountLogin: installationInfo.account.login
+				});
 			}
 			// Update account info if changed
-			return this.installationRepo.update(installationId, {
+			const updated = await this.installationRepo.update(installationId, {
 				accountLogin: installationInfo.account.login,
 				accountType: installationInfo.account.type,
 				accountAvatar: installationInfo.account.avatarUrl
 			});
+			return updated;
 		}
 
 		// 3. Create new installation
 		const record = await this.installationRepo.create({
-			userId,
+			userId, // Store first user as reference (nullable for org installations)
 			installationId,
 			accountLogin: installationInfo.account.login,
 			accountType: installationInfo.account.type,
 			accountAvatar: installationInfo.account.avatarUrl
 		});
 
-		logger.info('GitHub installation created', {
+		// Immediately add user to the junction table
+		await this.installationRepo.addUserToInstallation(userId, installationId);
+
+		logger.info('[github-setup] GitHub installation created', {
 			userId,
 			installationId,
-			accountLogin: installationInfo.account.login
+			accountLogin: installationInfo.account.login,
+			accountType: installationInfo.account.type
 		});
 
 		return record;
@@ -77,6 +102,6 @@ export class GitHubSetupService {
 		}
 
 		await this.installationRepo.delete(installationId);
-		logger.info('GitHub installation revoked', { installationId });
+		logger.info('[github-setup] GitHub installation revoked', { installationId });
 	}
 }

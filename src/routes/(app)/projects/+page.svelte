@@ -5,6 +5,7 @@
     ConfirmDeleteModal,
     FeedbackBanner,
     PM2SystemModal,
+    DeployAllModal,
   } from "$lib/ui/components";
   import { base } from "$app/paths";
   import type { PageData } from "./$types";
@@ -30,6 +31,8 @@
     mode: "startup",
   });
   let startingProject = $state<string | null>(null);
+  let deployAllModal = $state({ open: false });
+  let isDeployingAll = $state(false);
 
   let favoriteProcesses = $derived(processes.filter((p) => p.isFavorite));
   let nonFavoriteProcesses = $derived(processes.filter((p) => !p.isFavorite));
@@ -156,8 +159,28 @@
       </p>
     </div>
 
-    {#if data.userRole === "admin"}
-      <div class="flex gap-xs">
+    <div class="flex gap-xs flex-wrap">
+      <button
+        class="btn-primary px-3 py-1.5 text-body-sm inline-flex items-center gap-1.5"
+        onclick={() => { deployAllModal.open = true; }}
+        disabled={isDeployingAll}
+        class:opacity-40={isDeployingAll}
+        class:cursor-not-allowed={isDeployingAll}
+        title="Deploy all online apps sequentially"
+      >
+        {#if isDeployingAll}
+          <svg class="w-3.5 h-3.5 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+          </svg>
+          Deploying...
+        {:else}
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m9-13V1a1 1 0 00-1 1v2.582a5.009 5.009 0 00-3.412 1.918m7.422 2.476V4a1 1 0 00-2 0v1.582"/>
+          </svg>
+          Deploy All
+        {/if}
+      </button>
+      {#if data.userRole === "admin"}
         <button
           class="btn-secondary px-3 py-1.5 text-body-sm inline-flex items-center gap-1.5"
           onclick={() => (systemModal = { open: true, mode: "save" })}
@@ -178,8 +201,8 @@
           </svg>
           PM2 Startup
         </button>
-      </div>
-    {/if}
+      {/if}
+    </div>
   </div>
 
   {#if feedback}
@@ -534,4 +557,10 @@
   onClose={() => {
     systemModal.open = false;
   }}
+/>
+
+<DeployAllModal
+  open={deployAllModal.open}
+  onDeploying={(deploying) => { isDeployingAll = deploying; }}
+  onClose={() => { deployAllModal.open = false; }}
 />

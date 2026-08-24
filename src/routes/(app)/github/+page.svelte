@@ -330,7 +330,7 @@
 				<p class="text-body text-muted mb-md">
 					Connect your GitHub account to start importing repositories.
 				</p>
-				<a href={data.installUrl}>
+				<a href={data.setupUrl}>
 					<Button variant="primary">Connect GitHub</Button>
 				</a>
 			</div>

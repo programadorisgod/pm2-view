@@ -20,6 +20,15 @@
         </a>
       </div>
     </Card>
+  {:else if data.installUrl}
+    <Card>
+      <div class="text-center py-lg">
+        <p class="text-body text-muted mb-md">{data.message}</p>
+        <a href={data.installUrl}>
+          <Button variant="primary">Install GitHub App</Button>
+        </a>
+      </div>
+    </Card>
   {:else}
     <Card>
       <div class="text-center py-lg">

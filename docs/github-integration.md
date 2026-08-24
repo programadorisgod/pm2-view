@@ -21,24 +21,22 @@ sequenceDiagram
     participant A as PM2 View
     participant G as GitHub
 
-    U->>U: Clicks "Connect GitHub" on /github
-    U->>G: Opens GitHub OAuth authorization
+    U->>A: Clicks "Connect GitHub" on /github
+    A-->>U: Redirect to /github/setup
+    U->>G: GitHub OAuth authorization
     G->>U: OAuth consent screen
     U->>G: Authorizes the app
     G-->>A: Redirect to {base}/github/setup?code=XXX&state=YYY
     A->>G: Exchanges code for access token
     A->>G: GET /user/installations
     G-->>A: List of installations
-    alt Installation exists
-        A->>A: Save installation in github_installations table
+    alt Installation exists in list
+        A->>A: Save installation + add user to junction table
         A-->>U: "GitHub connected successfully" → /github
     else No installation found
-        A-->>U: "Please install the GitHub App"
-        Note over U: User clicks install link
-        U->>G: Opens {base}/github/setup?setup_action=request&code=ZZZ
-        Note over A: This is GitHub initiating the flow,<br/>not user's direct click
-        A-->>U: Redirects to GitHub App installation page
-        U->>G: Selects account + repo access, clicks "Install"
+        A-->>U: "Please install the GitHub App" + install link
+        U->>G: Clicks install → selects account + repo access
+        U->>G: Clicks "Install"
         G-->>A: Redirect to {base}/github/setup?installation_id=123&setup_action=install
         A->>G: GET /app/installations/{id} (validate installation)
         A->>A: Save installation in github_installations table
@@ -61,6 +59,10 @@ sequenceDiagram
 - Installation tells GitHub "this user installed our app to access their repositories"
 
 A user can authorize OAuth without installing the app. In that case, PM2 View shows an "install the GitHub App" message after OAuth completes. The user must then complete the installation (selecting repos) for repository access to work.
+
+### Key insight: Org installations are shared, but access is per-user
+
+When the app is installed into an organization, the installation belongs to the org — not to the individual who installed it. However, PM2 View tracks which users have access via a junction table. Each org member must complete the OAuth flow at least once to be added to this table. After that, they see the same repositories without re-installing.
 
 ## Prerequisites
 
@@ -99,8 +101,8 @@ A user can authorize OAuth without installing the app. In that case, PM2 View sh
 
 | Field | Value | Notes |
 | ----- | ----- | ----- |
-| **Setup URL** | Leave **empty** | Unavailable when "Request user authorization during installation" is checked — the Setup URL is the same as the Redirect URI. |
-| **Redirect on update** | ✅ Check this | Redirects users to the callback URL after installations are updated (e.g. repos added/removed). |
+| **Setup URL** | `https://gcmbigdata.online/pm2/github/setup` (prod) or `http://localhost:5179/github/setup` (dev) | ⚠️ **MUST be set** — this is where GitHub redirects after installation completes. Must match the Redirect URI. |
+| **Redirect on update** | ✅ Check this | Redirects users to the Setup URL after installations are updated (e.g. repos added/removed). |
 
 ### 1.4 — Webhook
 
@@ -297,15 +299,26 @@ pm2 restart pm2-view          # production (or whatever your app name is)
 ## Using the integration
 
 1. Log in and open the **GitHub** page from the sidebar.
-2. Click **Connect GitHub** → you're taken through GitHub OAuth authorization.
-3. After authorizing, PM2 View checks if the GitHub App is installed:
-   - **If installed**: saves the installation → shows repository list
-   - **If not installed**: shows "Please install the GitHub App" with an install link
-4. Click **Install GitHub App** → select account/org and repo access → click **Install**.
+2. Click **Connect GitHub** → you're taken to `/github/setup` which starts GitHub OAuth.
+3. After authorizing, PM2 View calls `GET /user/installations` to find installations the user has access to:
+   - **If found**: saves the installation + adds user to the junction table → shows repository list
+   - **If not found**: shows "Please install the GitHub App" with an install link
+4. If installation is needed: click **Install GitHub App** → select account/org and repo access → click **Install**.
 5. GitHub redirects to `{base}/github/setup?installation_id=...&setup_action=install` → the app validates and saves the installation.
 6. You're back on `/github`, now showing **Connected** plus the list of accessible repositories.
 7. Click **Import** on any repository — it clones the repo (`--depth 1`) into a temp workspace with a fresh installation token, then cleans up.
 8. If you uninstall the app, the `installation` webhook with `action=deleted` removes the DB record automatically.
+
+### Multi-user org installations
+
+When the GitHub App is installed into an organization (not a personal account), **each user who needs access must complete the OAuth flow individually**:
+
+1. User clicks **Connect GitHub** on the GitHub page
+2. OAuth authorizes → `GET /user/installations` returns the org's installation
+3. The callback detects the installation exists but the user doesn't have access yet
+4. The user is added to the junction table → now sees **Connected** + repos
+
+This means the first user who installs the app creates the installation record, and subsequent org members are added to it through their own OAuth flow. No re-installation is needed.
 
 ---
 
@@ -320,7 +333,8 @@ pm2 restart pm2-view          # production (or whatever your app name is)
 | "Invalid OAuth state" | OAuth state mismatch — browser cookies not working | Ensure cookies are enabled and the session is valid. |
 | OAuth succeeds but "No installations found" | User authorized OAuth but didn't install the GitHub App | Click "Install GitHub App" and complete the installation. |
 | OAuth succeeds, user installs app, but "Invalid setup parameters" | The app is Private — only the creator can install it | Make the app Public (see Step 7). |
-| App installed but still shows "Connect GitHub" | Setup URL never called, or callback failed | Check server logs for `[github-setup]`. Verify Setup URL + Redirect URI are `{base}/github/setup`. Uninstall and reinstall the app after fixing. |
+| App installed but still shows "Connect GitHub" | Setup URL never called, or callback failed | Check server logs for `[github-setup]`. Verify Setup URL + Redirect URI are both `{base}/github/setup`. Uninstall and reinstall the app after fixing. |
+| Org member can't see installation after first user connected | User hasn't completed their own OAuth flow yet | Each org member must click "Connect GitHub" and go through OAuth individually — the installation is shared, but the junction table entry is per-user. |
 | GitHub shows webhook delivery failures | Webhook URL path wrong | Must end in `/api/webhooks/github`. |
 | `401 Invalid webhook signature` | `GITHUB_WEBHOOK_SECRET` ≠ webhook secret on GitHub | Set both to the same value (`openssl rand -hex 32`). |
 | Webhooks never reach the app | Webhook URL is `http://localhost` | GitHub can't reach your machine. Use a tunnel and a reachable URL. |

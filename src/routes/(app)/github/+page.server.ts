@@ -11,7 +11,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 	logger.info('[github-page] load called', { userId: user?.id, hasUser: !!user });
 
 	if (!user) {
-		return { connected: false, installation: null, repositories: [], installUrl: '' };
+		return { connected: false, installation: null, repositories: [], setupUrl: `${base}/github/setup` };
 	}
 
 	const installationRepo = new GitHubInstallationRepository();
@@ -30,7 +30,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 			connected: false,
 			installation: null,
 			repositories: [],
-			installUrl: appClient.getInstallUrl()
+			setupUrl: `${base}/github/setup`
 		};
 	}
 
@@ -47,12 +47,12 @@ export const load: PageServerLoad = async ({ locals }) => {
 				userId: user.id,
 				installationId: installation.installationId,
 			});
-			return {
-				connected: false,
-				installation: null,
-				repositories: [],
-				installUrl: appClient.getInstallUrl(),
-			};
+		return {
+			connected: false,
+			installation: null,
+			repositories: [],
+			setupUrl: `${base}/github/setup`,
+		};
 		}
 		throw err;
 	}
@@ -66,6 +66,6 @@ export const load: PageServerLoad = async ({ locals }) => {
 			accountAvatar: installation.accountAvatar
 		},
 		repositories,
-		installUrl: ''
+		setupUrl: `${base}/github/setup`
 	};
 };

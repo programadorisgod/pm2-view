@@ -5,13 +5,17 @@ import { GitHubSetupService } from '$lib/github/github-setup.service';
 import { GitHubRepositoriesService } from '$lib/github/github-repositories.service';
 import { GitHubInstallationRevoked } from '$lib/github/github.types';
 import { logger } from '$lib/logger';
+import { getEnv } from '$lib/db/env';
 
-export const load: PageServerLoad = async ({ locals }) => {
+export const load: PageServerLoad = async ({ locals, url }) => {
 	const user = locals.user;
 	logger.info('[github-page] load called', { userId: user?.id, hasUser: !!user });
 
+	const basePath = getEnv().APP_BASE_PATH ?? '';
+	const setupUrl = `${url.origin}${basePath}/github/setup`;
+
 	if (!user) {
-		return { connected: false, installation: null, repositories: [], setupUrl: `${base}/github/setup` };
+		return { connected: false, installation: null, repositories: [], setupUrl };
 	}
 
 	const installationRepo = new GitHubInstallationRepository();
@@ -30,7 +34,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 			connected: false,
 			installation: null,
 			repositories: [],
-			setupUrl: `${base}/github/setup`
+			setupUrl
 		};
 	}
 
@@ -47,12 +51,12 @@ export const load: PageServerLoad = async ({ locals }) => {
 				userId: user.id,
 				installationId: installation.installationId,
 			});
-		return {
-			connected: false,
-			installation: null,
-			repositories: [],
-			setupUrl: `${base}/github/setup`,
-		};
+			return {
+				connected: false,
+				installation: null,
+				repositories: [],
+				setupUrl,
+			};
 		}
 		throw err;
 	}
@@ -66,6 +70,6 @@ export const load: PageServerLoad = async ({ locals }) => {
 			accountAvatar: installation.accountAvatar
 		},
 		repositories,
-		setupUrl: `${base}/github/setup`
+		setupUrl
 	};
 };

@@ -6,6 +6,7 @@
     FeedbackBanner,
     PM2SystemModal,
     DeployAllModal,
+    RegisterProcessModal,
   } from "$lib/ui/components";
   import { base } from "$app/paths";
   import type { PageData } from "./$types";
@@ -33,6 +34,7 @@
   let startingProject = $state<string | null>(null);
   let deployAllModal = $state({ open: false });
   let isDeployingAll = $state(false);
+  let registerModal = $state({ open: false });
 
   let favoriteProcesses = $derived(processes.filter((p) => p.isFavorite));
   let nonFavoriteProcesses = $derived(processes.filter((p) => !p.isFavorite));
@@ -181,6 +183,16 @@
         {/if}
       </button>
       {#if data.userRole === "admin"}
+        <button
+          class="btn-secondary px-3 py-1.5 text-body-sm inline-flex items-center gap-1.5"
+          onclick={() => (registerModal = { open: true })}
+          title="Register a running PM2 process"
+        >
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+          </svg>
+          Register process
+        </button>
         <button
           class="btn-secondary px-3 py-1.5 text-body-sm inline-flex items-center gap-1.5"
           onclick={() => (systemModal = { open: true, mode: "save" })}
@@ -564,3 +576,12 @@
   onDeploying={(deploying) => { isDeployingAll = deploying; }}
   onClose={() => { deployAllModal.open = false; }}
 />
+
+{#if data.userRole === "admin"}
+  <RegisterProcessModal
+    open={registerModal.open}
+    onClose={() => { registerModal.open = false; invalidateAll(); }}
+    users={data.users ?? []}
+    teams={data.teams ?? []}
+  />
+{/if}

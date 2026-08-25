@@ -59,6 +59,11 @@ export const POST = adminHandler(async (event) => {
     description: description ?? `PM2 process: ${processName}`,
     targetPath: targetPath ?? null,
     teamId: teamId ?? null,
+    pm2Names: null,
+    githubRepo: null,
+    deployBranch: 'main',
+    autoDeployEnabled: false,
+    notifyEmail: null,
   });
 
   // Add members

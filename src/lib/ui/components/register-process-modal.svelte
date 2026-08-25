@@ -356,9 +356,9 @@
 
           <!-- Members -->
           <div>
-            <label class="block text-caption font-medium mb-xs" style="color: var(--text-secondary);">
+            <div class="block text-caption font-medium mb-sm" style="color: var(--text-secondary);">
               Members <span class="text-caption" style="color: var(--text-muted);">(optional)</span>
-            </label>
+            </div>
 
             {#if members.length > 0}
               <div class="space-y-xs mb-sm">

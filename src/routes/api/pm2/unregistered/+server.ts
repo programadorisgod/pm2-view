@@ -20,8 +20,8 @@ export const GET = adminHandler(async () => {
       name: p.name,
       pm_id: p.pm_id,
       status: p.pm2_env?.status ?? 'unknown',
-      cwd: (p.pm2_env as Record<string, string | undefined>)?.pm_cwd
-        ?? (p.pm2_env as Record<string, string | undefined>)?.cwd
+      cwd: p.pm2_env?.pm_cwd
+        ?? p.pm2_env?.cwd
         ?? '',
     }));
 

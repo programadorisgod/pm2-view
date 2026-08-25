@@ -28,6 +28,7 @@ export const load: PageServerLoad = async ({ params, request }) => {
 	}
 
 	const members = team.teamMembers?.map(tm => ({
+		id: tm.id,
 		userId: tm.userId,
 		role: tm.role,
 		joinedAt: tm.createdAt,

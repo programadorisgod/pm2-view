@@ -24,7 +24,10 @@ export function adminHandler(handler: AdminHandlerFn): RequestHandler {
 				throw err;
 			}
 			// Log the actual error before throwing generic 500
-			logger.error('adminHandler error:', err);
+			const errorDetails = err instanceof Error
+				? { message: err.message, stack: err.stack, name: err.name }
+				: { raw: err };
+			logger.error('adminHandler error:', errorDetails);
 			throw error(500, err instanceof Error ? err.message : 'Internal server error');
 		}
 	};

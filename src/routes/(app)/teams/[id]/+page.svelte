@@ -343,7 +343,7 @@
                         </p>
                     {:else}
                         <div class="space-y-xs">
-                            {#each members as member, i (member.userId)}
+                            {#each members as member, i (member.id)}
                                 <div
                                     class="flex items-center justify-between py-sm px-md rounded-md"
                                     style="border-bottom: 1px solid var(--border-color);"
@@ -413,7 +413,7 @@
                         </p>
                     {:else}
                         <div class="space-y-sm">
-                            {#each members as member (member.userId)}
+                            {#each members as member (member.id)}
                                 <div
                                     class="flex items-center justify-between py-sm px-md rounded-lg"
                                     style="background: var(--bg-surface); border: 1px solid var(--border-color);"

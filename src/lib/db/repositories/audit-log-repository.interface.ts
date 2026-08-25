@@ -6,6 +6,8 @@ import type { AuditLog } from '../schema/audit-logs';
 export type AuditLogFilters = {
   action?: string;
   actorId?: string;
+  /** Partial search across actor name, email, or ID */
+  actorQuery?: string;
   targetId?: string;
   resourceType?: string;
   startDate?: Date;

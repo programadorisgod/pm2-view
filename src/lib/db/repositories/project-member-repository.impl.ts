@@ -1,4 +1,4 @@
-import { db } from '../db';
+import { db } from '$lib/db';
 import { projectMembers } from '../schema';
 import { eq, and } from 'drizzle-orm';
 import type { IProjectMemberRepository, ProjectMember } from './project-member-repository.interface';

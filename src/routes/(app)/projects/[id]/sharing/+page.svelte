@@ -188,7 +188,7 @@
 		</div>
 
 		<div class="divide-y" style="divide-color: var(--border-color);">
-			{#each members as member (member.userId)}
+			{#each members as member (member.id)}
 				<div class="p-lg flex items-center justify-between">
 					<div>
 						<p class="text-body-sm font-medium" style="color: var(--text-primary);">

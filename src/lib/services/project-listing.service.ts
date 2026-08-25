@@ -70,15 +70,19 @@ export class ProjectListingService {
 			});
 
 		// Add DB projects with targetPath that are NOT in PM2
-		for (const dbProject of dbProjects) {
-			if (pm2Names.has(dbProject.pm2Name)) continue;
-			if (!dbProject.targetPath) continue;
+		const offlineProjects = dbProjects
+			.filter(dbProject => !pm2Names.has(dbProject.pm2Name) && dbProject.targetPath)
+			.filter(dbProject => existsSync(dbProject.targetPath));
 
-			// Check if targetPath exists on disk
-			if (!existsSync(dbProject.targetPath)) continue;
+		// Parallelize filesystem checks for ecosystem files
+		const ecosystemResults = await Promise.all(
+			offlineProjects.map(async (dbProject) => ({
+				dbProject,
+				ecosystemFiles: await findEcosystemFiles(dbProject.targetPath!)
+			}))
+		);
 
-			// Check for ecosystem files
-			const ecosystemFiles = await findEcosystemFiles(dbProject.targetPath);
+		for (const { dbProject, ecosystemFiles } of ecosystemResults) {
 			if (ecosystemFiles.length === 0) continue;
 
 			const accessType = this.determineAccessType(dbProject, userId);

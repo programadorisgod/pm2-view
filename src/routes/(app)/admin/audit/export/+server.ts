@@ -1,36 +1,22 @@
 import { error } from '@sveltejs/kit';
 import { adminHandler } from '$lib/server/admin-handler';
 import { createAuditService } from '$lib/services/admin/audit.service';
-import { listAuditQuerySchema } from '$lib/validation/audit-schemas';
 
 const auditService = createAuditService();
 
 export const GET = adminHandler(async ({ url }) => {
-	const parseResult = listAuditQuerySchema.safeParse({
-		action: url.searchParams.get('action'),
-		actorId: url.searchParams.get('actorId'),
-		targetId: url.searchParams.get('targetId'),
-		resourceType: url.searchParams.get('resourceType'),
-		startDate: url.searchParams.get('startDate'),
-		endDate: url.searchParams.get('endDate')
-	});
+	const action = url.searchParams.get('action') || undefined;
+	const actorQuery = url.searchParams.get('actor') || undefined;
+	const startDate = url.searchParams.get('startDate') || undefined;
+	const endDate = url.searchParams.get('endDate') || undefined;
 
-	if (!parseResult.success) {
-		throw error(400, parseResult.error.issues[0].message);
-	}
+	const filters: Record<string, any> = {};
+	if (action) filters.action = action;
+	if (actorQuery) filters.actorQuery = actorQuery;
+	if (startDate) filters.startDate = new Date(startDate);
+	if (endDate) filters.endDate = new Date(endDate);
 
-	const { page: _page, limit: _limit, ...filters } = parseResult.data;
-
-	// Convert date strings to Date objects if present
-	const auditFilters: Record<string, any> = { ...filters };
-	if (auditFilters.startDate) {
-		auditFilters.startDate = new Date(auditFilters.startDate);
-	}
-	if (auditFilters.endDate) {
-		auditFilters.endDate = new Date(auditFilters.endDate);
-	}
-
-	const csvString = await auditService.exportCSV(auditFilters);
+	const csvString = await auditService.exportCSV(Object.keys(filters).length > 0 ? filters : undefined);
 
 	return new Response(csvString, {
 		headers: {

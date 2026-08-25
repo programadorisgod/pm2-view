@@ -36,6 +36,7 @@
 	let selectedUserId = $state('');
 	let memberRole = $state('team_member');
 	let teamMembers = $state<any[]>([]);
+	let loadingMembers = $state(false);
 	let memberFeedback = $state<{ type: 'success' | 'error'; text: string } | null>(null);
 
 	async function handleCreateTeam() {
@@ -123,8 +124,13 @@
 		selectedUserId = '';
 		memberRole = 'team_member';
 		memberFeedback = null;
+		teamMembers = [];
+		loadingMembers = true;
 
-		// Load existing members
+		// Open modal immediately so UI doesn't feel stuck
+		showMemberModal = true;
+
+		// Load existing members in background
 		try {
 			const res = await fetch(`${base}/admin/teams/${team.id}/members`);
 			if (res.ok) {
@@ -133,9 +139,9 @@
 			}
 		} catch (err) {
 			console.error('Failed to load members:', err);
+		} finally {
+			loadingMembers = false;
 		}
-
-		showMemberModal = true;
 	}
 
 	async function handleAddMember() {
@@ -475,12 +481,19 @@
 			{/if}
 
 			<!-- Existing members list (primary) -->
-			<h3 class="text-caption font-medium mb-sm" style="color: var(--text-secondary);">Team Members ({teamMembers.length})</h3>
-			{#if teamMembers.length === 0}
+			<h3 class="text-caption font-medium mb-sm" style="color: var(--text-secondary);">Team Members ({loadingMembers ? '...' : teamMembers.length})</h3>
+			{#if loadingMembers}
+				<div class="text-center py-md mb-md" style="color: var(--text-muted);">
+					<svg class="w-5 h-5 animate-spin mx-auto mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+						<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+					</svg>
+					<span class="text-body-sm">Loading members...</span>
+				</div>
+			{:else if teamMembers.length === 0}
 				<p class="text-center py-md mb-md" style="color: var(--text-muted);">No members yet</p>
 			{:else}
 				<div class="space-y-sm mb-lg">
-					{#each teamMembers as member (member.userId)}
+					{#each teamMembers as member (member.id)}
 						<div class="flex items-center justify-between py-sm px-md rounded-lg" style="background: var(--bg-card); border: 1px solid var(--border-color);">
 							<div>
 								<p class="text-body-sm font-medium" style="color: var(--text-primary);">{member.user.name ?? member.user.email}</p>

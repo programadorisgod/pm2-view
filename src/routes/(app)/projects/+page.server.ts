@@ -41,13 +41,15 @@ export const load: PageServerLoad = async (event) => {
 	};
 
 	if (session.user.role === 'admin') {
-		const allUsers = await db.select({
-			id: users.id,
-			email: users.email,
-			name: users.name,
-		}).from(users);
 		const sharingService = createProjectSharingService();
-		const allTeams = await sharingService.getAllTeams();
+		const [allUsers, allTeams] = await Promise.all([
+			db.select({
+				id: users.id,
+				email: users.email,
+				name: users.name,
+			}).from(users),
+			sharingService.getAllTeams()
+		]);
 		result.users = allUsers;
 		result.teams = allTeams.map(t => ({ id: t.id, name: t.name }));
 	}

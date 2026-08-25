@@ -15,14 +15,14 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 	const limit = parseInt(url.searchParams.get('limit') || '20', 10);
 
 	const actionFilter = url.searchParams.get('action') || undefined;
-	const actorIdFilter = url.searchParams.get('actorId') || undefined;
+	const actorQuery = url.searchParams.get('actor') || undefined;
 	const startDate = url.searchParams.get('startDate') || undefined;
 	const endDate = url.searchParams.get('endDate') || undefined;
 
-	const filters: AuditLogFilters | undefined = (actionFilter || actorIdFilter || startDate || endDate)
+	const filters: AuditLogFilters | undefined = (actionFilter || actorQuery || startDate || endDate)
 		? {
 			action: actionFilter,
-			actorId: actorIdFilter,
+			actorQuery,
 			startDate: startDate ? new Date(startDate) : undefined,
 			endDate: endDate ? new Date(endDate) : undefined
 		}

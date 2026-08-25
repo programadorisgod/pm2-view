@@ -1,5 +1,5 @@
 import { auth } from '$lib/auth';
-import { db } from '../db';
+import { db } from '$lib/db';
 import { users, sessions } from '../schema';
 import { eq, count } from 'drizzle-orm';
 import type { IAuthRepository, User, Session } from '../../auth/auth.types';

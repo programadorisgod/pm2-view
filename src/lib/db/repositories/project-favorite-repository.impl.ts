@@ -1,4 +1,4 @@
-import { db } from '../db';
+import { db } from '$lib/db';
 import { projectFavorites } from '../schema';
 import { eq, and } from 'drizzle-orm';
 import type { ProjectFavorite, NewProjectFavorite } from '../schema/project-favorites';

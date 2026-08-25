@@ -34,6 +34,7 @@
 	let availableTeams = $state<Array<{ id: string; name: string }>>([]);
 	let teamAssigning = $state(false);
 	let teamMessage = $state<{ type: 'success' | 'error'; text: string } | null>(null);
+	let memberMessage = $state<{ type: 'success' | 'error'; text: string } | null>(null);
 
 	async function loadTeams() {
 		try {
@@ -56,7 +57,7 @@
 			const res = await fetch(`${base}/admin/projects/${project.id}/team`, {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ teamId: selectedTeamId })
+				body: JSON.stringify({ teamId: selectedTeamId || null })
 			});
 
 			if (res.ok) {
@@ -69,6 +70,33 @@
 			}
 		} catch (err) {
 			teamMessage = { type: 'error', text: 'Failed to assign team' };
+		} finally {
+			teamAssigning = false;
+		}
+	}
+
+	async function handleRemoveTeam() {
+		if (!project?.id) return;
+		if (!confirm('Remove this team from the project? Members will lose team-based access.')) return;
+		teamAssigning = true;
+		teamMessage = null;
+
+		try {
+			const res = await fetch(`${base}/admin/projects/${project.id}/team`, {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ teamId: null })
+			});
+
+			if (res.ok) {
+				teamMessage = { type: 'success', text: 'Team removed from project' };
+				goto(`${base}/projects/${project.id}/sharing`, { invalidateAll: true });
+			} else {
+				const error = await res.json();
+				teamMessage = { type: 'error', text: error.message || 'Failed to remove team' };
+			}
+		} catch (err) {
+			teamMessage = { type: 'error', text: 'Failed to remove team' };
 		} finally {
 			teamAssigning = false;
 		}
@@ -116,6 +144,7 @@
 
 	async function handleRemoveMember(memberId: string) {
 		if (!confirm('Are you sure you want to remove this member?')) return;
+		memberMessage = null;
 
 		try {
 			const res = await fetch(`${base}/projects/${project?.id}/members?userId=${memberId}`, {
@@ -123,10 +152,14 @@
 			});
 
 			if (res.ok) {
+				memberMessage = { type: 'success', text: 'Member removed' };
 				goto(`${base}/projects/${project?.id}/sharing`, { invalidateAll: true });
+			} else {
+				const err = await res.json();
+				memberMessage = { type: 'error', text: err.message || 'Failed to remove member' };
 			}
 		} catch (err) {
-			console.error('Failed to remove member:', err);
+			memberMessage = { type: 'error', text: 'Failed to remove member' };
 		}
 	}
 </script>
@@ -155,12 +188,31 @@
 						<h2 class="text-h3 font-semibold" style="color: var(--text-primary);">Team Assignment</h2>
 						<p class="text-caption" style="color: var(--text-muted);">Assign this project to a team so all team members can access it</p>
 					</div>
-					<button
-						class="btn-secondary px-3 py-1.5 text-caption"
-						onclick={() => { selectedTeamId = team?.id ?? null; loadTeams(); showTeamModal = true; }}
-					>
-						{team ? 'Change Team' : 'Assign Team'}
-					</button>
+					<div class="flex items-center gap-2">
+						{#if team}
+							<button
+								class="btn-secondary px-3 py-1.5 text-caption"
+								onclick={() => { selectedTeamId = team?.id ?? null; loadTeams(); showTeamModal = true; }}
+								disabled={teamAssigning}
+							>
+								Change Team
+							</button>
+							<button
+								class="btn-danger px-3 py-1.5 text-caption"
+								onclick={handleRemoveTeam}
+								disabled={teamAssigning}
+							>
+								Remove Team
+							</button>
+						{:else}
+							<button
+								class="btn-secondary px-3 py-1.5 text-caption"
+								onclick={() => { selectedTeamId = team?.id ?? null; loadTeams(); showTeamModal = true; }}
+							>
+								Assign Team
+							</button>
+						{/if}
+					</div>
 				</div>
 			</div>
 
@@ -187,6 +239,14 @@
 			<h2 class="text-h3 font-semibold" style="color: var(--text-primary);">Members</h2>
 		</div>
 
+		{#if memberMessage}
+			<div class="px-lg pt-lg">
+				<div class="p-md rounded-md" style="background: {memberMessage.type === 'success' ? 'rgba(0,230,118,0.1)' : 'rgba(255,82,82,0.1)'}; border: 1px solid {memberMessage.type === 'success' ? '#00E676' : '#FF5252'};">
+					<p class="text-body-sm" style="color: {memberMessage.type === 'success' ? '#00E676' : '#FF5252'};">{memberMessage.text}</p>
+				</div>
+			</div>
+		{/if}
+
 		<div class="divide-y" style="divide-color: var(--border-color);">
 			{#each members as member (member.id)}
 				<div class="p-lg flex items-center justify-between">
@@ -197,26 +257,22 @@
 						<p class="text-caption" style="color: var(--text-muted);">{member.email}</p>
 					</div>
 					<div class="flex items-center gap-3">
-						{#if member.role !== 'owner'}
-							<select
-								value={member.role}
-								onchange={(e) => handleRoleChange(member.userId, (e.target as HTMLSelectElement).value)}
-								class="px-3 py-1.5 rounded-md text-caption border"
-								style="background: var(--bg-card); border-color: var(--border-color); color: var(--text-primary);"
-							>
-								<option value="viewer">Viewer</option>
-								<option value="editor">Editor</option>
-								<option value="owner">Owner</option>
-							</select>
-							<button
-								class="text-caption text-[#FF5252] hover:underline"
-								onclick={() => handleRemoveMember(member.userId)}
-							>
-								Remove
-							</button>
-						{:else}
-							<span class="text-caption px-3 py-1.5" style="color: var(--text-muted);">Owner</span>
-						{/if}
+						<select
+							value={member.role}
+							onchange={(e) => handleRoleChange(member.userId, (e.target as HTMLSelectElement).value)}
+							class="px-3 py-1.5 rounded-md text-caption border"
+							style="background: var(--bg-card); border-color: var(--border-color); color: var(--text-primary);"
+						>
+							<option value="viewer">Viewer</option>
+							<option value="editor">Editor</option>
+							<option value="owner">Owner</option>
+						</select>
+						<button
+							class="btn-danger px-3 py-1.5 text-caption"
+							onclick={() => handleRemoveMember(member.userId)}
+						>
+							Remove
+						</button>
 					</div>
 				</div>
 			{/each}

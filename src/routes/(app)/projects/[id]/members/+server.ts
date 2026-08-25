@@ -172,12 +172,21 @@ export const PATCH: RequestHandler = async ({ params, request, locals }) => {
 			throw error(404, 'Project member not found');
 		}
 
-		// Prevent removing last owner
+		// Prevent removing last owner (count project creator too)
 		if (existing.role === 'owner' && role !== 'owner') {
 			const ownerCount = await db.select({ count: count() })
 				.from(projectMembers)
 				.where(and(eq(projectMembers.projectId, projectId), eq(projectMembers.role, 'owner')));
-			if (ownerCount[0]?.count <= 1) {
+			const project = await db.query.projects.findFirst({
+				where: eq(projects.id, projectId),
+				columns: { userId: true }
+			});
+			const creatorIsMember = await db.query.projectMembers.findFirst({
+				where: and(eq(projectMembers.projectId, projectId), eq(projectMembers.userId, project?.userId ?? '')),
+				columns: { id: true }
+			});
+			const totalOwners = ownerCount[0]?.count + (project && !creatorIsMember ? 1 : 0);
+			if (totalOwners <= 1) {
 				throw error(403, 'Cannot remove the last project owner');
 			}
 		}
@@ -229,12 +238,22 @@ export const DELETE: RequestHandler = async ({ params, request, locals }) => {
 			throw error(404, 'Project member not found');
 		}
 
-		// Prevent removing last owner
+		// Prevent removing last owner (count project creator too)
 		if (existing.role === 'owner') {
 			const ownerCount = await db.select({ count: count() })
 				.from(projectMembers)
 				.where(and(eq(projectMembers.projectId, projectId), eq(projectMembers.role, 'owner')));
-			if (ownerCount[0]?.count <= 1) {
+			// Also check if project creator is NOT in project_members (they have implicit owner)
+			const project = await db.query.projects.findFirst({
+				where: eq(projects.id, projectId),
+				columns: { userId: true }
+			});
+			const creatorIsMember = await db.query.projectMembers.findFirst({
+				where: and(eq(projectMembers.projectId, projectId), eq(projectMembers.userId, project?.userId ?? '')),
+				columns: { id: true }
+			});
+			const totalOwners = ownerCount[0]?.count + (project && !creatorIsMember ? 1 : 0);
+			if (totalOwners <= 1) {
 				throw error(403, 'Cannot remove the last project owner');
 			}
 		}

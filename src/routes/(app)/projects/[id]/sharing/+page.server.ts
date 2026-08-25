@@ -4,12 +4,8 @@ import { projects, projectMembers, users, teams } from '$lib/db/schema';
 import { eq } from 'drizzle-orm';
 import { error } from '@sveltejs/kit';
 import { createServices } from '$lib/services/factory';
+import { isUuid } from '$lib/utils/ids';
 import type { PageServerLoad } from './$types';
-
-/** Check if a string looks like a UUID (project DB ID) */
-function isUuid(id: string): boolean {
-	return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
-}
 
 export const load: PageServerLoad = async ({ params, locals }) => {
 	const paramId = params.id;

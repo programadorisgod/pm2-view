@@ -19,6 +19,7 @@
 		install: [],
 		build: [],
 		restart: [],
+		postDeploy: [],
 	});
 
 	$effect(() => {
@@ -26,6 +27,7 @@
 			install: initialConfig.install ? [...initialConfig.install] : [],
 			build: initialConfig.build ? [...initialConfig.build] : [],
 			restart: initialConfig.restart ? [...initialConfig.restart] : [],
+			postDeploy: initialConfig.postDeploy ? [...initialConfig.postDeploy] : [],
 		};
 	});
 
@@ -33,6 +35,7 @@
 	let installEditing = $state(false);
 	let buildEditing = $state(false);
 	let restartAdding = $state(false);
+	let postDeployAdding = $state(false);
 	let editingCommand = $state<DeployCommand | null>(null);
 
 	// Form fields
@@ -61,7 +64,7 @@
 		return null;
 	}
 
-	async function saveCommand(commandType: 'install' | 'build' | 'restart', existingId?: string) {
+	async function saveCommand(commandType: 'install' | 'build' | 'restart' | 'post-deploy', existingId?: string) {
 		serverError = null;
 		const labelError = validateLabel(labelInput);
 		const commandError = validateCommand(commandInput);
@@ -98,16 +101,20 @@
 					config.install = config.install.map((c) => c.id === existingId ? savedCommand : c);
 				} else if (commandType === 'build') {
 					config.build = config.build.map((c) => c.id === existingId ? savedCommand : c);
-				} else {
+				} else if (commandType === 'restart') {
 					config.restart = config.restart.map((c) => c.id === existingId ? savedCommand : c);
+				} else {
+					config.postDeploy = config.postDeploy.map((c) => c.id === existingId ? savedCommand : c);
 				}
 			} else {
 				if (commandType === 'install') {
 					config.install = [savedCommand];
 				} else if (commandType === 'build') {
 					config.build = [savedCommand];
-				} else {
+				} else if (commandType === 'restart') {
 					config.restart = [...config.restart, savedCommand];
+				} else {
+					config.postDeploy = [...config.postDeploy, savedCommand];
 				}
 			}
 
@@ -137,8 +144,10 @@
 				config.install = config.install.filter((c) => c.id !== cmd.id);
 			} else if (cmd.commandType === 'build') {
 				config.build = config.build.filter((c) => c.id !== cmd.id);
-			} else {
+			} else if (cmd.commandType === 'restart') {
 				config.restart = config.restart.filter((c) => c.id !== cmd.id);
+			} else {
+				config.postDeploy = config.postDeploy.filter((c) => c.id !== cmd.id);
 			}
 
 			deleteTarget = null;
@@ -186,6 +195,45 @@
 		}
 	}
 
+	async function reorderPostDeployCommand(cmd: DeployCommand, direction: 'up' | 'down') {
+		const list = config.postDeploy;
+		const idx = list.findIndex((c) => c.id === cmd.id);
+		if (idx === -1) return;
+		if (direction === 'up' && idx === 0) return;
+		if (direction === 'down' && idx === list.length - 1) return;
+
+		const targetIdx = direction === 'up' ? idx - 1 : idx + 1;
+		const newList = [...list];
+		const temp = newList[idx];
+		newList[idx] = newList[targetIdx];
+		newList[targetIdx] = temp;
+
+		// Optimistic update
+		const oldList = config.postDeploy;
+		config.postDeploy = newList;
+
+		try {
+			// Swap sort_order values via PUT
+			const cmd1 = newList[idx];
+			const cmd2 = newList[targetIdx];
+			const res1 = await fetch(`${base}/api/deploy-config`, {
+				method: 'PUT',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ id: cmd1.id, sort_order: cmd1.sortOrder }),
+			});
+			const res2 = await fetch(`${base}/api/deploy-config`, {
+				method: 'PUT',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ id: cmd2.id, sort_order: cmd2.sortOrder }),
+			});
+			if (!res1.ok || !res2.ok) throw new Error('Reorder failed');
+		} catch {
+			// Rollback
+			config.postDeploy = oldList;
+			serverError = 'Failed to reorder commands';
+		}
+	}
+
 	function startAddInstall() {
 		labelInput = '';
 		commandInput = '';
@@ -207,19 +255,28 @@
 		editingCommand = null;
 	}
 
+	function startAddPostDeploy() {
+		labelInput = '';
+		commandInput = '';
+		postDeployAdding = true;
+		editingCommand = null;
+	}
+
 	function startEdit(cmd: DeployCommand) {
 		labelInput = cmd.label;
 		commandInput = cmd.command;
 		editingCommand = cmd;
 		if (cmd.commandType === 'install') installEditing = true;
 		else if (cmd.commandType === 'build') buildEditing = true;
-		else restartAdding = true;
+		else if (cmd.commandType === 'restart') restartAdding = true;
+		else postDeployAdding = true;
 	}
 
 	function closeForms() {
 		installEditing = false;
 		buildEditing = false;
 		restartAdding = false;
+		postDeployAdding = false;
 		editingCommand = null;
 		labelInput = '';
 		commandInput = '';
@@ -560,6 +617,127 @@
 				onclick={startAddRestart}
 			>
 				+ Add restart command
+			</button>
+		{/if}
+	</Card>
+
+	<!-- Post-Deploy Commands Section -->
+	<Card padding>
+		<div class="mb-md flex items-center justify-between">
+			<h3 class="text-h3 font-semibold" style="color: var(--text-primary);">Post-Deploy Actions</h3>
+		</div>
+		<p class="text-caption mb-md" style="color: var(--text-muted);">
+			Optional commands to run after a successful deploy. Multiple commands run in sequence. Failures are logged as warnings and do not fail the deployment.
+		</p>
+
+		{#if postDeployAdding}
+			<div class="space-y-sm mb-md">
+				<input
+					type="text"
+					bind:value={labelInput}
+					placeholder="Label (e.g., Build docs)"
+					class="input-base w-full h-10 px-md text-body-sm"
+					maxlength="100"
+				/>
+				<input
+					type="text"
+					bind:value={commandInput}
+					placeholder="Command (e.g., pnpm build:docs)"
+					class="input-base w-full h-10 px-md text-body-sm font-mono"
+					maxlength="2000"
+				/>
+				<div class="flex gap-xs">
+					<button
+						type="button"
+						class="btn-primary px-3 py-1.5 text-caption"
+						disabled={isSaving}
+						onclick={() => saveCommand('post-deploy', editingCommand?.id)}
+					>
+						{isSaving ? 'Saving...' : 'Save'}
+					</button>
+					<button
+						type="button"
+						class="btn-secondary px-3 py-1.5 text-caption"
+						onclick={closeForms}
+					>
+						Cancel
+					</button>
+				</div>
+			</div>
+		{/if}
+
+		{#if config.postDeploy.length > 0}
+			<div class="space-y-xs mb-md">
+				{#each config.postDeploy as cmd, i (cmd.id)}
+					<div
+						class="flex items-center gap-sm p-sm rounded-md"
+						style="background: var(--bg-surface); border: 1px solid var(--border-color);"
+					>
+						<!-- Reorder arrows -->
+						<div class="flex flex-col gap-2xs">
+							<button
+								type="button"
+								class="p-2xs text-caption"
+								disabled={i === 0}
+								style="color: {i === 0 ? 'var(--text-muted)' : 'var(--text-secondary)'}; opacity: {i === 0 ? 0.3 : 1};"
+								onclick={() => reorderPostDeployCommand(cmd, 'up')}
+								title="Move up"
+							>
+								<svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+									<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7"/>
+								</svg>
+							</button>
+							<button
+								type="button"
+								class="p-2xs text-caption"
+								disabled={i === config.postDeploy.length - 1}
+								style="color: {i === config.postDeploy.length - 1 ? 'var(--text-muted)' : 'var(--text-secondary)'}; opacity: {i === config.postDeploy.length - 1 ? 0.3 : 1};"
+								onclick={() => reorderPostDeployCommand(cmd, 'down')}
+								title="Move down"
+							>
+								<svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+									<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+								</svg>
+							</button>
+						</div>
+
+						<!-- Command info -->
+						<div class="flex-1 min-w-0">
+							<p class="text-body-sm font-medium" style="color: var(--text-primary);">{cmd.label}</p>
+							<p class="text-caption font-mono truncate" style="color: var(--text-muted);" title={cmd.command}>
+								{cmd.command}
+							</p>
+						</div>
+
+						<!-- Actions -->
+						<div class="flex gap-xs">
+							<button
+								type="button"
+								class="btn-secondary px-2 py-1 text-caption"
+								onclick={() => startEdit(cmd)}
+							>
+								Edit
+							</button>
+							<button
+								type="button"
+								class="btn-danger px-2 py-1 text-caption"
+								onclick={() => confirmDelete(cmd)}
+							>
+								Delete
+							</button>
+						</div>
+					</div>
+				{/each}
+			</div>
+		{/if}
+
+		{#if !postDeployAdding}
+			<button
+				type="button"
+				class="btn-secondary px-3 py-1.5 text-caption"
+				onclick={startAddPostDeploy}
+			>
+				+ Add post-deploy action
 			</button>
 		{/if}
 	</Card>

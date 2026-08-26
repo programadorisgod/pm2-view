@@ -5,6 +5,8 @@ import { eq } from 'drizzle-orm';
 import { error } from '@sveltejs/kit';
 import { createServices } from '$lib/services/factory';
 import { isUuid } from '$lib/utils/ids';
+import { existsSync, readFileSync } from 'fs';
+import { join, dirname, basename } from 'path';
 import type { PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async ({ params, locals }) => {
@@ -47,15 +49,67 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 				}) ?? null;
 			}
 
-			// Auto-provision: create project record if it doesn't exist yet (and is not a group member)
+			// Auto-provision: create project record if it doesn't exist yet
+			// Detect monorepo workspace root before creating
 			if (!project) {
+				const WORKSPACE_INDICATORS = [
+					'pnpm-workspace.yaml', 'lerna.json', 'nx.json',
+					'turbo.json', 'rush.json', '.yarnrc.yml',
+				];
+				const cwd = (pm2Process.pm2_env?.pm_cwd ?? '').replace(/\/+$/, '');
+				let workspaceRoot: string | null = null;
+				if (cwd) {
+					let dir = cwd;
+					for (let i = 0; i < 4; i++) {
+						for (const file of WORKSPACE_INDICATORS) {
+							if (existsSync(join(dir, file))) { workspaceRoot = dir; break; }
+						}
+						if (!workspaceRoot) {
+							const pkgPath = join(dir, 'package.json');
+							if (existsSync(pkgPath)) {
+								try {
+									const pkg = JSON.parse(readFileSync(pkgPath, 'utf-8'));
+									if (pkg.workspaces) workspaceRoot = dir;
+								} catch { /* ignore */ }
+							}
+						}
+						if (workspaceRoot) break;
+						const parent = dirname(dir);
+						if (parent === dir) break;
+						dir = parent;
+					}
+				}
+
+				// Find all processes in the workspace
+				let groupPm2Names: string[] | undefined;
+				let targetPath = pm2Process.pm2_env?.pm_cwd || null;
+				let projectName = pm2Process.name;
+
+				if (workspaceRoot) {
+					const { pm2Service } = createServices();
+					const allProcesses = await pm2Service.getAllProcesses();
+					const groupProcesses = allProcesses.filter(p => {
+						const pCwd = (p.pm2_env?.pm_cwd ?? '').replace(/\/+$/, '');
+						return pCwd.startsWith(workspaceRoot + '/') || pCwd === workspaceRoot;
+					});
+					if (groupProcesses.length > 1) {
+						groupPm2Names = groupProcesses.map(p => p.name);
+						targetPath = workspaceRoot;
+						projectName = basename(workspaceRoot);
+					}
+				}
+
+				const primaryName = groupPm2Names ? groupPm2Names[0] : pm2Process.name;
 				const [created] = await db.insert(projects).values({
 					id: crypto.randomUUID(),
 					userId: locals.user.id,
-					name: pm2Process.name,
-					pm2Name: pm2Process.name,
-					description: `PM2 process: ${pm2Process.name}`,
-					targetPath: pm2Process.pm2_env.pm_cwd || null,
+					name: projectName,
+					pm2Name: primaryName,
+					description: groupPm2Names
+						? `PM2 group: ${groupPm2Names.join(', ')}`
+						: `PM2 process: ${pm2Process.name}`,
+					targetPath,
+					pm2Names: groupPm2Names ? JSON.stringify(groupPm2Names) : null,
 				}).returning();
 				project = created;
 			}

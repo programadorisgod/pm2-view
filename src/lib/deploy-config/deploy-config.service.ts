@@ -18,19 +18,22 @@ export class DeployConfigService {
 		const install: DeployCommand[] = [];
 		const build: DeployCommand[] = [];
 		const restart: DeployCommand[] = [];
+		const postDeploy: DeployCommand[] = [];
 
 		for (const cmd of commands) {
 			if (cmd.commandType === 'install') install.push(cmd);
 			else if (cmd.commandType === 'build') build.push(cmd);
 			else if (cmd.commandType === 'restart') restart.push(cmd);
+			else if (cmd.commandType === 'post-deploy') postDeploy.push(cmd);
 		}
 
-		// Sort restart commands by sortOrder
+		// Sort commands by sortOrder
 		install.sort((a, b) => a.sortOrder - b.sortOrder);
 		build.sort((a, b) => a.sortOrder - b.sortOrder);
 		restart.sort((a, b) => a.sortOrder - b.sortOrder);
+		postDeploy.sort((a, b) => a.sortOrder - b.sortOrder);
 
-		return { install, build, restart };
+		return { install, build, restart, postDeploy };
 	}
 
 	async saveCommand(payload: {
@@ -74,10 +77,10 @@ export class DeployConfigService {
 			}
 		}
 
-		// For restart, auto-assign sort_order = max + 1
-		if (command_type === 'restart') {
-			const existingRestart = await this.repo.getByType(project_id, 'restart');
-			const maxSortOrder = existingRestart.reduce((max, cmd) => Math.max(max, cmd.sortOrder), -1);
+		// For restart/post-deploy (multi-command), auto-assign sort_order = max + 1
+		if (command_type === 'restart' || command_type === 'post-deploy') {
+			const existing = await this.repo.getByType(project_id, command_type);
+			const maxSortOrder = existing.reduce((max, cmd) => Math.max(max, cmd.sortOrder), -1);
 			const sortOrder = maxSortOrder + 1;
 
 			const created = await this.repo.create({

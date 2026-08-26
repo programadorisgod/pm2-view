@@ -1,6 +1,6 @@
 # Auto-Deploy via GitHub Webhooks — Setup & Operations Guide
 
-This guide explains the automatic deployment feature: when GitHub sends a `push` event for a configured repository and branch, PM2 View runs a full deployment pipeline (git → install → build → pm2 restart → health verification) in the background and records every step.
+This guide explains the automatic deployment feature: when GitHub sends a `push` event for a configured repository and branch, PM2 View runs a full deployment pipeline (git → install → build → pm2 restart → health verification → post-deploy actions) in the background and records every step.
 
 > **TL;DR** — You need `GITHUB_WEBHOOK_SECRET` set, the GitHub App installed for the repository owner, the project configured in its **Config** tab, and a webhook registered in GitHub. The flow is: push → GitHub POSTs → PM2 View verifies signature and matches repo/branch → queues a deployment → worker executes the pipeline → history visible in the UI.
 
@@ -12,6 +12,8 @@ This guide explains the automatic deployment feature: when GitHub sends a `push`
 | **Security** | HMAC-SHA256 signature verification over the raw body (timing-safe) |
 | **Idempotency** | `X-GitHub-Delivery` header stored with a UNIQUE constraint; replays are acknowledged, never executed twice |
 | **Execution** | Background worker; HTTP responds `202 Accepted` immediately |
+| **Multi-process** | Restarts **every** PM2 name in the project's `pm2_names` group, sequentially, verifying each is online |
+| **Notifications** | Emails the project owner + `notify_email` with the deploy result (success/failure) via SMTP |
 | **Observability** | Per-stage logs persisted in the database; history card polls every 5s |
 
 ## Flow diagram
@@ -36,6 +38,7 @@ sequenceDiagram
     WK->>P: git fetch/checkout/pull --ff-only (fresh App token)
     WK->>P: install → build
     WK->>WK: pm2 restart --update-env → verify online
+    WK->>P: post-deploy commands (optional, warnings only)
     WK->>DB: mark success/failed (+logs, duration)
 ```
 
@@ -46,9 +49,35 @@ sequenceDiagram
 | **git** | Dirty-tree check (tracked files only) → fetch → checkout branch → `pull --ff-only` | Deployment fails fast; nothing touched |
 | **install** | Configured command, or package-manager install fallback (`pnpm`/`npm`/`yarn`) | Fails; build never runs |
 | **build** | Configured command, or `<pm> run build` if script exists; skipped if neither | Fails; **PM2 is NOT restarted** |
-| **pm2** | `pm2 restart <name> --update-env`, then poll until process is online | Fails if restart errors or process never reaches online |
+| **pm2** | For **each** name in `pm2_names` (or `pm2_name`): `pm2 restart <name> --update-env`, then poll until online | Fails if any restart errors or any process never reaches online |
+| **post-deploy** | Optional configured commands, run in sequence after all processes are verified online | Never fails the deploy — a non-zero exit is logged as a warning |
 
 Non-destructive policy: the pipeline never runs `reset --hard`, `clean`, or `checkout .`. Untracked files are ignored by the dirty check (they can't be destroyed by fetch/pull); local modifications to tracked files abort the deployment explicitly.
+
+### Multi-process (group) restarts
+
+A project configured as a group (a JSON array in `pm2_names`, e.g. `["atlas-backend","atlas-frontend"]`) is restarted as a whole:
+
+1. `DeploymentRunner.resolveProcessNames()` reads `pm2_names` (falling back to `pm2_name`).
+2. **Before touching anything**, the runner verifies every name exists in PM2 — if any is missing, the deploy fails with "Start it once manually".
+3. Each process is restarted sequentially with `pm2 restart <name> --update-env`.
+4. Each is then polled until it reports `online`.
+
+The webhook also resolves **group members** to their **parent project** (`src/routes/api/webhooks/github/+server.ts`), so a single auto-deploy config on the parent covers the entire monorepo — even if the push matched only a member's `github_repo`.
+
+### Post-deploy actions
+
+After a deployment succeeds (every process verified online), PM2 View optionally runs a set of **post-deploy commands** configured per project (Config tab → **Post-Deploy Actions**):
+
+- Multiple commands run in sequence, in the configured order (sortable, like restart commands).
+- Each command is executed shell-free via `tokenizeCommand` (same arg-splitting as install/build), in the project's `target_path`, with the deploy's environment.
+- A non-zero exit code is logged as a warning (`[post-deploy]`) but the deployment is still marked **success** — the app is already up and running.
+
+Commands may carry inline environment variables, e.g. `ATLAS_DOCS_BASE=/atlas/docs pnpm build:docs` — leading `KEY=VALUE` tokens are parsed into the command's environment without shell interpolation.
+
+Common use case: publishing documentation after a deploy (e.g. `pnpm build:docs`), which must run **after** the code is pulled and built, but must not fail the deployment if it errors.
+
+> The `post-deploy` command type lives in the same `deploy_commands` table as install/build/restart. No DB migration is required: `command_type` is a plain `text` column (the enum is TypeScript-only).
 
 ## Setup, step by step
 
@@ -74,7 +103,15 @@ PUBLIC_WEBHOOK_BASE_URL=https://pm2-view.example.com
 npm run db:migrate
 ```
 
-Migration `0007_add_auto_deploy.sql` adds `github_repo`, `deploy_branch`, `auto_deploy_enabled` to `projects` and creates the `deployments` table (which doubles as the job queue).
+The auto-deploy feature relies on several migrations in `drizzle/`:
+
+| Migration | Adds |
+| --------- | ---- |
+| `0007_add_auto_deploy.sql` | `github_repo`, `deploy_branch`, `auto_deploy_enabled` on `projects`; creates the `deployments` table (which doubles as the job queue) |
+| `0008_add_notify_email.sql` | `notify_email` on `projects` (deploy-result email recipient) |
+| `0010_add_pm2_names.sql` | `pm2_names` on `projects` (multi-process group support) |
+
+> On a fresh checkout, `drizzle-kit push` (or `npm run db:migrate`) applies the full migration set; you don't need to run them individually.
 
 ### 3. Configure the project in the UI
 
@@ -138,6 +175,23 @@ Expected responses:
 | Payload trust | Webhook data is limited to matching (repo, branch) and a validated commit SHA; paths and commands always come from internal project configuration |
 | Secrets in UI | Never rendered; webhook secret lives only in server env |
 
+## Email notifications
+
+After every deployment completes (success or failure), `DeploymentNotifier` (`src/lib/deploy/deployment-notifier.ts`) emails the result:
+
+- **Recipients**: the project owner (`projects.user_id`) plus `projects.notify_email` (deduplicated).
+- `notify_email` is captured automatically from the session when deployment settings are saved (`src/routes/api/projects/[id]/deployment-settings/+server.ts`).
+- The email includes status, project, repository@branch, commit SHA, stage (on failure), error, and duration.
+- Delivery goes through the notification provider (nodemailer); it requires SMTP to be configured (`SMTP_*` env vars). Notification failures are logged but **never** affect the deployment itself.
+
+## Deploy All (manual bulk deploy)
+
+The **Deploy All** button on the Projects page (`src/routes/api/deploy/all/+server.ts`) sequentially deploys **every online PM2 process** through `DeployService`:
+
+- Streams NDJSON (`application/x-ndjson`) with a summary, then per-process logs and results.
+- An in-memory lock prevents concurrent bulk deploys (returns `409` if one is already running).
+- Each process runs the standard pipeline: `git pull` → install → build → `pm2 restart --update-env` (with pnpm `approve-builds` support surfaced as `needsApproval`).
+
 ## Where the code lives
 
 | Path | Role |
@@ -147,9 +201,12 @@ Expected responses:
 | `src/lib/deploy/git-auth.provider.ts` | Mints short-lived GitHub App installation tokens per repository |
 | `src/lib/deploy/deployment-runner.ts` | Staged pipeline executor with injectable dependencies |
 | `src/lib/deploy/deployment-worker.ts` | Sequential queue consumer; stale-run recovery |
+| `src/lib/deploy/deployment-notifier.ts` | Emails deploy results to owner + `notify_email` |
 | `src/lib/deploy/factory.ts` | Production dependency wiring (singleton) |
-| `src/routes/api/webhooks/github/+server.ts` | Push event ingestion |
+| `src/routes/api/webhooks/github/+server.ts` | Push event ingestion (incl. group-member resolution) |
+| `src/routes/api/deploy/all/+server.ts` | Deploy All bulk endpoint (NDJSON) |
 | `src/lib/db/schema/deployments.ts` | Queue/history persistence |
+| `src/lib/db/schema/deploy-commands.ts` | Per-project install/build/restart/post-deploy commands |
 
 ## Troubleshooting
 
@@ -159,7 +216,7 @@ Expected responses:
 | Push ignored (`204`) | Repo/branch mismatch or toggle off | Check card values match GitHub exactly |
 | Failed at git: authentication | No GitHub App installation for the repo owner | Install the app / verify `github_installations` row |
 | Failed at git: local modifications | Tracked files changed in the clone | Resolve/stash changes in `target_path` |
-| Failed at pm2: process not found | Process name wrong or never started | Start it once manually; auto-start is not supported yet |
+| Failed at pm2: process not found | Process name wrong or never started (for groups: any member in `pm2_names` missing) | Start it once manually; auto-start is not supported yet |
 | Build failed, process still old PID | By design: PM2 restarts only after a successful build | Fix build; redeploy |
 
 ## Future improvements

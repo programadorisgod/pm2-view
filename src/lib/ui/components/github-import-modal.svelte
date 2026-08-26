@@ -37,6 +37,7 @@ import type { GitHubRepoDTO } from '$lib/github/github.types';
 	let installCommand = $state<string | undefined>(undefined);
 	let buildCommand = $state<string | undefined>(undefined);
 	let showAdvanced = $state(false);
+	let envSubdir = $state('');
 
 	let lines = $state<LogLine[]>([]);
 	let ecosystemFiles = $state<string[]>([]);
@@ -51,6 +52,8 @@ import type { GitHubRepoDTO } from '$lib/github/github.types';
 	let envVars = $state<Record<string, string>>({});
 	let envFileName = $state('');
 	let envFileInput = $state<HTMLInputElement | undefined>();
+	let ecosystemAppNames = $state<string[]>([]);
+	let selectedApps = $state<string[]>([]);
 
 	$effect(() => {
 		if (open && repository) {
@@ -63,16 +66,19 @@ import type { GitHubRepoDTO } from '$lib/github/github.types';
 			installCommand = undefined;
 			buildCommand = undefined;
 			showAdvanced = false;
+			envSubdir = '';
 			view = 'config';
 			isRunning = false;
 			importSuccess = null;
 			startSuccess = null;
-		approvalPending = false;
-		approvalPackages = [];
-		envMode = 'paste';
-		envText = '';
-		envVars = {};
-		envFileName = '';
+			approvalPending = false;
+			approvalPackages = [];
+			envMode = 'paste';
+			envText = '';
+			envVars = {};
+			envFileName = '';
+			ecosystemAppNames = [];
+			selectedApps = [];
 			dialogRef?.showModal();
 		} else {
 			dialogRef?.close();
@@ -206,9 +212,10 @@ import type { GitHubRepoDTO } from '$lib/github/github.types';
 									ecosystemFiles = data.ecosystemFiles || [];
 
 									// Use ecosystem app name as default process name if available
-									const ecosystemAppNames = data.ecosystemAppNames || [];
+									ecosystemAppNames = data.ecosystemAppNames || [];
 									if (ecosystemAppNames.length > 0) {
-										processName = ecosystemAppNames[0];
+										processName = repository.name;
+										selectedApps = [...ecosystemAppNames];
 									}
 
 									if (ecosystemFiles.length > 0) {
@@ -377,14 +384,15 @@ import type { GitHubRepoDTO } from '$lib/github/github.types';
 		lines = [];
 
 		try {
-			const res = await fetch(`${base}/api/github/repositories/${repository.id}/write-env`, {
-				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({
-					targetPath,
-					envVars: merged,
-				}),
-			});
+		const res = await fetch(`${base}/api/github/repositories/${repository.id}/write-env`, {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({
+				targetPath,
+				envVars: merged,
+				envSubdir: envSubdir || undefined,
+			}),
+		});
 
 			const result = await res.json();
 
@@ -440,6 +448,7 @@ import type { GitHubRepoDTO } from '$lib/github/github.types';
 					targetPath,
 					processName,
 					ecosystemFile: selectedEcosystemFile,
+					pm2Names: selectedApps.length > 1 ? selectedApps : undefined,
 				}),
 			});
 
@@ -833,7 +842,42 @@ import type { GitHubRepoDTO } from '$lib/github/github.types';
 			<!-- Selecting Ecosystem View -->
 			{#if view === 'selecting' && !isRunning}
 				<div class="p-lg space-y-md">
-					{#if ecosystemFiles.length > 0}
+					{#if ecosystemAppNames.length > 1}
+						<!-- Multi-app: show checkbox list -->
+						<div>
+							<p class="text-caption font-medium mb-sm" style="color: var(--text-secondary);">
+								Detected <strong style="color: var(--text-primary);">{ecosystemAppNames.length}</strong> apps in {ecosystemFiles[0] ?? 'ecosystem file'}:
+							</p>
+							<div class="space-y-xs">
+								{#each ecosystemAppNames as appName}
+									<label
+										class="flex items-center gap-sm p-sm rounded-lg cursor-pointer transition-colors"
+										style="background: var(--bg-base); border: 1px solid {selectedApps.includes(appName) ? '#38CDFF' : 'var(--border-color)'};"
+									>
+										<input
+											type="checkbox"
+											checked={selectedApps.includes(appName)}
+											onchange={() => {
+												if (selectedApps.includes(appName)) {
+													selectedApps = selectedApps.filter(n => n !== appName);
+												} else {
+													selectedApps = [...selectedApps, appName];
+												}
+											}}
+											class="w-4 h-4"
+										/>
+										<span class="text-body-sm font-mono" style="color: var(--text-primary);">
+											{appName}
+										</span>
+									</label>
+								{/each}
+							</div>
+							<p class="text-caption-xs mt-sm" style="color: var(--text-muted);">
+								{selectedApps.length}/{ecosystemAppNames.length} selected. These will be registered as a group.
+							</p>
+						</div>
+					{:else if ecosystemFiles.length > 0}
+						<!-- Single app: show ecosystem file selection -->
 						<div>
 							<p class="text-caption font-medium mb-sm" style="color: var(--text-secondary);">
 								Select an ecosystem file to start with PM2:
@@ -888,10 +932,14 @@ import type { GitHubRepoDTO } from '$lib/github/github.types';
 						class="btn-primary px-4 py-2 text-caption font-semibold"
 						style="background: #38CDFF; color: #1a1a2e;"
 						onclick={() => { view = 'env'; }}
-						disabled={!selectedEcosystemFile}
-						title={!selectedEcosystemFile ? 'No ecosystem file selected' : ''}
+						disabled={!selectedEcosystemFile || (ecosystemAppNames.length > 1 && selectedApps.length === 0)}
+						title={!selectedEcosystemFile ? 'No ecosystem file selected' : ecosystemAppNames.length > 1 && selectedApps.length === 0 ? 'Select at least one app' : ''}
 					>
-						Start with PM2
+						{#if ecosystemAppNames.length > 1}
+							Continue ({selectedApps.length} apps)
+						{:else}
+							Start with PM2
+						{/if}
 					</button>
 				</div>
 			{/if}
@@ -902,6 +950,24 @@ import type { GitHubRepoDTO } from '$lib/github/github.types';
 					<p class="text-caption" style="color: var(--text-secondary);">
 						Add environment variables before starting PM2. This step is optional.
 					</p>
+
+					<!-- .env Subdirectory -->
+					<div>
+						<label for="envSubdir" class="block text-caption font-medium mb-xs" style="color: var(--text-secondary);">
+							.env Location
+						</label>
+						<input
+							id="envSubdir"
+							type="text"
+							bind:value={envSubdir}
+							placeholder="/ (project root)"
+							class="w-full px-md py-sm rounded-lg text-body-sm"
+							style="background: var(--bg-base); border: 1px solid var(--border-color); color: var(--text-primary);"
+						/>
+						<p class="text-caption-xs mt-xs" style="color: var(--text-muted);">
+							Subdirectory where .env will be written (e.g. <span class="font-mono">app/backend</span>). Leave empty for project root.
+						</p>
+					</div>
 
 					<!-- Mode Toggle -->
 					<div class="flex gap-sm">

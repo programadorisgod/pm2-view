@@ -10,6 +10,7 @@ import { z } from 'zod';
 const writeEnvSchema = z.object({
 	targetPath: z.string().min(1),
 	envVars: z.record(z.string(), z.string()),
+	envSubdir: z.string().optional(),
 });
 
 export const POST: RequestHandler = async ({ params, request, getClientAddress }) => {
@@ -46,7 +47,7 @@ export const POST: RequestHandler = async ({ params, request, getClientAddress }
 		return json({ error: message }, { status: 400 });
 	}
 
-	const { targetPath, envVars } = validationResult.data;
+	const { targetPath, envVars, envSubdir } = validationResult.data;
 
 	// Validate targetPath is absolute
 	if (!targetPath.startsWith('/')) {
@@ -66,13 +67,24 @@ export const POST: RequestHandler = async ({ params, request, getClientAddress }
 
 	try {
 		const envContent = stringifyEnv(envVars as Record<string, string>);
-		const envPath = join(targetPath, '.env');
+		const envDir = envSubdir ? join(targetPath, envSubdir) : targetPath;
+		const envPath = join(envDir, '.env');
+
+		// Ensure the target directory exists
+		if (!existsSync(envDir)) {
+			return json(
+				{ error: `Directory does not exist: ${envDir}` },
+				{ status: 400 }
+			);
+		}
+
 		writeFileSync(envPath, envContent + '\n', 'utf-8');
 
 		logger.info('Environment file written during import', {
 			userId: session.user.id,
 			repositoryId,
 			targetPath,
+			envSubdir: envSubdir || '(root)',
 			varCount: Object.keys(envVars).length,
 		});
 

@@ -3,12 +3,14 @@
 	let {
 		open = false,
 		itemName,
+		processCount = 1,
 		onConfirm,
 		onCancel,
 		loading = false
 	}: {
 		open: boolean;
 		itemName: string;
+		processCount?: number;
 		onConfirm: (deleteFiles: boolean) => void;
 		onCancel: () => void;
 		loading?: boolean;
@@ -76,10 +78,13 @@
 				</div>
 			</div>
 
-			<!-- Body -->
-			<p class="text-body-sm mb-md" style="color: var(--text-secondary);">
-				Please type <strong class="font-mono" style="color: var(--text-primary);">{itemName}</strong> to confirm deletion.
-			</p>
+		<!-- Body -->
+		<p class="text-body-sm mb-md" style="color: var(--text-secondary);">
+			Please type <strong class="font-mono" style="color: var(--text-primary);">{itemName}</strong> to confirm deletion.
+			{#if processCount > 1}
+				<br><span class="text-caption" style="color: #FF5252;">This will delete {processCount} processes in the group.</span>
+			{/if}
+		</p>
 
 			<input
 				type="text"

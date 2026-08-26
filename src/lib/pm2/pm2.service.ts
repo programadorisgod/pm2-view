@@ -101,26 +101,103 @@ export class PM2Service {
 	async deleteProcess(id: string, deleteFiles = false): Promise<{ success: boolean; message: string }> {
 		try {
 			const process = await this.repository.describe(id);
-			await this.repository.delete(id);
 
-			// Clean up DB record if it matches this PM2 process
-			if (process?.name) {
+			// Try PM2 delete — don't fail if the process isn't registered
+			let pm2Deleted = false;
+			if (process) {
 				try {
-					const { db } = await import('$lib/db');
-					const { projects } = await import('$lib/db/schema');
-					const { eq } = await import('drizzle-orm');
-					await db.delete(projects).where(eq(projects.pm2Name, process.name));
+					await this.repository.delete(id);
+					pm2Deleted = true;
 				} catch {
-					// Non-critical: DB cleanup failure doesn't affect PM2 delete
+					// Process was in describe but delete failed — proceed with cleanup
 				}
 			}
 
-			if (deleteFiles && process?.pm2_env?.pm_cwd) {
-				await this.repository.deleteFiles(process.pm2_env.pm_cwd);
-				return { success: true, message: `Process ${id} and project files deleted successfully` };
+			// Resolve the name for DB and file lookup
+			const processName = process?.name ?? id;
+
+			// Look up DB record for targetPath and group handling
+			let targetPath: string | null = null;
+			let projectDeleted = false;
+			try {
+				const { db } = await import('$lib/db');
+				const { projects } = await import('$lib/db/schema');
+				const { eq, like } = await import('drizzle-orm');
+
+				// Try direct pm2Name match first
+				let row = await db.select().from(projects).where(eq(projects.pm2Name, processName)).get();
+
+				// If not found, check if this name is inside a pm2Names JSON array (grouped project)
+				if (!row) {
+					const allProjects = await db.select().from(projects).where(
+						like(projects.pm2Names, `%${processName}%`)
+					).all();
+					row = allProjects.find(p => {
+						try {
+							const names = JSON.parse(p.pm2Names!) as string[];
+							return names.includes(processName);
+						} catch { return false; }
+					}) ?? null;
+				}
+
+				if (row) {
+					targetPath = row.targetPath;
+
+					// Check if this process is a member of a group (in pm2Names but not the primary)
+					const isGroupMember = (() => {
+						if (!row.pm2Names || row.pm2Name === processName) return false;
+						try {
+							const names = JSON.parse(row.pm2Names) as string[];
+							return names.includes(processName);
+						} catch { return false; }
+					})();
+
+					if (isGroupMember) {
+						// Remove this process from the group, keep the project
+						const names = JSON.parse(row.pm2Names!) as string[];
+						const updatedNames = names.filter(n => n !== processName);
+						if (updatedNames.length === 0) {
+							// Last member removed — delete the project
+							await db.delete(projects).where(eq(projects.id, row.id));
+							projectDeleted = true;
+						} else {
+							// Still members remaining — update the array
+							await db.update(projects)
+								.set({ pm2Names: JSON.stringify(updatedNames) })
+								.where(eq(projects.id, row.id));
+						}
+					} else {
+						// Primary match or single project — delete the entire project
+						await db.delete(projects).where(eq(projects.id, row.id));
+						projectDeleted = true;
+					}
+				}
+			} catch {
+				// Non-critical: DB cleanup failure
 			}
 
-			return { success: true, message: `Process ${id} deleted successfully` };
+			// Use PM2 pm_cwd as fallback for targetPath
+			if (!targetPath && process?.pm2_env?.pm_cwd) {
+				targetPath = process.pm2_env.pm_cwd;
+			}
+
+			// Delete project files if requested
+			if (deleteFiles && targetPath) {
+				await this.repository.deleteFiles(targetPath);
+				return {
+					success: true,
+					message: pm2Deleted
+						? `Process ${id} and project files deleted successfully`
+						: `Project files deleted (process was not in PM2)`
+				};
+			}
+
+			if (pm2Deleted) {
+				return { success: true, message: `Process ${id} deleted successfully` };
+			}
+
+			// Process wasn't in PM2 and no files to delete — still a success
+			return { success: true, message: `Process ${id} removed (was not running in PM2)` };
 		} catch (error) {
 			return {
 				success: false,

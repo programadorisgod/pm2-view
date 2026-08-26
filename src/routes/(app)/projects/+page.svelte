@@ -19,10 +19,11 @@
   let feedback = $state<{ type: "success" | "error"; text: string } | null>(
     null,
   );
-  let deleteModal = $state<{ open: boolean; name: string; pm_id: string }>({
+  let deleteModal = $state<{ open: boolean; name: string; pm_id: string; processCount: number; pm2Names?: string[] }>({
     open: false,
     name: "",
     pm_id: "",
+    processCount: 1,
   });
   let deleteLoading = $state(false);
   let favoritesExpanded = $state(true);
@@ -114,18 +115,22 @@
     }
   }
 
-  function requestDelete(pm_id: string, name: string) {
-    deleteModal = { open: true, name, pm_id };
+  function requestDelete(pm_id: string, name: string, processCount = 1, pm2Names?: string[]) {
+    deleteModal = { open: true, name, pm_id, processCount, pm2Names };
   }
 
   async function confirmDelete(deleteFiles = false) {
     deleteLoading = true;
     feedback = null;
     try {
+      const body: Record<string, unknown> = { pm_id: deleteModal.pm_id, deleteFiles };
+      if (deleteModal.pm2Names && deleteModal.pm2Names.length > 0) {
+        body.pm2Names = deleteModal.pm2Names;
+      }
       const res = await fetch(`${base}/projects/api?action=delete`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ pm_id: deleteModal.pm_id, deleteFiles }),
+        body: JSON.stringify(body),
       });
       const result = await res.json();
       if (res.ok) {
@@ -399,7 +404,7 @@
                   <button
                     class="btn-danger px-3 py-1 text-caption"
                     onclick={() =>
-                      requestDelete(process.pm_id.toString(), process.name)}
+                      requestDelete(process.pm_id.toString(), process.name, process.pm2Names?.length ?? 1, process.pm2Names)}
                   >
                     Delete
                   </button>
@@ -540,7 +545,7 @@
                 <button
                   class="btn-danger px-3 py-1 text-caption"
                   onclick={() =>
-                    requestDelete(process.pm_id.toString(), process.name)}
+                    requestDelete(process.pm_id.toString(), process.name, process.pm2Names?.length ?? 1, process.pm2Names)}
                 >
                   Delete
                 </button>
@@ -556,6 +561,7 @@
 <ConfirmDeleteModal
   open={deleteModal.open}
   itemName={deleteModal.name}
+  processCount={deleteModal.processCount}
   loading={deleteLoading}
   onConfirm={confirmDelete}
   onCancel={() => {

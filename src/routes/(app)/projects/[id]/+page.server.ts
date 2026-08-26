@@ -7,6 +7,8 @@ import { db } from '$lib/db';
 import { eq } from 'drizzle-orm';
 import { projects } from '$lib/db/schema';
 import { error } from '@sveltejs/kit';
+import { existsSync, readFileSync } from 'fs';
+import { join, dirname, basename } from 'path';
 import type { PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async ({ params, request }) => {
@@ -41,22 +43,87 @@ export const load: PageServerLoad = async ({ params, request }) => {
 	let deployConfig = { install: [], build: [], restart: [] };
 	let projectInternalId: string | null = null;
 	let autoDeploySettings = { autoDeployEnabled: false, githubRepo: null as string | null, deployBranch: 'main', pm2Names: [] as string[], pm2Name: '' as string };
+	let groupProcesses: typeof process[] = [];
+	let projectName = process.name;
 	try {
 		// Find project by pm2_name to get internal ID
 		let project = await db.query.projects.findFirst({
 			where: eq(projects.pm2Name, process.name),
-			columns: { id: true, autoDeployEnabled: true, githubRepo: true, deployBranch: true, pm2Name: true, pm2Names: true }
+			columns: { id: true, name: true, autoDeployEnabled: true, githubRepo: true, deployBranch: true, pm2Name: true, pm2Names: true }
 		});
 
-		// Auto-provision: register project if it doesn't exist yet
+		// If not found by pm2Name, check if this process is a member of a group
+		if (!project) {
+			const allProjects = await db.query.projects.findMany({
+				columns: { id: true, name: true, autoDeployEnabled: true, githubRepo: true, deployBranch: true, pm2Name: true, pm2Names: true }
+			});
+			project = allProjects.find(p => {
+				if (!p.pm2Names) return false;
+				try {
+					const names = JSON.parse(p.pm2Names) as string[];
+					return names.includes(process.name);
+				} catch { return false; }
+			}) ?? null;
+		}
+
+		// If not found in DB, detect monorepo group via workspace root
+		let workspaceRoot: string | null = null;
+		if (!project) {
+			const WORKSPACE_INDICATORS = [
+				'pnpm-workspace.yaml', 'lerna.json', 'nx.json',
+				'turbo.json', 'rush.json', '.yarnrc.yml',
+			];
+			const cwd = process.pm2_env?.pm_cwd ?? '';
+			if (cwd) {
+				let dir = cwd.replace(/\/+$/, '');
+				for (let i = 0; i < 4; i++) {
+					for (const file of WORKSPACE_INDICATORS) {
+						if (existsSync(join(dir, file))) { workspaceRoot = dir; break; }
+					}
+					if (!workspaceRoot) {
+						const pkgPath = join(dir, 'package.json');
+						if (existsSync(pkgPath)) {
+							try {
+								const pkg = JSON.parse(readFileSync(pkgPath, 'utf-8'));
+								if (pkg.workspaces) workspaceRoot = dir;
+							} catch { /* ignore */ }
+						}
+					}
+					if (workspaceRoot) break;
+					const parent = dirname(dir);
+					if (parent === dir) break;
+					dir = parent;
+				}
+
+				if (workspaceRoot) {
+					const allProcesses = await pm2Service.getAllProcesses();
+					groupProcesses = allProcesses.filter(p => {
+						const pCwd = (p.pm2_env?.pm_cwd ?? '').replace(/\/+$/, '');
+						return pCwd.startsWith(workspaceRoot + '/') || pCwd === workspaceRoot;
+					});
+					if (groupProcesses.length > 1) {
+						projectName = basename(workspaceRoot);
+					}
+				}
+			}
+		}
+
+		// Auto-provision: register project if it doesn't exist yet (and is not a group member)
 		if (!project && session?.user) {
+			const isGroup = groupProcesses.length > 1;
+			const groupPm2Names = isGroup ? groupProcesses.map(p => p.name) : undefined;
+			const primaryName = isGroup ? groupProcesses[0].name : process.name;
+
 			const [created] = await db.insert(projects).values({
 				id: crypto.randomUUID(),
 				userId: session.user.id,
-				name: process.name,
-				pm2Name: process.name,
-				description: `PM2 process: ${process.name}`,
-				targetPath: process.pm2_env.pm_cwd || null,
+				name: projectName,
+				pm2Name: primaryName,
+				description: isGroup
+					? `PM2 group: ${groupProcesses.map(p => p.name).join(', ')}`
+					: `PM2 process: ${process.name}`,
+				targetPath: (isGroup ? workspaceRoot : process.pm2_env.pm_cwd) || null,
+				pm2Names: isGroup ? JSON.stringify(groupPm2Names) : null,
 			}).returning({
 				id: projects.id,
 				autoDeployEnabled: projects.autoDeployEnabled,
@@ -70,6 +137,7 @@ export const load: PageServerLoad = async ({ params, request }) => {
 
 		if (project) {
 			projectInternalId = project.id;
+			projectName = project.name || process.name;
 			autoDeploySettings = {
 				autoDeployEnabled: project.autoDeployEnabled,
 				githubRepo: project.githubRepo,
@@ -77,6 +145,13 @@ export const load: PageServerLoad = async ({ params, request }) => {
 				pm2Names: project.pm2Names ? JSON.parse(project.pm2Names) as string[] : [],
 				pm2Name: project.pm2Name
 			};
+
+			// Load all processes in the group
+			if (autoDeploySettings.pm2Names.length > 0) {
+				const allProcesses = await pm2Service.getAllProcesses();
+				groupProcesses = allProcesses.filter(p => autoDeploySettings.pm2Names.includes(p.name));
+			}
+
 			const deployConfigRepo = new DeployConfigRepository();
 			const commands = await deployConfigRepo.getByProjectId(project.id);
 			// Group by command type
@@ -96,6 +171,8 @@ export const load: PageServerLoad = async ({ params, request }) => {
 		isFavorite,
 		deployConfig,
 		projectInternalId,
+		projectName,
 		autoDeploySettings,
+		groupProcesses,
 	};
 };

@@ -17,11 +17,22 @@
 
   let { data }: { data: PageData } = $props();
 
-  let {
-    process,
-    isFavorite: initialIsFavorite,
-    deployConfig,
-  } = $derived(data);
+	let {
+		process: initialProcess,
+		isFavorite: initialIsFavorite,
+		deployConfig,
+		groupProcesses: initialGroupProcesses,
+		projectName,
+	} = $derived(data);
+
+  let groupProcesses = $derived(initialGroupProcesses ?? []);
+  let hasGroup = $derived(groupProcesses.length > 1);
+  let activeProcessName = $state(initialProcess.name);
+  let process = $derived(
+    hasGroup
+      ? groupProcesses.find(p => p.name === activeProcessName) ?? initialProcess
+      : initialProcess
+  );
 
   const TABS = [
     { id: 'overview', label: 'Overview' },
@@ -161,10 +172,11 @@
     deleteLoading = true;
     feedback = null;
     try {
+      const body: Record<string, unknown> = { pm_id: process.pm_id.toString(), deleteFiles };
       const res = await fetch(`${base}/projects/api?action=delete`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ pm_id: process.pm_id.toString(), deleteFiles }),
+        body: JSON.stringify(body),
       });
       const result = await res.json();
       if (res.ok) {
@@ -326,11 +338,16 @@
           class="text-hero font-bold process-name"
           style="view-transition-name: page-title; color: var(--text-primary);"
         >
-          {process.name}
+          {projectName}
         </h1>
         <Badge variant={getStatusVariant(process.status)}
           >{process.status}</Badge
         >
+        {#if hasGroup}
+          <span class="text-caption px-2 py-0.5 rounded-full" style="background: rgba(56, 205, 255, 0.15); color: #38CDFF;">
+            {groupProcesses.length} processes
+          </span>
+        {/if}
         <button
           class="transition-colors self-center"
           style="font-size: 1.25rem; line-height: 1; color: {isFavorite ? '#FFD740' : 'var(--text-muted)'};"
@@ -397,6 +414,22 @@
       >
     </div>
   </div>
+
+  <!-- Process Selector (for groups) -->
+  {#if hasGroup}
+    <div class="flex gap-xs mb-lg p-sm rounded-lg" style="background: var(--bg-surface); border: 1px solid var(--border-color);">
+      {#each groupProcesses as proc}
+        <button
+          class="flex items-center gap-sm px-3 py-1.5 rounded-md text-caption font-medium transition-colors"
+          style="background: {proc.name === activeProcessName ? 'rgba(56, 205, 255, 0.15)' : 'transparent'}; color: {proc.name === activeProcessName ? '#38CDFF' : 'var(--text-muted)'};"
+          onclick={() => { activeProcessName = proc.name; }}
+        >
+          <StatusIndicator status={getStatusVariant(proc.pm2_env?.status ?? 'stopped')} />
+          {proc.name}
+        </button>
+      {/each}
+    </div>
+  {/if}
 
   <!-- Tabs -->
   <div
@@ -657,6 +690,7 @@
 <ConfirmDeleteModal
   open={deleteModal.open}
   itemName={process.name}
+  processCount={hasGroup ? groupProcesses.length : 1}
   loading={deleteLoading}
   onConfirm={confirmDelete}
   onCancel={() => {

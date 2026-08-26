@@ -39,27 +39,33 @@ export const POST = adminHandler(async (event) => {
     throw error(400, getZodErrorMessage(validationResult));
   }
 
-  const { processName, name, description, targetPath, teamId, members } = validationResult.data;
+  const { processName, name, description, targetPath, teamId, members, pm2Names } = validationResult.data;
   const user = event.locals.user!;
 
   const projectRepo = new ProjectRepository();
 
-  // Check for collision
+  // Check for collision — check primary name and all pm2Names
   const existing = await projectRepo.getAll();
-  const collision = existing.find(p => p.pm2Name === processName);
+  const namesToCheck = pm2Names ?? [processName];
+  const collision = existing.find(p =>
+    namesToCheck.some(n => p.pm2Name === n)
+  );
   if (collision) {
     throw error(409, 'Process already registered');
   }
 
+  // Determine primary name and group
+  const primaryName = pm2Names?.[0] ?? processName;
+
   // Create project
   const newProject = await projectRepo.create({
     userId: user.id,
-    pm2Name: processName,
-    name: name ?? processName,
-    description: description ?? `PM2 process: ${processName}`,
+    pm2Name: primaryName,
+    name: name ?? primaryName,
+    description: description ?? `PM2 process: ${primaryName}`,
     targetPath: targetPath ?? null,
     teamId: teamId ?? null,
-    pm2Names: null,
+    pm2Names: pm2Names && pm2Names.length > 1 ? JSON.stringify(pm2Names) : null,
     githubRepo: null,
     deployBranch: 'main',
     autoDeployEnabled: false,
@@ -85,14 +91,15 @@ export const POST = adminHandler(async (event) => {
     resourceType: 'project',
     resourceId: newProject.id,
     details: {
-      processName,
+      processName: primaryName,
+      pm2Names: pm2Names ?? [processName],
       teamId,
       memberCount: members?.length ?? 0,
     },
   });
 
   return json(
-    { success: true, project: { id: newProject.id, name: newProject.name, pm2Name: newProject.pm2Name } },
+    { success: true, project: { id: newProject.id, name: newProject.name, pm2Name: newProject.pm2Name, pm2Names: pm2Names ?? null } },
     { status: 201 }
   );
 });

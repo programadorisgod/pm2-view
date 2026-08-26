@@ -6,6 +6,7 @@ export const registerProjectSchema = z.object({
   description: z.string().optional(),
   targetPath: z.string().optional(),
   teamId: z.string().nullable().optional(),
+  pm2Names: z.array(z.string().trim().min(1)).min(1).optional(),
   members: z.array(z.object({
     userId: z.string().min(1),
     role: z.enum(['owner', 'editor', 'viewer'])

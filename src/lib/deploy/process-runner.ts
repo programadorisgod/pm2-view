@@ -1,6 +1,6 @@
 import { spawn } from 'child_process';
 import { existsSync, readFileSync } from 'fs';
-import { join } from 'path';
+import { dirname, join } from 'path';
 
 /** Environment map passed to spawned child processes (values may be undefined, like Node's process.env). */
 export type EnvMap = Record<string, string | undefined>;
@@ -93,6 +93,7 @@ function flushBuffer(buffer: string[], onLine: (line: string) => void, flushAll 
 
 /**
  * Detects the package manager for a directory via packageManager field or lockfiles.
+ * Searches the target directory and up to 3 parent levels (handles monorepo workspaces).
  * Falls back to npm when nothing conclusive is found.
  */
 export function detectPackageManagerOrDefault(dir: string): PackageManager {
@@ -109,8 +110,15 @@ export function detectPackageManagerOrDefault(dir: string): PackageManager {
 		}
 	}
 
-	for (const [file, pm] of Object.entries(LOCK_FILES)) {
-		if (existsSync(join(dir, file))) return pm;
+	// Check current directory and up to 3 parent levels for lockfiles
+	let current = dir;
+	for (let level = 0; level <= 3; level++) {
+		for (const [file, pm] of Object.entries(LOCK_FILES)) {
+			if (existsSync(join(current, file))) return pm;
+		}
+		const parent = dirname(current);
+		if (parent === current) break; // reached filesystem root
+		current = parent;
 	}
 
 	return 'npm';

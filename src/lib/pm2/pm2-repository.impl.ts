@@ -168,14 +168,15 @@ function classifyLogLevel(line: string, streamType: 'out' | 'err'): 'info' | 'wa
 	const isFalsePositive =
 		/\b(next|nuxt|vite|astro|sveltekit|react|vue|angular|nest|express)\b.*start/i.test(line) ||
 		/\b(pm2|node|npm|yarn|pnpm)\b.{0,40}(start|running|installed|version|listening|ready|init|exit|loaded|boot|compil)/i.test(line) ||
-		/\b(LISTENING|listening on|started on|ready|port)\b/i.test(line) ||
+		/\b(LISTENING|listening on|started on|ready)\b/i.test(line) ||
 		/\bcompil(e|ing|ed|er)\b/i.test(line) ||
 		/\b(build|building|built)\b/i.test(line) ||
 		/\b(hot[- ]?module|hmr|module reload)\b/i.test(line) ||
 		/\b(deploy|deploying|deployed)\b/i.test(line) ||
 		/\b(watching|watch)\b/i.test(line) ||
 		/\b(discount|discountinued)\b/i.test(line) ||
-		/\b(node_modules|\.next|\.nuxt|dist|build)\b/i.test(line) ||
+		/\b(node_modules|\.next|\.nuxt)\b.*\b(start|running|loaded|ready)\b/i.test(line) ||
+		/^node:\s.*not found$/i.test(line) ||
 		/^\s*$/.test(line);
 
 	// True error patterns (override stream-based default when found in stdout)
@@ -186,6 +187,9 @@ function classifyLogLevel(line: string, streamType: 'out' | 'err'): 'info' | 'wa
 		/\bcannot (read|find|open|access|connect|resolve)\b/i.test(line) ||
 		/\berrno\b.*\b(coded|=\s*\d+)\b/i.test(line) ||
 		/\bstack trace\b/i.test(line) ||
+		/\b(EADDRINUSE|EACCES|ENOTFOUND|ECONNREFUSED|ECONNRESET|ETIMEDOUT)\b/i.test(line) ||
+		/\baddress already in use\b/i.test(line) ||
+		/\bport\b.{0,20}\b(in use|already|conflict|error|fail)\b/i.test(line) ||
 		/^Trace\s*\(/.test(line) || // Node.js stack trace start
 		/^\s+at\s+/.test(line); // Node.js stack trace frame
 

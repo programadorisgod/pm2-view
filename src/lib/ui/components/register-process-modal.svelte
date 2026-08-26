@@ -22,6 +22,11 @@
     cwd: string;
   }
 
+  interface ProcessGroup {
+    cwd: string;
+    processes: UnregisteredProcess[];
+  }
+
   interface MemberEntry {
     userId: string;
     role: 'owner' | 'editor' | 'viewer';
@@ -31,7 +36,9 @@
   let dialogRef = $state<HTMLDialogElement | undefined>();
 
   let view = $state<'select' | 'form'>('select');
-  let unregisteredProcesses = $state<UnregisteredProcess[]>([]);
+  let groups = $state<ProcessGroup[]>([]);
+  let singles = $state<UnregisteredProcess[]>([]);
+  let selectedGroup = $state<ProcessGroup | null>(null);
   let selectedProcess = $state<UnregisteredProcess | null>(null);
   let loading = $state(false);
   let submitting = $state(false);
@@ -60,6 +67,9 @@
 
   function resetState() {
     view = 'select';
+    groups = [];
+    singles = [];
+    selectedGroup = null;
     selectedProcess = null;
     loading = false;
     submitting = false;
@@ -78,7 +88,9 @@
     try {
       const res = await fetch(`${base}/api/pm2/unregistered`);
       if (res.ok) {
-        unregisteredProcesses = await res.json();
+        const data = await res.json();
+        groups = data.groups ?? [];
+        singles = data.singles ?? [];
       }
     } catch {
       errorMessage = 'Failed to fetch unregistered processes';
@@ -87,11 +99,23 @@
     }
   }
 
-  function selectProcess(process: UnregisteredProcess) {
+  function selectSingle(process: UnregisteredProcess) {
     selectedProcess = process;
+    selectedGroup = null;
     name = process.name;
     description = `PM2 process: ${process.name}`;
     targetPath = process.cwd;
+    view = 'form';
+  }
+
+  function selectGroup(group: ProcessGroup) {
+    selectedGroup = group;
+    selectedProcess = null;
+    // Use the last directory name from cwd as default name
+    const dirName = group.cwd.split('/').filter(Boolean).pop() ?? group.processes[0].name;
+    name = dirName;
+    description = `PM2 group: ${group.processes.map(p => p.name).join(', ')}`;
+    targetPath = group.cwd;
     view = 'form';
   }
 
@@ -115,22 +139,27 @@
   }
 
   async function handleSubmit() {
-    if (!selectedProcess) return;
+    if (!selectedProcess && !selectedGroup) return;
 
     submitting = true;
     errorMessage = null;
+
+    const processNames = selectedGroup
+      ? selectedGroup.processes.map(p => p.name)
+      : [selectedProcess!.name];
 
     try {
       const res = await fetch(`${base}/api/projects/register`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          processName: selectedProcess.name,
+          processName: processNames[0],
           name,
           description,
           targetPath: targetPath || undefined,
           teamId,
           members: members.map(m => ({ userId: m.userId, role: m.role })),
+          ...(processNames.length > 1 && { pm2Names: processNames }),
         }),
       });
 
@@ -167,6 +196,7 @@
 
   function goBackToSelect() {
     view = 'select';
+    selectedGroup = null;
     selectedProcess = null;
   }
 </script>
@@ -209,7 +239,7 @@
               Register PM2 Process
             </h3>
             <p class="text-caption" style="color: var(--text-muted);">
-              {view === 'select' ? 'Select a running process' : `Registering: ${selectedProcess?.name ?? ''}`}
+              {view === 'select' ? 'Select a running process' : `Registering: ${selectedGroup ? `${selectedGroup.processes.length} processes` : (selectedProcess?.name ?? '')}`}
             </p>
           </div>
         </div>
@@ -232,7 +262,7 @@
       {:else if view === 'select'}
         <!-- Process selection -->
         <div class="p-lg">
-          {#if unregisteredProcesses.length === 0}
+          {#if groups.length === 0 && singles.length === 0}
             <div
               class="rounded-lg p-lg text-center"
               style="background: var(--bg-base); border: 1px solid var(--border-color);"
@@ -240,37 +270,93 @@
               <p style="color: var(--text-secondary);">All running processes are already registered.</p>
             </div>
           {:else}
-            <div class="space-y-sm">
-              {#each unregisteredProcesses as process}
-                <button
-                  type="button"
-                  class="w-full text-left p-md rounded-lg transition-colors"
-                  style="background: var(--bg-base); border: 1px solid var(--border-color);"
-                  onclick={() => selectProcess(process)}
-                >
-                  <div class="flex items-start justify-between">
-                    <div>
-                      <p class="text-body-sm font-semibold" style="color: var(--text-primary);">
-                        {process.name}
-                      </p>
-                      <p class="text-caption" style="color: var(--text-muted);">
-                        {process.cwd || 'No working directory'}
-                      </p>
-                    </div>
-                    <span
-                      class="px-2 py-0.5 rounded-full text-caption font-medium"
-                      style="background: {process.status === 'online' ? 'rgba(0, 230, 118, 0.15)' : process.status === 'error' ? 'rgba(255, 82, 82, 0.15)' : 'rgba(128, 128, 128, 0.15)'}; color: {process.status === 'online' ? '#00E676' : process.status === 'error' ? '#FF5252' : '#808080'};"
-                    >
-                      {process.status}
-                    </span>
+            <div class="space-y-md">
+              <!-- Groups -->
+              {#if groups.length > 0}
+                <div>
+                  <p class="text-caption font-medium mb-sm" style="color: var(--text-muted);">
+                    Groups ({groups.length})
+                  </p>
+                  <div class="space-y-sm">
+                    {#each groups as group}
+                      <button
+                        type="button"
+                        class="w-full text-left p-md rounded-lg transition-colors"
+                        style="background: var(--bg-base); border: 1px solid rgba(56, 205, 255, 0.3);"
+                        onclick={() => selectGroup(group)}
+                      >
+                        <div class="flex items-start justify-between">
+                          <div>
+                            <p class="text-body-sm font-semibold" style="color: var(--text-primary);">
+                              {group.cwd.split('/').filter(Boolean).pop()}
+                            </p>
+                            <p class="text-caption" style="color: var(--text-muted);">
+                              {group.cwd}
+                            </p>
+                            <div class="flex flex-wrap gap-xs mt-xs">
+                              {#each group.processes as proc}
+                                <span
+                                  class="px-2 py-0.5 rounded-full text-caption"
+                                  style="background: rgba(56, 205, 255, 0.15); color: #38CDFF;"
+                                >
+                                  {proc.name}
+                                </span>
+                              {/each}
+                            </div>
+                          </div>
+                          <span
+                            class="px-2 py-0.5 rounded-full text-caption font-medium flex-shrink-0"
+                            style="background: rgba(56, 205, 255, 0.15); color: #38CDFF;"
+                          >
+                            {group.processes.length} processes
+                          </span>
+                        </div>
+                      </button>
+                    {/each}
                   </div>
-                </button>
-              {/each}
+                </div>
+              {/if}
+
+              <!-- Singles -->
+              {#if singles.length > 0}
+                <div>
+                  <p class="text-caption font-medium mb-sm" style="color: var(--text-muted);">
+                    Singles ({singles.length})
+                  </p>
+                  <div class="space-y-sm">
+                    {#each singles as process}
+                      <button
+                        type="button"
+                        class="w-full text-left p-md rounded-lg transition-colors"
+                        style="background: var(--bg-base); border: 1px solid var(--border-color);"
+                        onclick={() => selectSingle(process)}
+                      >
+                        <div class="flex items-start justify-between">
+                          <div>
+                            <p class="text-body-sm font-semibold" style="color: var(--text-primary);">
+                              {process.name}
+                            </p>
+                            <p class="text-caption" style="color: var(--text-muted);">
+                              {process.cwd || 'No working directory'}
+                            </p>
+                          </div>
+                          <span
+                            class="px-2 py-0.5 rounded-full text-caption font-medium"
+                            style="background: {process.status === 'online' ? 'rgba(0, 230, 118, 0.15)' : process.status === 'error' ? 'rgba(255, 82, 82, 0.15)' : 'rgba(128, 128, 128, 0.15)'}; color: {process.status === 'online' ? '#00E676' : process.status === 'error' ? '#FF5252' : '#808080'};"
+                          >
+                            {process.status}
+                          </span>
+                        </div>
+                      </button>
+                    {/each}
+                  </div>
+                </div>
+              {/if}
             </div>
           {/if}
         </div>
 
-      {:else if view === 'form' && selectedProcess}
+        {:else if view === 'form' && (selectedProcess || selectedGroup)}
         <!-- Registration form -->
         <div class="p-lg space-y-md">
           {#if errorMessage}
@@ -290,6 +376,27 @@
               <p class="text-caption" style="color: #FFD740;">
                 Only you (admin) will see this project. You can share it later from the project's Sharing tab.
               </p>
+            </div>
+          {/if}
+
+          {#if selectedGroup}
+            <div
+              class="rounded-lg p-md"
+              style="background: rgba(56, 205, 255, 0.08); border: 1px solid rgba(56, 205, 255, 0.3);"
+            >
+              <p class="text-caption font-medium mb-xs" style="color: #38CDFF;">
+                Group: {selectedGroup.processes.length} processes
+              </p>
+              <div class="flex flex-wrap gap-xs">
+                {#each selectedGroup.processes as proc}
+                  <span class="text-caption" style="color: var(--text-muted);">
+                    {proc.name}
+                  </span>
+                  {#if proc !== selectedGroup.processes[selectedGroup.processes.length - 1]}
+                    <span style="color: var(--text-muted);">·</span>
+                  {/if}
+                {/each}
+              </div>
             </div>
           {/if}
 
@@ -437,6 +544,8 @@
           >
             {#if submitting}
               Registering...
+            {:else if selectedGroup}
+              Register Group ({selectedGroup.processes.length} processes)
             {:else}
               Register Process
             {/if}

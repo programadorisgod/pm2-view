@@ -33,7 +33,21 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 				where: eq(projects.pm2Name, pm2Process.name)
 			});
 
-			// Auto-provision: create project record if it doesn't exist yet
+			// If not found by pm2Name, check if this process is a member of a group
+			if (!project) {
+				const allProjects = await db.query.projects.findMany({
+					columns: { id: true, userId: true, teamId: true, name: true, pm2Name: true, pm2Names: true, description: true, targetPath: true, githubRepo: true, deployBranch: true, autoDeployEnabled: true, notifyEmail: true, createdAt: true }
+				});
+				project = allProjects.find(p => {
+					if (!p.pm2Names) return false;
+					try {
+						const names = JSON.parse(p.pm2Names) as string[];
+						return names.includes(pm2Process.name);
+					} catch { return false; }
+				}) ?? null;
+			}
+
+			// Auto-provision: create project record if it doesn't exist yet (and is not a group member)
 			if (!project) {
 				const [created] = await db.insert(projects).values({
 					id: crypto.randomUUID(),

@@ -29,10 +29,23 @@ export const load: LayoutServerLoad = async (event) => {
 		if (!pm2Process) {
 			return { user: session.user, session: session.session, projectId: paramId, memberRole: null };
 		}
-		const project = await db.query.projects.findFirst({
+		let project = await db.query.projects.findFirst({
 			where: eq(projects.pm2Name, pm2Process.name),
 			columns: { id: true }
 		});
+		// If not found by pm2Name, check if this process is a member of a group
+		if (!project) {
+			const allProjects = await db.query.projects.findMany({
+				columns: { id: true, pm2Names: true }
+			});
+			project = allProjects.find(p => {
+				if (!p.pm2Names) return false;
+				try {
+					const names = JSON.parse(p.pm2Names) as string[];
+					return names.includes(pm2Process.name);
+				} catch { return false; }
+			}) ?? null;
+		}
 		if (!project) {
 			return { user: session.user, session: session.session, projectId: paramId, memberRole: null };
 		}

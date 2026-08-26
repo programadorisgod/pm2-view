@@ -108,10 +108,45 @@ async function handlePushEvent(
 		return new Response(null, { status: 204 });
 	}
 
+	// Resolve group members to their parent project so a single auto-deploy
+	// config covers the entire monorepo group.
+	const allProjects = await projectRepo.getAll();
+	const resolvedProjects = new Map<string, typeof allProjects[0]>();
+
+	for (const project of enabled) {
+		// Check if this project is a group parent (has pm2Names)
+		if (project.pm2Names) {
+			try {
+				const names = JSON.parse(project.pm2Names) as string[];
+				if (Array.isArray(names) && names.length > 0) {
+					resolvedProjects.set(project.id, project);
+					continue;
+				}
+			} catch { /* invalid JSON — fall through */ }
+		}
+
+		// Check if this project is a member of a group
+		const parent = allProjects.find(p => {
+			if (!p.pm2Names || p.pm2Name === project.pm2Name) return false;
+			try {
+				const names = JSON.parse(p.pm2Names) as string[];
+				return names.includes(project.pm2Name);
+			} catch { return false; }
+		});
+
+		if (parent) {
+			// Use the parent project — it has pm2Names so the runner will restart all group members
+			resolvedProjects.set(parent.id, parent);
+		} else {
+			// Standalone project
+			resolvedProjects.set(project.id, project);
+		}
+	}
+
 	const worker = getDeploymentWorker();
 	const deploymentIds: string[] = [];
 
-	for (const project of enabled) {
+	for (const project of resolvedProjects.values()) {
 		let deployment;
 		try {
 			deployment = await deploymentRepo.create({

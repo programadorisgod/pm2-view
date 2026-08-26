@@ -110,6 +110,37 @@
 								{startingProject === process.name ? 'Starting...' : 'Start →'}
 							</button>
 						</div>
+					{:else if process.groupMembers}
+						<!-- Grouped processes -->
+						<a href="{base}/projects/{process.pm_id}" class="flex items-center justify-between py-sm px-md rounded-md transition-colors hover:bg-[var(--bg-surface)] cursor-pointer group stagger-item" style="--stagger-index: {i + 4};">
+							<div class="flex items-center gap-md">
+								<StatusIndicator status={getStatusVariant(process.status)} />
+								<div>
+									<p class="text-body-sm font-medium process-name group-hover:text-[#38CDFF] transition-colors" style="color: var(--text-primary);">
+										{process.name}
+										<span class="text-caption font-normal ml-xs" style="color: #38CDFF;">
+											({process.groupMembers.length} processes)
+										</span>
+									</p>
+									<p class="text-caption" style="color: var(--text-muted);">
+										CPU: {process.cpu}% · RAM: {process.memoryMB}MB · {process.uptimeFormatted}
+									</p>
+									<div class="flex flex-wrap gap-xs mt-xs">
+										{#each process.groupMembers as member}
+											<span
+												class="px-2 py-0.5 rounded-full text-caption"
+												style="background: {member.status === 'online' ? 'rgba(0, 230, 118, 0.15)' : member.status === 'error' ? 'rgba(255, 82, 82, 0.15)' : 'rgba(128, 128, 128, 0.15)'}; color: {member.status === 'online' ? '#00E676' : member.status === 'error' ? '#FF5252' : '#808080'};"
+											>
+												{member.name}
+											</span>
+										{/each}
+									</div>
+								</div>
+							</div>
+							<span class="btn-secondary px-3 py-1 text-caption opacity-0 group-hover:opacity-100 transition-opacity">
+								View →
+							</span>
+						</a>
 					{:else}
 						<!-- Running PM2 process -->
 						<a href="{base}/projects/{process.pm_id}" class="flex items-center justify-between py-sm px-md rounded-md transition-colors hover:bg-[var(--bg-surface)] cursor-pointer group stagger-item" style="--stagger-index: {i + 4};">

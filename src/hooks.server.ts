@@ -8,7 +8,7 @@ import type { Handle } from '@sveltejs/kit';
 
 if (!building) {
 	startMetricsEmitter(10000);
-	startStatusWatcher(5000);
+	startStatusWatcher(10000);
 
 	process.on('SIGTERM', () => {
 		logger.info('SIGTERM received, shutting down...');

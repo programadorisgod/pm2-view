@@ -1,12 +1,17 @@
 import { sseManager } from './sse-manager';
 import { createServices } from '$lib/services/factory';
 import { logger } from '$lib/logger';
+import { mapStatus } from '$lib/pm2/pm2.service';
+import { createDefaultProcessAlertNotifier } from '$lib/notifications/process-alert-notifier';
 
 let previousStatuses = new Map<string, string>();
 let intervalId: ReturnType<typeof setInterval> | null = null;
+let alertNotifier: ReturnType<typeof createDefaultProcessAlertNotifier> | null = null;
 
 export function startStatusWatcher(intervalMs: number = 5000): void {
 	if (intervalId) return;
+
+	alertNotifier = createDefaultProcessAlertNotifier();
 
 	intervalId = setInterval(async () => {
 		try {
@@ -23,8 +28,17 @@ export function startStatusWatcher(intervalMs: number = 5000): void {
 						processId: id,
 						processName: process.name,
 						status: currentStatus,
-						previousStatus,
+						previousStatus
 					});
+
+					if (mapStatus(currentStatus) === 'error' && alertNotifier) {
+						alertNotifier.notifyProcessError(process.name, previousStatus).catch((err) => {
+							logger.error('Failed to send process error alert', {
+								processName: process.name,
+								error: String(err)
+							});
+						});
+					}
 				}
 
 				previousStatuses.set(id, currentStatus);

@@ -128,8 +128,22 @@ export function detectPackageManagerOrDefault(dir: string): PackageManager {
  * Splits a configured command string into binary + args tokens.
  * Commands come exclusively from internal configuration (deploy_commands),
  * never from webhook payloads.
+ *
+ * Leading `KEY=VALUE` tokens are parsed as inline environment variables
+ * (e.g. `ATLAS_DOCS_BASE=/atlas/docs pnpm build:docs`), so a post-deploy
+ * command can carry its own env without shell interpolation.
  */
-export function tokenizeCommand(command: string): { bin: string; args: string[] } {
+export function tokenizeCommand(command: string): { bin: string; args: string[]; env: Record<string, string> } {
 	const tokens = command.trim().split(/\s+/).filter(Boolean);
-	return { bin: tokens[0], args: tokens.slice(1) };
+	const env: Record<string, string> = {};
+
+	let i = 0;
+	for (; i < tokens.length; i++) {
+		const match = tokens[i].match(/^([A-Za-z_][A-Za-z0-9_]*)=(.*)$/);
+		if (!match) break;
+		env[match[1]] = match[2];
+	}
+
+	const bin = tokens[i] ?? '';
+	return { bin, args: tokens.slice(i + 1), env };
 }

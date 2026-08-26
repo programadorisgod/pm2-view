@@ -2,7 +2,7 @@ import type { Deployment, DeploymentStatus } from '../db/schema';
 
 export type { Deployment, DeploymentStatus };
 
-export const DEPLOYMENT_STAGES = ['git', 'install', 'build', 'pm2'] as const;
+export const DEPLOYMENT_STAGES = ['git', 'install', 'build', 'pm2', 'post-deploy'] as const;
 export type DeployStage = (typeof DEPLOYMENT_STAGES)[number];
 
 export interface CreateDeploymentInput {

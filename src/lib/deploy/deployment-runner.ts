@@ -22,7 +22,7 @@ export interface DeploymentRunnerDeps {
 	deploymentRepo: IDeploymentRepository;
 	gitService: GitService;
 	pm2Repo: IPM2Repository;
-	deployConfigRepo: { getByType(projectId: string, type: 'install' | 'build' | 'restart'): Promise<{ command: string; sortOrder: number }[]> };
+	deployConfigRepo: { getByType(projectId: string, type: 'install' | 'build' | 'restart' | 'post-deploy'): Promise<{ command: string; sortOrder: number }[]> };
 	/** Runs `pm2 restart <name> --update-env`; injectable for testing. */
 	runPm2Restart: (
 		processName: string,
@@ -148,13 +148,13 @@ export class DeploymentRunner {
 			const [installCmd] = await this.deps.deployConfigRepo.getByType(project.id, 'install');
 			if (installCmd) {
 				log(`Installing dependencies (configured): ${installCmd.command}`);
-				const { bin, args } = tokenizeCommand(installCmd.command);
+				const { bin, args, env: inlineEnv } = tokenizeCommand(installCmd.command);
 				const code = await runCommand(
 					workingDir,
 					bin,
 					args,
 					(line, isError) => log(line, isError),
-					runEnv,
+					{ ...runEnv, ...inlineEnv },
 					INSTALL_BUILD_TIMEOUT_MS
 				);
 				if (code !== 0) {
@@ -186,13 +186,13 @@ export class DeploymentRunner {
 
 			if (buildCmd) {
 				log(`Building (configured): ${buildCmd.command}`);
-				const { bin, args } = tokenizeCommand(buildCmd.command);
+				const { bin, args, env: inlineEnv } = tokenizeCommand(buildCmd.command);
 				const code = await runCommand(
 					workingDir,
 					bin,
 					args,
 					(line, isError) => log(line, isError),
-					runEnv,
+					{ ...runEnv, ...inlineEnv },
 					INSTALL_BUILD_TIMEOUT_MS
 				);
 				if (code !== 0) {
@@ -274,6 +274,30 @@ export class DeploymentRunner {
 				}
 				log(`Process online: ${procName}`);
 			}
+
+			// ── Stage: post-deploy ──────────────────────────────────────
+			// Optional post-deploy actions run only after the app is online.
+			// Failures here are warnings — the deployment itself still succeeds.
+			currentStage = 'post-deploy';
+			const postDeployCmds = await this.deps.deployConfigRepo.getByType(project.id, 'post-deploy');
+			for (const cmd of postDeployCmds) {
+				log(`Running post-deploy command: ${cmd.command}`);
+				const { bin, args, env: inlineEnv } = tokenizeCommand(cmd.command);
+				const code = await runCommand(
+					workingDir,
+					bin,
+					args,
+					(line, isError) => log(line, isError),
+					{ ...runEnv, ...inlineEnv },
+					INSTALL_BUILD_TIMEOUT_MS
+				);
+				if (code !== 0) {
+					log(`Post-deploy command failed with exit code ${code} (deployment continues)`, true);
+				} else {
+					log('Post-deploy command completed');
+				}
+			}
+			await flushLogs();
 
 			// ── Success ─────────────────────────────────────────────────
 			log('Deployment completed successfully');

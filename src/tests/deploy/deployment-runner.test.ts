@@ -109,7 +109,8 @@ describe('DeploymentRunner', () => {
 		configCommands: Record<'install' | 'build', string[]> = {
 			install: ['node', '-e', 'process.exit(0)'],
 			build: ['node', '-e', 'process.exit(0)']
-		}
+		},
+		postDeployCommands: string[] = []
 	) {
 		let describeCalls = 0;
 		return {
@@ -125,6 +126,7 @@ describe('DeploymentRunner', () => {
 				getByType: vi.fn().mockImplementation(async (_pid: string, type: string) => {
 					if (type === 'install') return [{ command: configCommands.install.join(' '), sortOrder: 0 }];
 					if (type === 'build') return [{ command: configCommands.build.join(' '), sortOrder: 0 }];
+					if (type === 'post-deploy') return postDeployCommands.map((c, i) => ({ command: c, sortOrder: i }));
 					return [];
 				})
 			},
@@ -368,6 +370,41 @@ describe('DeploymentRunner', () => {
 
 		expect(deps.deploymentRepo.mocks.markSuccess).toHaveBeenCalled();
 		expect(deps.deploymentRepo.mocks.markFailed).not.toHaveBeenCalled();
+	});
+
+	it('18. runs post-deploy commands after restart and before marking success', async () => {
+		const deps = makeRunnerDeps({}, ['online'], {
+			install: ['node', '-e', 'process.exit(0)'],
+			build: ['node', '-e', 'process.exit(0)']
+		}, ['node -e process.exit(0)']);
+		const project = { ...TEST_PROJECT, targetPath: workingDir };
+		const runner = new DeploymentRunner(deps as any);
+
+		await runner.run(makeDeployment(), project);
+
+		expect(deps.deploymentRepo.mocks.markSuccess).toHaveBeenCalled();
+		expect(deps.deploymentRepo.mocks.markFailed).not.toHaveBeenCalled();
+		const persistedLogs = deps.deploymentRepo.mocks.setLogs.mock.calls.at(-1)?.[1] ?? '';
+		expect(persistedLogs).toContain('[post-deploy]');
+		expect(persistedLogs).toContain('Post-deploy command completed');
+		// Post-deploy runs after pm2 restart
+		expect(persistedLogs.indexOf('[pm2]')).toBeLessThan(persistedLogs.indexOf('[post-deploy]'));
+	});
+
+	it('19. treats a failing post-deploy command as a warning and still succeeds', async () => {
+		const deps = makeRunnerDeps({}, ['online'], {
+			install: ['node', '-e', 'process.exit(0)'],
+			build: ['node', '-e', 'process.exit(0)']
+		}, ['node -e process.exit(1)']);
+		const project = { ...TEST_PROJECT, targetPath: workingDir };
+		const runner = new DeploymentRunner(deps as any);
+
+		await runner.run(makeDeployment(), project);
+
+		expect(deps.deploymentRepo.mocks.markSuccess).toHaveBeenCalled();
+		expect(deps.deploymentRepo.mocks.markFailed).not.toHaveBeenCalled();
+		const persistedLogs = deps.deploymentRepo.mocks.setLogs.mock.calls.at(-1)?.[1] ?? '';
+		expect(persistedLogs).toContain('Post-deploy command failed with exit code 1');
 	});
 });
 

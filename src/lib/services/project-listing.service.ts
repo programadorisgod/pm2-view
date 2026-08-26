@@ -46,6 +46,7 @@ export class ProjectListingService {
 	 * Groups PM2 processes that share a project (via pm2Names).
 	 */
 	async getVisibleProjects(userId: string, userRole: string): Promise<VisibleProject[]> {
+		const isAdmin = userRole === 'admin';
 		// Get user's favorites
 		const favoriteNames = new Set(await this.favoriteRepo.getUserFavorites(userId));
 
@@ -75,7 +76,7 @@ export class ProjectListingService {
 			}
 		}
 
-		// Get PM2 processes
+		// Get PM2 processes for status (non-admins only see matched projects)
 		const processes = await this.pm2Service.getAllProcesses();
 
 		// Upgrade individual records to groups when workspace has multiple processes
@@ -128,6 +129,72 @@ export class ProjectListingService {
 					if (n !== p.pm2Name) secondaryProjectMap.set(n, p);
 				}
 			} catch { /* ignore upgrade errors */ }
+		}
+
+		// Also detect workspace groups among ALL PM2 processes (for users without project access)
+		// This ensures monorepo processes are grouped even when no DB record exists yet
+		const registeredNames = new Set([
+			...Array.from(primaryProjectMap.keys()),
+			...Array.from(secondaryProjectMap.keys()),
+		]);
+		for (const proc of processes) {
+			if (registeredNames.has(proc.name)) continue;
+			const cwd = (proc.pm2_env?.pm_cwd ?? '').replace(/\/+$/, '');
+			if (!cwd) continue;
+			let dir = cwd;
+			let wsRoot: string | null = null;
+			for (let i = 0; i < 4; i++) {
+				for (const file of WORKSPACE_INDICATORS) {
+					if (existsSync(join(dir, file))) { wsRoot = dir; break; }
+				}
+				if (!wsRoot) {
+					const pkgPath = join(dir, 'package.json');
+					if (existsSync(pkgPath)) {
+						try {
+							const pkg = JSON.parse(readFileSync(pkgPath, 'utf-8'));
+							if (pkg.workspaces) wsRoot = dir;
+						} catch { /* ignore */ }
+					}
+				}
+				if (wsRoot) break;
+				const parent = dirname(dir);
+				if (parent === dir) break;
+				dir = parent;
+			}
+			if (!wsRoot) continue;
+			// Find all unregistered processes in this workspace
+			const wsProcesses = processes.filter(p => {
+				if (registeredNames.has(p.name)) return false;
+				const pCwd = (p.pm2_env?.pm_cwd ?? '').replace(/\/+$/, '');
+				return pCwd.startsWith(wsRoot + '/') || pCwd === wsRoot;
+			});
+			if (wsProcesses.length <= 1) continue;
+			// Create a synthetic project entry for this workspace group
+			const groupPm2Names = wsProcesses.map(p => p.name);
+			const wsName = basename(wsRoot);
+			const primary = wsProcesses[0];
+			const syntheticProject: Project = {
+				id: `ws:${wsRoot}`,
+				userId: '',
+				name: wsName,
+				pm2Name: groupPm2Names[0],
+				description: `PM2 group: ${groupPm2Names.join(', ')}`,
+				targetPath: wsRoot,
+				teamId: null,
+				githubRepo: null,
+				deployBranch: 'main',
+				autoDeployEnabled: false,
+				notifyEmail: null,
+				createdAt: new Date(),
+				pm2Names: JSON.stringify(groupPm2Names),
+			};
+			// Add to maps so the main loop picks them up
+			for (const n of groupPm2Names) {
+				if (n !== syntheticProject.pm2Name) secondaryProjectMap.set(n, syntheticProject);
+			}
+			primaryProjectMap.set(syntheticProject.pm2Name, syntheticProject);
+			// Mark as registered so they're not added again
+			for (const n of groupPm2Names) registeredNames.add(n);
 		}
 
 		// Group processes by their project ID
@@ -228,38 +295,42 @@ export class ProjectListingService {
 			}
 		}
 
-		// Add monorepo groups as single visible entries
-		for (const [root, groupProcesses] of workspaceGroups) {
-			if (groupProcesses.length > 1) {
-				const primary = groupProcesses[0];
-				const worstStatus = this.getWorstStatus(groupProcesses);
-				const totalCpu = groupProcesses.reduce((sum, p) => sum + p.cpu, 0);
-				const totalMemory = groupProcesses.reduce((sum, p) => sum + p.memoryMB, 0);
-				const groupPm2Names = groupProcesses.map(p => p.name);
+		// Add monorepo groups as single visible entries (admin only)
+		if (isAdmin) {
+			for (const [root, groupProcesses] of workspaceGroups) {
+				if (groupProcesses.length > 1) {
+					const primary = groupProcesses[0];
+					const worstStatus = this.getWorstStatus(groupProcesses);
+					const totalCpu = groupProcesses.reduce((sum, p) => sum + p.cpu, 0);
+					const totalMemory = groupProcesses.reduce((sum, p) => sum + p.memoryMB, 0);
+					const groupPm2Names = groupProcesses.map(p => p.name);
 
-				results.push({
-					...primary,
-					name: basename(root),
-					status: worstStatus,
-					cpu: Math.round(totalCpu / groupProcesses.length),
-					memoryMB: totalMemory,
-					accessType: 'personal',
-					isFavorite: groupPm2Names.some(n => favoriteNames.has(n)),
-					groupMembers: groupProcesses,
-					pm2Names: groupPm2Names,
-				});
-			} else {
-				stillUnmatched.push(groupProcesses[0]);
+					results.push({
+						...primary,
+						name: basename(root),
+						status: worstStatus,
+						cpu: Math.round(totalCpu / groupProcesses.length),
+						memoryMB: totalMemory,
+						accessType: 'personal',
+						isFavorite: groupPm2Names.some(n => favoriteNames.has(n)),
+						groupMembers: groupProcesses,
+						pm2Names: groupPm2Names,
+					});
+				} else {
+					stillUnmatched.push(groupProcesses[0]);
+				}
 			}
 		}
 
-		// Add remaining unmatched processes as individual entries
-		for (const proc of stillUnmatched) {
-			results.push({
-				...proc,
-				accessType: 'personal',
-				isFavorite: favoriteNames.has(proc.name),
-			});
+		// Add remaining unmatched processes as individual entries (admin only)
+		if (isAdmin) {
+			for (const proc of stillUnmatched) {
+				results.push({
+					...proc,
+					accessType: 'personal',
+					isFavorite: favoriteNames.has(proc.name),
+				});
+			}
 		}
 
 		// Add DB projects with targetPath that are NOT in PM2

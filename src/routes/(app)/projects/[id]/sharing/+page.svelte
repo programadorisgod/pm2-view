@@ -30,7 +30,7 @@
 
 	// Team assignment state
 	let showTeamModal = $state(false);
-	let selectedTeamId = $state<string | null>(null);
+	let selectedTeamId = $state<string>('');
 	let availableTeams = $state<Array<{ id: string; name: string }>>([]);
 	let teamAssigning = $state(false);
 	let teamMessage = $state<{ type: 'success' | 'error'; text: string } | null>(null);
@@ -192,7 +192,7 @@
 						{#if team}
 							<button
 								class="btn-secondary px-3 py-1.5 text-caption"
-								onclick={() => { selectedTeamId = team?.id ?? null; loadTeams(); showTeamModal = true; }}
+								onclick={() => { selectedTeamId = team?.id ?? ''; loadTeams(); showTeamModal = true; }}
 								disabled={teamAssigning}
 							>
 								Change Team
@@ -207,7 +207,7 @@
 						{:else}
 							<button
 								class="btn-secondary px-3 py-1.5 text-caption"
-								onclick={() => { selectedTeamId = team?.id ?? null; loadTeams(); showTeamModal = true; }}
+								onclick={() => { selectedTeamId = team?.id ?? ''; loadTeams(); showTeamModal = true; }}
 							>
 								Assign Team
 							</button>

@@ -66,49 +66,64 @@ export const load: PageServerLoad = async ({ params, request }) => {
 			}) ?? null;
 		}
 
-		// If not found in DB, detect monorepo group via workspace root
+		// Always detect workspace root for monorepo grouping
 		let workspaceRoot: string | null = null;
-		if (!project) {
-			const WORKSPACE_INDICATORS = [
-				'pnpm-workspace.yaml', 'lerna.json', 'nx.json',
-				'turbo.json', 'rush.json', '.yarnrc.yml',
-			];
-			const cwd = process.pm2_env?.pm_cwd ?? '';
-			if (cwd) {
-				let dir = cwd.replace(/\/+$/, '');
-				for (let i = 0; i < 4; i++) {
-					for (const file of WORKSPACE_INDICATORS) {
-						if (existsSync(join(dir, file))) { workspaceRoot = dir; break; }
-					}
-					if (!workspaceRoot) {
-						const pkgPath = join(dir, 'package.json');
-						if (existsSync(pkgPath)) {
-							try {
-								const pkg = JSON.parse(readFileSync(pkgPath, 'utf-8'));
-								if (pkg.workspaces) workspaceRoot = dir;
-							} catch { /* ignore */ }
-						}
-					}
-					if (workspaceRoot) break;
-					const parent = dirname(dir);
-					if (parent === dir) break;
-					dir = parent;
+		const WORKSPACE_INDICATORS = [
+			'pnpm-workspace.yaml', 'lerna.json', 'nx.json',
+			'turbo.json', 'rush.json', '.yarnrc.yml',
+		];
+		const cwd = (process.pm2_env?.pm_cwd ?? '').replace(/\/+$/, '');
+		if (cwd) {
+			let dir = cwd;
+			for (let i = 0; i < 4; i++) {
+				for (const file of WORKSPACE_INDICATORS) {
+					if (existsSync(join(dir, file))) { workspaceRoot = dir; break; }
 				}
-
-				if (workspaceRoot) {
-					const allProcesses = await pm2Service.getAllProcesses();
-					groupProcesses = allProcesses.filter(p => {
-						const pCwd = (p.pm2_env?.pm_cwd ?? '').replace(/\/+$/, '');
-						return pCwd.startsWith(workspaceRoot + '/') || pCwd === workspaceRoot;
-					});
-					if (groupProcesses.length > 1) {
-						projectName = basename(workspaceRoot);
+				if (!workspaceRoot) {
+					const pkgPath = join(dir, 'package.json');
+					if (existsSync(pkgPath)) {
+						try {
+							const pkg = JSON.parse(readFileSync(pkgPath, 'utf-8'));
+							if (pkg.workspaces) workspaceRoot = dir;
+						} catch { /* ignore */ }
 					}
 				}
+				if (workspaceRoot) break;
+				const parent = dirname(dir);
+				if (parent === dir) break;
+				dir = parent;
 			}
 		}
 
-		// Auto-provision: register project if it doesn't exist yet (and is not a group member)
+		// Find all workspace processes for grouping
+		if (workspaceRoot) {
+			const allProcesses = await pm2Service.getAllProcesses();
+			groupProcesses = allProcesses.filter(p => {
+				const pCwd = (p.pm2_env?.pm_cwd ?? '').replace(/\/+$/, '');
+				return pCwd.startsWith(workspaceRoot + '/') || pCwd === workspaceRoot;
+			});
+			if (groupProcesses.length > 1) {
+				projectName = basename(workspaceRoot);
+			}
+		}
+
+		// If project found but is individual and workspace has groups → upgrade to group
+		if (project && !project.pm2Names && groupProcesses.length > 1) {
+			const groupPm2Names = groupProcesses.map(p => p.name);
+			await db.update(projects).set({
+				name: projectName,
+				pm2Names: JSON.stringify(groupPm2Names),
+				description: `PM2 group: ${groupPm2Names.join(', ')}`,
+				targetPath: workspaceRoot,
+			}).where(eq(projects.id, project.id));
+			// Refresh project data
+			project = await db.query.projects.findFirst({
+				where: eq(projects.id, project.id),
+				columns: { id: true, name: true, autoDeployEnabled: true, githubRepo: true, deployBranch: true, pm2Name: true, pm2Names: true }
+			}) ?? project;
+		}
+
+		// Auto-provision: register project if it doesn't exist yet
 		if (!project && session?.user) {
 			const isGroup = groupProcesses.length > 1;
 			const groupPm2Names = isGroup ? groupProcesses.map(p => p.name) : undefined;

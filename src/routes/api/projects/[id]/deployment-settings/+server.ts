@@ -23,7 +23,8 @@ const settingsSchema = z.object({
 		.trim()
 		.min(1, 'Branch is required')
 		.max(200)
-		.regex(BRANCH_REGEX, 'Branch contains invalid characters')
+		.regex(BRANCH_REGEX, 'Branch contains invalid characters'),
+	pm2Names: z.array(z.string().trim().min(1)).min(1).optional(),
 });
 
 function parseSettings(body: unknown) {
@@ -58,6 +59,7 @@ export const GET: RequestHandler = async ({ params, request }) => {
 		deployBranch: project.deployBranch,
 		targetPath: project.targetPath,
 		pm2Name: project.pm2Name,
+		pm2Names: project.pm2Names ? JSON.parse(project.pm2Names) as string[] : [project.pm2Name],
 		notifyEmail: project.notifyEmail,
 		lastDeployment: lastDeployment
 			? {
@@ -112,6 +114,7 @@ export const PUT: RequestHandler = async ({ params, request }) => {
 		autoDeployEnabled: parsed.data.autoDeployEnabled,
 		githubRepo: githubRepo ?? null,
 		deployBranch: parsed.data.deployBranch,
+		pm2Names: parsed.data.pm2Names ? JSON.stringify(parsed.data.pm2Names) : project.pm2Names,
 		// Capture who configured auto-deploy so they receive deploy outcome emails
 		notifyEmail: session.user.email ?? null
 	});
@@ -120,6 +123,7 @@ export const PUT: RequestHandler = async ({ params, request }) => {
 		autoDeployEnabled: updated.autoDeployEnabled,
 		githubRepo: updated.githubRepo,
 		deployBranch: updated.deployBranch,
+		pm2Names: updated.pm2Names ? JSON.parse(updated.pm2Names) as string[] : [updated.pm2Name],
 		notifyEmail: updated.notifyEmail
 	});
 };

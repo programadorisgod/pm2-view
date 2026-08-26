@@ -5,6 +5,8 @@
     ConfirmDeleteModal,
     FeedbackBanner,
     PM2SystemModal,
+    DeployAllModal,
+    RegisterProcessModal,
   } from "$lib/ui/components";
   import { base } from "$app/paths";
   import type { PageData } from "./$types";
@@ -17,10 +19,11 @@
   let feedback = $state<{ type: "success" | "error"; text: string } | null>(
     null,
   );
-  let deleteModal = $state<{ open: boolean; name: string; pm_id: string }>({
+  let deleteModal = $state<{ open: boolean; name: string; pm_id: string; processCount: number; pm2Names?: string[] }>({
     open: false,
     name: "",
     pm_id: "",
+    processCount: 1,
   });
   let deleteLoading = $state(false);
   let favoritesExpanded = $state(true);
@@ -30,6 +33,9 @@
     mode: "startup",
   });
   let startingProject = $state<string | null>(null);
+  let deployAllModal = $state({ open: false });
+  let isDeployingAll = $state(false);
+  let registerModal = $state({ open: false });
 
   let favoriteProcesses = $derived(processes.filter((p) => p.isFavorite));
   let nonFavoriteProcesses = $derived(processes.filter((p) => !p.isFavorite));
@@ -109,18 +115,22 @@
     }
   }
 
-  function requestDelete(pm_id: string, name: string) {
-    deleteModal = { open: true, name, pm_id };
+  function requestDelete(pm_id: string, name: string, processCount = 1, pm2Names?: string[]) {
+    deleteModal = { open: true, name, pm_id, processCount, pm2Names };
   }
 
   async function confirmDelete(deleteFiles = false) {
     deleteLoading = true;
     feedback = null;
     try {
+      const body: Record<string, unknown> = { pm_id: deleteModal.pm_id, deleteFiles };
+      if (deleteModal.pm2Names && deleteModal.pm2Names.length > 0) {
+        body.pm2Names = deleteModal.pm2Names;
+      }
       const res = await fetch(`${base}/projects/api?action=delete`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ pm_id: deleteModal.pm_id, deleteFiles }),
+        body: JSON.stringify(body),
       });
       const result = await res.json();
       if (res.ok) {
@@ -156,8 +166,38 @@
       </p>
     </div>
 
-    {#if data.userRole === "admin"}
-      <div class="flex gap-xs">
+    <div class="flex gap-xs flex-wrap">
+      <button
+        class="btn-primary px-3 py-1.5 text-body-sm inline-flex items-center gap-1.5"
+        onclick={() => { deployAllModal.open = true; }}
+        disabled={isDeployingAll}
+        class:opacity-40={isDeployingAll}
+        class:cursor-not-allowed={isDeployingAll}
+        title="Deploy all online apps sequentially"
+      >
+        {#if isDeployingAll}
+          <svg class="w-3.5 h-3.5 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+          </svg>
+          Deploying...
+        {:else}
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m9-13V1a1 1 0 00-1 1v2.582a5.009 5.009 0 00-3.412 1.918m7.422 2.476V4a1 1 0 00-2 0v1.582"/>
+          </svg>
+          Deploy All
+        {/if}
+      </button>
+      {#if data.userRole === "admin"}
+        <button
+          class="btn-secondary px-3 py-1.5 text-body-sm inline-flex items-center gap-1.5"
+          onclick={() => (registerModal = { open: true })}
+          title="Register a running PM2 process"
+        >
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+          </svg>
+          Register process
+        </button>
         <button
           class="btn-secondary px-3 py-1.5 text-body-sm inline-flex items-center gap-1.5"
           onclick={() => (systemModal = { open: true, mode: "save" })}
@@ -178,8 +218,8 @@
           </svg>
           PM2 Startup
         </button>
-      </div>
-    {/if}
+      {/if}
+    </div>
   </div>
 
   {#if feedback}
@@ -364,7 +404,7 @@
                   <button
                     class="btn-danger px-3 py-1 text-caption"
                     onclick={() =>
-                      requestDelete(process.pm_id.toString(), process.name)}
+                      requestDelete(process.pm_id.toString(), process.name, process.pm2Names?.length ?? 1, process.pm2Names)}
                   >
                     Delete
                   </button>
@@ -505,7 +545,7 @@
                 <button
                   class="btn-danger px-3 py-1 text-caption"
                   onclick={() =>
-                    requestDelete(process.pm_id.toString(), process.name)}
+                    requestDelete(process.pm_id.toString(), process.name, process.pm2Names?.length ?? 1, process.pm2Names)}
                 >
                   Delete
                 </button>
@@ -521,6 +561,7 @@
 <ConfirmDeleteModal
   open={deleteModal.open}
   itemName={deleteModal.name}
+  processCount={deleteModal.processCount}
   loading={deleteLoading}
   onConfirm={confirmDelete}
   onCancel={() => {
@@ -535,3 +576,18 @@
     systemModal.open = false;
   }}
 />
+
+<DeployAllModal
+  open={deployAllModal.open}
+  onDeploying={(deploying) => { isDeployingAll = deploying; }}
+  onClose={() => { deployAllModal.open = false; }}
+/>
+
+{#if data.userRole === "admin"}
+  <RegisterProcessModal
+    open={registerModal.open}
+    onClose={() => { registerModal.open = false; invalidateAll(); }}
+    users={data.users ?? []}
+    teams={data.teams ?? []}
+  />
+{/if}

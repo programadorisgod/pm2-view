@@ -4,12 +4,8 @@ import { projects, projectMembers, users, teams } from '$lib/db/schema';
 import { eq } from 'drizzle-orm';
 import { error } from '@sveltejs/kit';
 import { createServices } from '$lib/services/factory';
+import { isUuid } from '$lib/utils/ids';
 import type { PageServerLoad } from './$types';
-
-/** Check if a string looks like a UUID (project DB ID) */
-function isUuid(id: string): boolean {
-	return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
-}
 
 export const load: PageServerLoad = async ({ params, locals }) => {
 	const paramId = params.id;
@@ -37,7 +33,21 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 				where: eq(projects.pm2Name, pm2Process.name)
 			});
 
-			// Auto-provision: create project record if it doesn't exist yet
+			// If not found by pm2Name, check if this process is a member of a group
+			if (!project) {
+				const allProjects = await db.query.projects.findMany({
+					columns: { id: true, userId: true, teamId: true, name: true, pm2Name: true, pm2Names: true, description: true, targetPath: true, githubRepo: true, deployBranch: true, autoDeployEnabled: true, notifyEmail: true, createdAt: true }
+				});
+				project = allProjects.find(p => {
+					if (!p.pm2Names) return false;
+					try {
+						const names = JSON.parse(p.pm2Names) as string[];
+						return names.includes(pm2Process.name);
+					} catch { return false; }
+				}) ?? null;
+			}
+
+			// Auto-provision: create project record if it doesn't exist yet (and is not a group member)
 			if (!project) {
 				const [created] = await db.insert(projects).values({
 					id: crypto.randomUUID(),

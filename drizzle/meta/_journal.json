@@ -8,6 +8,13 @@
       "when": 1787409751600,
       "tag": "0000_dear_princess_powerful",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1787608266865,
+      "tag": "0001_faulty_naoko",
+      "breakpoints": true
     }
   ]
 }

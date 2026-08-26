@@ -1,7 +1,9 @@
 import { json, error } from '@sveltejs/kit';
 import { adminHandler } from '$lib/server/admin-handler';
 import { createTeamService } from '$lib/services/admin/team.service';
-import { createTeamRepository } from '$lib/db/repositories/team-repository.impl';
+import { db } from '$lib/db';
+import { teamMembers } from '$lib/db/schema';
+import { eq } from 'drizzle-orm';
 import { addTeamMemberSchema, updateTeamMemberSchema } from '$lib/validation/team-schemas';
 
 const teamService = createTeamService();
@@ -12,20 +14,25 @@ export const GET = adminHandler(async ({ params }) => {
 		throw new Error('Team ID is required');
 	}
 
-	const teamRepo = createTeamRepository();
-	const team = await teamRepo.findById(teamId) as any;
-	if (!team) {
-		throw error(404, 'Team not found');
-	}
+	// Direct query: team_members with user info (no nested relations overhead)
+	const members = await db.query.teamMembers.findMany({
+		where: eq(teamMembers.teamId, teamId),
+		with: {
+			user: {
+				columns: { id: true, email: true, name: true, role: true }
+			}
+		}
+	});
 
-	const members = (team.teamMembers ?? []).map((tm: any) => ({
+	const formatted = members.map((tm) => ({
+		id: tm.id,
 		userId: tm.userId,
 		role: tm.role,
 		joinedAt: tm.createdAt,
 		user: tm.user
 	}));
 
-	return json({ members });
+	return json({ members: formatted });
 });
 
 export const POST = adminHandler(async ({ params, request }, user) => {

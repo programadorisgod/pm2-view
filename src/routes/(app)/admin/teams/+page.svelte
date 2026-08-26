@@ -36,6 +36,7 @@
 	let selectedUserId = $state('');
 	let memberRole = $state('team_member');
 	let teamMembers = $state<any[]>([]);
+	let loadingMembers = $state(false);
 	let memberFeedback = $state<{ type: 'success' | 'error'; text: string } | null>(null);
 
 	async function handleCreateTeam() {
@@ -123,8 +124,13 @@
 		selectedUserId = '';
 		memberRole = 'team_member';
 		memberFeedback = null;
+		teamMembers = [];
+		loadingMembers = true;
 
-		// Load existing members
+		// Open modal immediately so UI doesn't feel stuck
+		showMemberModal = true;
+
+		// Load existing members in background
 		try {
 			const res = await fetch(`${base}/admin/teams/${team.id}/members`);
 			if (res.ok) {
@@ -133,9 +139,9 @@
 			}
 		} catch (err) {
 			console.error('Failed to load members:', err);
+		} finally {
+			loadingMembers = false;
 		}
-
-		showMemberModal = true;
 	}
 
 	async function handleAddMember() {
@@ -303,8 +309,24 @@
 		{#if teams.length === 0}
 			<div class="text-center py-2xl" style="color: var(--text-muted);">
 				No teams found. Create one to get started.
-			</div>
-		{/if}
+	</div>
+{/if}
+
+<style>
+	.members-scroll::-webkit-scrollbar {
+		width: 6px;
+	}
+	.members-scroll::-webkit-scrollbar-track {
+		background: transparent;
+	}
+	.members-scroll::-webkit-scrollbar-thumb {
+		background: var(--border-color, rgba(255,255,255,0.15));
+		border-radius: 3px;
+	}
+	.members-scroll::-webkit-scrollbar-thumb:hover {
+		background: var(--text-muted, rgba(255,255,255,0.3));
+	}
+</style>
 	</div>
 
 	<!-- Pagination -->
@@ -460,97 +482,112 @@
 <!-- Members Modal -->
 {#if showMemberModal}
 	<div class="fixed inset-0 z-50 flex items-center justify-center" style="background: rgba(0,0,0,0.5);">
-		<div class="w-full max-w-lg p-xl rounded-lg" style="background: var(--bg-surface); border: 1px solid var(--border-color); max-height: 80vh; overflow-y: auto;">
-			<h2 class="text-h3 font-semibold mb-lg" style="color: var(--text-primary);">
-				Manage: {memberTeamName}
-			</h2>
+		<div class="w-full max-w-lg rounded-lg flex flex-col" style="background: var(--bg-surface); border: 1px solid var(--border-color); max-height: 80vh;">
+			<!-- Fixed header -->
+			<div class="p-xl pb-md">
+				<h2 class="text-h3 font-semibold" style="color: var(--text-primary);">
+					Manage: {memberTeamName}
+				</h2>
 
-			{#if memberFeedback}
-				<div class="mb-md p-sm rounded-md text-body-sm"
-					style="background: {memberFeedback.type === 'success' ? 'rgba(0, 230, 118, 0.1)' : 'rgba(255, 82, 82, 0.1)'};
-						color: {memberFeedback.type === 'success' ? '#00E676' : '#FF5252'};
-						border: 1px solid {memberFeedback.type === 'success' ? 'rgba(0, 230, 118, 0.2)' : 'rgba(255, 82, 82, 0.2)'};">
-					{memberFeedback.text}
-				</div>
-			{/if}
-
-			<!-- Existing members list (primary) -->
-			<h3 class="text-caption font-medium mb-sm" style="color: var(--text-secondary);">Team Members ({teamMembers.length})</h3>
-			{#if teamMembers.length === 0}
-				<p class="text-center py-md mb-md" style="color: var(--text-muted);">No members yet</p>
-			{:else}
-				<div class="space-y-sm mb-lg">
-					{#each teamMembers as member (member.userId)}
-						<div class="flex items-center justify-between py-sm px-md rounded-lg" style="background: var(--bg-card); border: 1px solid var(--border-color);">
-							<div>
-								<p class="text-body-sm font-medium" style="color: var(--text-primary);">{member.user.name ?? member.user.email}</p>
-								{#if member.user.name}<p class="text-caption" style="color: var(--text-muted);">{member.user.email}</p>{/if}
-							</div>
-							<div class="flex items-center gap-sm">
-								<span class="text-caption font-medium" style="color: {roleColor(member.role)};">{roleLabel(member.role)}</span>
-								{#if member.role !== 'team_owner'}
-									<select
-										class="text-caption px-2 py-1 rounded"
-										style="background: var(--bg-surface); border: 1px solid var(--border-color); color: var(--text-primary);"
-										value={member.role}
-										onchange={(e) => handleRoleChange(member.userId, (e.target as HTMLSelectElement).value)}
-									>
-										<option value="team_member">Member</option>
-										<option value="team_admin">Admin</option>
-									</select>
-									<button
-										class="btn-danger px-2 py-1 text-caption"
-										onclick={() => handleRemoveMember(member.userId, member.user.name ?? member.user.email)}
-									>
-										Remove
-									</button>
-								{/if}
-							</div>
-						</div>
-					{/each}
-				</div>
-			{/if}
-
-			<!-- Add member form (secondary) -->
-			<div class="p-md rounded-lg" style="background: var(--bg-card); border: 1px solid var(--border-color);">
-				<h3 class="text-caption font-medium mb-sm" style="color: var(--text-secondary);">Add Member</h3>
-				<div class="flex gap-sm flex-wrap">
-					<select
-						bind:value={selectedUserId}
-						class="flex-1 min-w-[180px] px-3 py-2 rounded-md border text-body-sm"
-						style="background: var(--bg-surface); border-color: var(--border-color); color: var(--text-primary);"
-					>
-						<option value="">Select a user...</option>
-						{#each nonMembers as user}
-							<option value={user.id}>{user.name || user.email}</option>
-						{/each}
-					</select>
-					<select
-						bind:value={memberRole}
-						class="px-3 py-2 rounded-md border text-body-sm"
-						style="background: var(--bg-surface); border-color: var(--border-color); color: var(--text-primary);"
-					>
-						<option value="team_member">Member</option>
-						<option value="team_admin">Admin</option>
-						<option value="team_owner">Owner</option>
-					</select>
-					<button
-						class="btn-primary px-4 py-2 text-body-sm"
-						onclick={handleAddMember}
-						disabled={!selectedUserId}
-					>
-						Add
-					</button>
-				</div>
+				{#if memberFeedback}
+					<div class="mt-md p-sm rounded-md text-body-sm"
+						style="background: {memberFeedback.type === 'success' ? 'rgba(0, 230, 118, 0.1)' : 'rgba(255, 82, 82, 0.1)'};
+							color: {memberFeedback.type === 'success' ? '#00E676' : '#FF5252'};
+							border: 1px solid {memberFeedback.type === 'success' ? 'rgba(0, 230, 118, 0.2)' : 'rgba(255, 82, 82, 0.2)'};">
+						{memberFeedback.text}
+					</div>
+				{/if}
 			</div>
 
-			<div class="flex gap-md mt-xl justify-end">
-				<button
-					class="btn-secondary px-4 py-2 text-body-sm"
-					onclick={() => (showMemberModal = false)}
-				>
-					Close
-				</button>
+			<!-- Scrollable members list -->
+			<div class="flex-1 overflow-y-auto px-xl members-scroll" style="min-height: 0;">
+				<h3 class="text-caption font-medium mb-sm" style="color: var(--text-secondary);">Team Members ({loadingMembers ? '...' : teamMembers.length})</h3>
+				{#if loadingMembers}
+					<div class="text-center py-md mb-md" style="color: var(--text-muted);">
+						<svg class="w-5 h-5 animate-spin mx-auto mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+							<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+						</svg>
+						<span class="text-body-sm">Loading members...</span>
+					</div>
+				{:else if teamMembers.length === 0}
+					<p class="text-center py-md mb-md" style="color: var(--text-muted);">No members yet</p>
+				{:else}
+					<div class="space-y-sm mb-md">
+						{#each teamMembers as member (member.id)}
+							<div class="flex items-center justify-between py-sm px-md rounded-lg" style="background: var(--bg-card); border: 1px solid var(--border-color);">
+								<div>
+									<p class="text-body-sm font-medium" style="color: var(--text-primary);">{member.user.name ?? member.user.email}</p>
+									{#if member.user.name}<p class="text-caption" style="color: var(--text-muted);">{member.user.email}</p>{/if}
+								</div>
+								<div class="flex items-center gap-sm">
+									<span class="text-caption font-medium" style="color: {roleColor(member.role)};">{roleLabel(member.role)}</span>
+									{#if member.role !== 'team_owner'}
+										<select
+											class="text-caption px-2 py-1 rounded"
+											style="background: var(--bg-surface); border: 1px solid var(--border-color); color: var(--text-primary);"
+											value={member.role}
+											onchange={(e) => handleRoleChange(member.userId, (e.target as HTMLSelectElement).value)}
+										>
+											<option value="team_member">Member</option>
+											<option value="team_admin">Admin</option>
+										</select>
+										<button
+											class="btn-danger px-2 py-1 text-caption"
+											onclick={() => handleRemoveMember(member.userId, member.user.name ?? member.user.email)}
+										>
+											Remove
+										</button>
+									{/if}
+								</div>
+							</div>
+						{/each}
+					</div>
+				{/if}
+			</div>
+
+			<!-- Fixed footer: Add form + Close -->
+			<div class="p-xl pt-md space-y-md">
+				<!-- Add member form -->
+				<div class="p-md rounded-lg" style="background: var(--bg-card); border: 1px solid var(--border-color);">
+					<h3 class="text-caption font-medium mb-sm" style="color: var(--text-secondary);">Add Member</h3>
+					<div class="flex gap-sm flex-wrap">
+						<select
+							bind:value={selectedUserId}
+							class="flex-1 min-w-[180px] px-3 py-2 rounded-md border text-body-sm"
+							style="background: var(--bg-surface); border-color: var(--border-color); color: var(--text-primary);"
+						>
+							<option value="">Select a user...</option>
+							{#each nonMembers as user}
+								<option value={user.id}>{user.name || user.email}</option>
+							{/each}
+						</select>
+						<select
+							bind:value={memberRole}
+							class="px-3 py-2 rounded-md border text-body-sm"
+							style="background: var(--bg-surface); border-color: var(--border-color); color: var(--text-primary);"
+						>
+							<option value="team_member">Member</option>
+							<option value="team_admin">Admin</option>
+							<option value="team_owner">Owner</option>
+						</select>
+						<button
+							class="btn-primary px-4 py-2 text-body-sm"
+							onclick={handleAddMember}
+							disabled={!selectedUserId}
+						>
+							Add
+						</button>
+					</div>
+				</div>
+
+				<div class="flex justify-end">
+					<button
+						class="btn-secondary px-4 py-2 text-body-sm"
+						onclick={() => (showMemberModal = false)}
+					>
+						Close
+					</button>
+				</div>
 			</div>
 		</div>
 	</div>

@@ -221,11 +221,10 @@ export class DeploymentRunner {
 
 			// ── Stage: pm2 ──────────────────────────────────────────────
 			currentStage = 'pm2';
-			const processName = project.pm2Name;
-			const existing = await this.deps.pm2Repo.describe(processName);
-			if (!existing) {
+			const processNames = this.resolveProcessNames(project);
+			if (processNames.length === 0) {
 				await fail(
-					`PM2 process "${processName}" not found. Start it once manually; auto-start from webhook deployments is not supported yet.`
+					`No PM2 process configured. Start it once manually; auto-start from webhook deployments is not supported yet.`
 				);
 				return;
 			}
@@ -239,25 +238,42 @@ export class DeploymentRunner {
 				...projectEnv
 			};
 
-			log(`Restarting PM2 process: ${processName}`);
-			const restartCode = await this.deps.runPm2Restart(
-				processName,
-				workingDir,
-				restartEnv,
-				(line, isError) => log(line, isError)
-			);
-			if (restartCode !== 0) {
-				await fail(`PM2 restart failed with exit code ${restartCode}`);
-				return;
+			// Verify all processes exist before restarting any
+			for (const procName of processNames) {
+				const existing = await this.deps.pm2Repo.describe(procName);
+				if (!existing) {
+					await fail(
+						`PM2 process "${procName}" not found. Start it once manually; auto-start from webhook deployments is not supported yet.`
+					);
+					return;
+				}
 			}
 
-			log('Verifying process is online');
-			const online = await this.verifyOnline(processName);
-			if (!online) {
-				await fail(`PM2 process "${processName}" did not reach online state after restart`);
-				return;
+			// Restart all processes sequentially
+			for (const procName of processNames) {
+				log(`Restarting PM2 process: ${procName}`);
+				const restartCode = await this.deps.runPm2Restart(
+					procName,
+					workingDir,
+					restartEnv,
+					(line, isError) => log(line, isError)
+				);
+				if (restartCode !== 0) {
+					await fail(`PM2 restart failed for "${procName}" with exit code ${restartCode}`);
+					return;
+				}
 			}
-			log('Process online');
+
+			// Verify all processes are online
+			for (const procName of processNames) {
+				log(`Verifying process is online: ${procName}`);
+				const online = await this.verifyOnline(procName);
+				if (!online) {
+					await fail(`PM2 process "${procName}" did not reach online state after restart`);
+					return;
+				}
+				log(`Process online: ${procName}`);
+			}
 
 			// ── Success ─────────────────────────────────────────────────
 			log('Deployment completed successfully');
@@ -305,5 +321,23 @@ export class DeploymentRunner {
 			}
 		}
 		return false;
+	}
+
+	/**
+	 * Resolves the list of PM2 process names for a project.
+	 * Uses `pm2Names` (JSON array) if present, falls back to `pm2Name` for single-process projects.
+	 */
+	private resolveProcessNames(project: Project): string[] {
+		if (project.pm2Names) {
+			try {
+				const parsed = JSON.parse(project.pm2Names) as unknown;
+				if (Array.isArray(parsed) && parsed.length > 0 && parsed.every((v) => typeof v === 'string')) {
+					return parsed as string[];
+				}
+			} catch {
+				// Invalid JSON — fall through to single-process fallback
+			}
+		}
+		return project.pm2Name ? [project.pm2Name] : [];
 	}
 }

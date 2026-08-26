@@ -3,10 +3,12 @@
     value = $bindable(''),
     label = '',
     id = '',
+    class: className = '',
   }: {
     value: string;
     label?: string;
     id?: string;
+    class?: string;
   } = $props();
 
   let open = $state(false);
@@ -116,14 +118,14 @@
   });
 </script>
 
-<div class="relative inline-flex items-center gap-2" bind:this={containerEl}>
+<div class="relative flex flex-col gap-1 {className}" bind:this={containerEl}>
   {#if label}
     <label for={id} class="text-sm whitespace-nowrap" style="color: var(--text-muted);">{label}</label>
   {/if}
   <button
     {id}
     type="button"
-    class="flex items-center gap-2 px-3 py-1.5 text-sm rounded-md border text-left min-w-[160px]"
+    class="flex items-center gap-2 px-3 py-2 text-sm rounded-md border text-left w-full min-w-0"
     style="background: var(--bg-base); color: {value ? 'var(--text-primary)' : 'var(--text-muted)'}; border-color: var(--border-color);"
     onclick={() => (open = !open)}
   >

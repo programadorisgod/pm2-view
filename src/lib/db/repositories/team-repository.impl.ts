@@ -1,6 +1,6 @@
-import { db } from '../db';
+import { db } from '$lib/db';
 import { teams, teamMembers } from '../schema';
-import { eq, desc, count, and } from 'drizzle-orm';
+import { eq, desc, count, and, sql } from 'drizzle-orm';
 import type { ITeamRepository, Team, TeamMember, TeamWithMemberCount } from './team-repository.interface';
 
 /**
@@ -72,26 +72,29 @@ export class TeamRepository implements ITeamRepository {
 	}
 
 	async create(team: { name: string; description?: string; ownerId: string }): Promise<Team> {
-		// Use transaction to create team and add owner
-		const [newTeam] = await db
-			.insert(teams)
-			.values({
-				id: crypto.randomUUID(),
-				name: team.name,
-				description: team.description ?? null
-			})
-			.returning();
+		// Use transaction to create team and add owner atomically
+		const result = await db.transaction(async (tx) => {
+			const [newTeam] = await tx
+				.insert(teams)
+				.values({
+					id: crypto.randomUUID(),
+					name: team.name,
+					description: team.description ?? null
+				})
+				.returning();
 
-		// Add owner to team_members
-		await db.insert(teamMembers).values({
-			id: crypto.randomUUID(),
-			teamId: newTeam.id,
-			userId: team.ownerId,
-			role: 'team_owner'
+			await tx.insert(teamMembers).values({
+				id: crypto.randomUUID(),
+				teamId: newTeam.id,
+				userId: team.ownerId,
+				role: 'team_owner'
+			});
+
+			return newTeam;
 		});
 
 		// Return team with relations
-		const createdTeam = await this.findById(newTeam.id);
+		const createdTeam = await this.findById(result.id);
 		return createdTeam!;
 	}
 

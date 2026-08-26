@@ -10,6 +10,7 @@ import type { RequestHandler } from './$types';
 const actionSchema = z.object({
 	pm_id: z.string().min(1, 'Process ID is required'),
 	deleteFiles: z.boolean().optional().default(false),
+	pm2Names: z.array(z.string()).optional(),
 });
 
 function getZodErrorMessage(result: any): string {
@@ -51,9 +52,34 @@ export const POST: RequestHandler = async ({ request, url, getClientAddress }) =
     case 'start':
       response = await pm2Service.startProcess(pm_id);
       break;
-    case 'delete':
-      response = await pm2Service.deleteProcess(pm_id, body.deleteFiles);
+	case 'delete': {
+      const pm2Names = body.pm2Names as string[] | undefined;
+      if (pm2Names && pm2Names.length > 0) {
+        // Delete all processes in the group
+        const results: string[] = [];
+        const errors: string[] = [];
+        for (const name of pm2Names) {
+          const result = await pm2Service.deleteProcess(name, body.deleteFiles);
+          if (result.success) {
+            results.push(name);
+          } else {
+            errors.push(`${name}: ${result.message}`);
+          }
+        }
+        if (results.length === 0) {
+          return json({ error: `Failed to delete processes: ${errors.join(', ')}` }, { status: 500 });
+        }
+        response = {
+          success: true,
+          message: errors.length > 0
+            ? `${results.length} deleted, ${errors.length} failed: ${errors.join(', ')}`
+            : `${results.length} processes deleted successfully`
+        };
+      } else {
+        response = await pm2Service.deleteProcess(pm_id, body.deleteFiles);
+      }
       break;
+    }
     default:
       return json({ error: 'Invalid action' }, { status: 400 });
   }

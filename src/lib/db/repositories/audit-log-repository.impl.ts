@@ -1,6 +1,7 @@
-import { db } from '../db';
+import { db } from '$lib/db';
 import { auditLogs } from '../schema';
-import { eq, like, gte, lte, and, desc, count } from 'drizzle-orm';
+import { users } from '../schema';
+import { eq, like, gte, lte, and, or, desc, count, inArray } from 'drizzle-orm';
 import type { IAuditLogRepository, AuditLogFilters, AuditLogWithActor } from './audit-log-repository.interface';
 
 /**
@@ -34,6 +35,26 @@ export class AuditLogRepository implements IAuditLogRepository {
 	}): Promise<{ logs: AuditLogWithActor[]; total: number }> {
 		// Build where conditions from filters
 		const conditions = this.buildWhereConditions(options.filters);
+
+		// Handle actorQuery: find matching user IDs first (name, email, or id)
+		if (options.filters?.actorQuery) {
+			const query = `%${options.filters.actorQuery}%`;
+			const matchingUsers = await db
+				.select({ id: users.id })
+				.from(users)
+				.where(or(
+					like(users.name, query),
+					like(users.email, query),
+					like(users.id, query)
+				));
+			const matchingIds = matchingUsers.map(u => u.id);
+			if (matchingIds.length > 0) {
+				conditions.push(inArray(auditLogs.actorId, matchingIds));
+			} else {
+				// No matching users — return empty results
+				return { logs: [], total: 0 };
+			}
+		}
 
 		// Get logs with actor info
 		const logs = await db.query.auditLogs.findMany({

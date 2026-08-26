@@ -1,4 +1,4 @@
-import { db } from '../db';
+import { db } from '$lib/db';
 import { deployments } from '../schema';
 import { and, asc, desc, eq, ne, notInArray, sql } from 'drizzle-orm';
 import type {

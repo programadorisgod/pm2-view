@@ -1,4 +1,4 @@
-import { db } from '../db';
+import { db } from '$lib/db';
 import { envVars } from '../schema';
 import { eq } from 'drizzle-orm';
 import type { IEnvVarRepository, EnvVar } from '../../env-vars/env-var.types';

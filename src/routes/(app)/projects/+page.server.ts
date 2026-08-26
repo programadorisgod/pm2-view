@@ -2,9 +2,12 @@ import { PM2Repository } from '$lib/pm2/pm2-repository.impl';
 import { PM2Service } from '$lib/pm2/pm2.service';
 import { createServices } from '$lib/services/factory';
 import { createProjectListingService } from '$lib/services/project-listing.service';
+import { createProjectSharingService } from '$lib/services/admin/project-sharing.service';
 import { auth } from '$lib/auth';
 import { fail } from '@sveltejs/kit';
 import { z } from 'zod';
+import { db } from '$lib/db';
+import { users, teams } from '$lib/db/schema';
 import type { PageServerLoad, Actions } from './$types';
 
 const actionSchema = z.object({
@@ -27,10 +30,31 @@ export const load: PageServerLoad = async (event) => {
 		session.user.role
 	);
 
-	return {
+	const result: {
+		processes: typeof visibleProjects;
+		userRole: typeof session.user.role;
+		users?: { id: string; email: string; name: string | null }[];
+		teams?: { id: string; name: string }[];
+	} = {
 		processes: visibleProjects,
-		userRole: session.user.role
+		userRole: session.user.role,
 	};
+
+	if (session.user.role === 'admin') {
+		const sharingService = createProjectSharingService();
+		const [allUsers, allTeams] = await Promise.all([
+			db.select({
+				id: users.id,
+				email: users.email,
+				name: users.name,
+			}).from(users),
+			sharingService.getAllTeams()
+		]);
+		result.users = allUsers;
+		result.teams = allTeams.map(t => ({ id: t.id, name: t.name }));
+	}
+
+	return result;
 };
 
 function getZodErrorMessage(result: any): string {

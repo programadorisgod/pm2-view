@@ -179,6 +179,31 @@
     return result;
   });
 
+  // Counts exclude level filter so tabs always show correct totals
+  let logsForCounts = $derived.by(() => {
+    let result = showDismissed ? logs : logs.filter((l) => !l.dismissed);
+    if (filterStream !== 'all') {
+      result = result.filter((l) => l.type === filterStream);
+    }
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase();
+      result = result.filter((l) => l.data.toLowerCase().includes(q));
+    }
+    if (dateFrom) {
+      const from = new Date(dateFrom);
+      if (!isNaN(from.getTime())) {
+        result = result.filter((l) => l.timestamp >= from);
+      }
+    }
+    if (dateTo) {
+      const to = new Date(dateTo);
+      if (!isNaN(to.getTime())) {
+        result = result.filter((l) => l.timestamp <= to);
+      }
+    }
+    return result;
+  });
+
   let filteredOutLogs = $derived(filteredLogs.filter((l) => l.type === 'out'));
   let filteredErrLogs = $derived(filteredLogs.filter((l) => l.type === 'err'));
   let newErrCount = $derived(
@@ -187,7 +212,7 @@
 
   let levelCounts = $derived.by(() => {
     const counts = { info: 0, warn: 0, error: 0 };
-    for (const l of filteredLogs) {
+    for (const l of logsForCounts) {
       counts[l.level]++;
     }
     return counts;

@@ -13,6 +13,7 @@ const startSchema = z.object({
 	targetPath: z.string().min(1, 'Target path is required'),
 	processName: z.string().min(1, 'Process name is required'),
 	ecosystemFile: z.string().min(1, 'Ecosystem file is required'),
+	pm2Names: z.array(z.string().trim().min(1)).min(1).optional(),
 });
 
 function getZodErrorMessage(result: unknown): string {
@@ -54,7 +55,7 @@ export const POST: RequestHandler = async ({ request, getClientAddress }) => {
 		return json({ error: getZodErrorMessage(validationResult) }, { status: 400 });
 	}
 
-	const { targetPath, processName, ecosystemFile } = validationResult.data;
+	const { targetPath, processName, ecosystemFile, pm2Names } = validationResult.data;
 
 	// Validate targetPath is absolute
 	if (!targetPath.startsWith('/')) {
@@ -138,6 +139,7 @@ export const POST: RequestHandler = async ({ request, getClientAddress }) => {
 									userId: session.user.id,
 									name: sanitizedProcessName,
 									pm2Name: sanitizedProcessName,
+									pm2Names: pm2Names && pm2Names.length > 1 ? JSON.stringify(pm2Names) : null,
 									description: `PM2 process: ${sanitizedProcessName}`,
 									targetPath,
 								});

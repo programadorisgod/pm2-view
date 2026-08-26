@@ -16,3 +16,5 @@ export { default as PM2SystemModal } from './pm2-system-modal.svelte';
 export { default as GitHubImportModal } from './github-import-modal.svelte';
 export { default as LogViewer } from './log-viewer.svelte';
 export { default as DateTimePicker } from './date-time-picker.svelte';
+export { default as DeployAllModal } from './deploy-all-modal.svelte';
+export { default as RegisterProcessModal } from './register-process-modal.svelte';

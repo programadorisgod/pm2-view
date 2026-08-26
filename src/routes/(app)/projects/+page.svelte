@@ -40,6 +40,13 @@
   let favoriteProcesses = $derived(processes.filter((p) => p.isFavorite));
   let nonFavoriteProcesses = $derived(processes.filter((p) => !p.isFavorite));
   let displayedNonFavorites = $derived(nonFavoriteProcesses);
+  let togglingFavorite = $state<string | null>(null);
+
+  function getFavoriteKey(process: VisibleProject): string {
+    if (process.dbProject?.pm2Name) return process.dbProject.pm2Name;
+    if (process.pm2Names && process.pm2Names.length > 0) return process.pm2Names[0];
+    return process.name;
+  }
 
   function getStatusVariant(status: string) {
     switch (status) {
@@ -100,18 +107,22 @@
     }
   }
 
-  async function toggleFavorite(pm2Name: string) {
+  async function toggleFavorite(pm2Name: string, process: VisibleProject) {
+    const key = getFavoriteKey(process);
+    togglingFavorite = key;
     try {
       const res = await fetch(`${base}/projects/favorites`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ pm2Name }),
+        body: JSON.stringify({ pm2Name: key }),
       });
       if (res.ok) {
         await invalidateAll();
       }
     } catch {
       // Silent fail
+    } finally {
+      togglingFavorite = null;
     }
   }
 
@@ -319,13 +330,21 @@
                   </div>
                   <button
                     class="transition-colors"
+                    disabled={togglingFavorite === getFavoriteKey(process)}
                     style={process.isFavorite
                       ? "color: #FFD740; text-shadow: 0 0 6px rgba(255, 215, 64, 0.65); background: rgba(255, 215, 64, 0.18); border: 1px solid rgba(255, 215, 64, 0.45); border-radius: 999px; padding: 0.1rem 0.4rem;"
                       : "color: var(--text-muted); background: transparent; border: 1px solid transparent; border-radius: 999px; padding: 0.1rem 0.4rem;"}
-                    onclick={() => toggleFavorite(process.name)}
+                    class:opacity-40={togglingFavorite === getFavoriteKey(process)}
+                    onclick={() => toggleFavorite(process.name, process)}
                     title={process.isFavorite ? "Remove from favorites" : "Add to favorites"}
                   >
-                    {process.isFavorite ? "★" : "☆"}
+                    {#if togglingFavorite === getFavoriteKey(process)}
+                      <svg class="w-3.5 h-3.5 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                      </svg>
+                    {:else}
+                      {process.isFavorite ? "★" : "☆"}
+                    {/if}
                   </button>
                 </div>
 
@@ -465,13 +484,21 @@
                 </div>
                 <button
                   class="transition-colors"
+                  disabled={togglingFavorite === getFavoriteKey(process)}
                   style={process.isFavorite
                     ? "color: #FFD740; text-shadow: 0 0 6px rgba(255, 215, 64, 0.65); background: rgba(255, 215, 64, 0.18); border: 1px solid rgba(255, 215, 64, 0.45); border-radius: 999px; padding: 0.1rem 0.4rem;"
                     : "color: var(--text-muted); background: transparent; border: 1px solid transparent; border-radius: 999px; padding: 0.1rem 0.4rem;"}
-                  onclick={() => toggleFavorite(process.name)}
+                  class:opacity-40={togglingFavorite === getFavoriteKey(process)}
+                  onclick={() => toggleFavorite(process.name, process)}
                   title={process.isFavorite ? "Remove from favorites" : "Add to favorites"}
                 >
-                  {process.isFavorite ? "★" : "☆"}
+                  {#if togglingFavorite === getFavoriteKey(process)}
+                    <svg class="w-3.5 h-3.5 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                    </svg>
+                  {:else}
+                    {process.isFavorite ? "★" : "☆"}
+                  {/if}
                 </button>
               </div>
 

@@ -10,6 +10,14 @@ import { findEcosystemFiles } from '$lib/utils/ecosystem';
 import { existsSync, readFileSync } from 'fs';
 import { join, basename, dirname } from 'path';
 
+const WORKSPACE_INDICATORS = [
+	'pnpm-workspace.yaml', 'lerna.json', 'nx.json',
+	'turbo.json', 'rush.json', '.yarnrc.yml',
+];
+import { db } from '$lib/db';
+import { projects as projectsSchema } from '$lib/db/schema';
+import { eq as eqFn } from 'drizzle-orm';
+
 export interface VisibleProject extends ProcessWithStatus {
 	accessType: 'personal' | 'team' | 'shared' | 'admin';
 	teamName?: string;
@@ -69,6 +77,58 @@ export class ProjectListingService {
 
 		// Get PM2 processes
 		const processes = await this.pm2Service.getAllProcesses();
+
+		// Upgrade individual records to groups when workspace has multiple processes
+		for (const p of dbProjects) {
+			if (p.pm2Names || !p.targetPath) continue;
+			// Check if this individual record is part of a workspace
+			let dir = p.targetPath.replace(/\/+$/, '');
+			let wsRoot: string | null = null;
+			for (let i = 0; i < 4; i++) {
+				for (const file of WORKSPACE_INDICATORS) {
+					if (existsSync(join(dir, file))) { wsRoot = dir; break; }
+				}
+				if (!wsRoot) {
+					const pkgPath = join(dir, 'package.json');
+					if (existsSync(pkgPath)) {
+						try {
+							const pkg = JSON.parse(readFileSync(pkgPath, 'utf-8'));
+							if (pkg.workspaces) wsRoot = dir;
+						} catch { /* ignore */ }
+					}
+				}
+				if (wsRoot) break;
+				const parent = dirname(dir);
+				if (parent === dir) break;
+				dir = parent;
+			}
+			if (!wsRoot) continue;
+			// Find all processes in this workspace
+			const wsProcesses = processes.filter(proc => {
+				const pCwd = (proc.pm2_env?.pm_cwd ?? '').replace(/\/+$/, '');
+				return pCwd.startsWith(wsRoot + '/') || pCwd === wsRoot;
+			});
+			if (wsProcesses.length <= 1) continue;
+			// Upgrade: update DB record
+			const groupPm2Names = wsProcesses.map(proc => proc.name);
+			const wsName = basename(wsRoot);
+			try {
+				await db.update(projectsSchema).set({
+					name: wsName,
+					pm2Names: JSON.stringify(groupPm2Names),
+					description: `PM2 group: ${groupPm2Names.join(', ')}`,
+					targetPath: wsRoot,
+				}).where(eqFn(projectsSchema.id, p.id));
+				// Update maps
+				p.name = wsName;
+				p.pm2Names = JSON.stringify(groupPm2Names);
+				p.description = `PM2 group: ${groupPm2Names.join(', ')}`;
+				p.targetPath = wsRoot;
+				for (const n of groupPm2Names) {
+					if (n !== p.pm2Name) secondaryProjectMap.set(n, p);
+				}
+			} catch { /* ignore upgrade errors */ }
+		}
 
 		// Group processes by their project ID
 		const projectProcessMap = new Map<string, { project: Project; processes: ProcessWithStatus[] }>();
@@ -131,10 +191,6 @@ export class ProjectListingService {
 		}
 
 		// Group unmatched PM2 processes by workspace root (monorepo detection)
-		const WORKSPACE_INDICATORS = [
-			'pnpm-workspace.yaml', 'lerna.json', 'nx.json',
-			'turbo.json', 'rush.json', '.yarnrc.yml',
-		];
 
 		function findWorkspaceRoot(startDir: string): string | null {
 			let dir = startDir.replace(/\/+$/, '');

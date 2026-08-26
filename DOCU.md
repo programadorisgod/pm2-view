@@ -12,11 +12,16 @@
 8. [Rate Limiting](#rate-limiting)
 9. [Pagination](#pagination)
 10. [Logging](#logging)
-11. [Teams](#teams)
-12. [Favorites](#favorites)
-13. [Security](#security)
-14. [Development](#development)
-15. [Deployment](#deployment)
+11. [Security](#security)
+12. [Teams](#teams)
+13. [Favorites](#favorites)
+14. [Roles & Permissions](#roles--permissions)
+15. [Audit Module](#audit-module)
+16. [Project Sharing](#project-sharing)
+17. [Multi-process Groups](#multi-process-groups)
+18. [Auto-deploy](#auto-deploy)
+19. [Development](#development)
+20. [Deployment](#deployment)
 
 ---
 
@@ -170,10 +175,11 @@ The `AuthUser` and `AuthSession` types are **independent of Drizzle schema** —
 
 | Event            | Data                                                     | Frequency                      |
 | ---------------- | -------------------------------------------------------- | ------------------------------ |
-| `log`            | `LogEvent` (processId, line, logType)                    | Not emitted (logs use polling) |
-| `metrics`        | `MetricsEvent` (processId, cpu, memoryMB, status)        | Every 10s                      |
-| `process-status` | `ProcessStatusEvent` (processId, status, previousStatus) | On state change                |
+| `metrics`        | `MetricsEvent` (processId, cpu, memoryMB, status)        | Every 10s (live, no DB)        |
+| `process-status` | `ProcessStatusEvent` (processId, status, previousStatus) | On state change (5s watcher)   |
 | `ping`           | `:ping\n\n`                                              | Every 15s (heartbeat)          |
+
+> The `log` and `deploy-log` event types exist in `SSEEventType` but are not emitted server-side. Project logs are read via `tail -n` polling (see [Log Reading](#log-reading)), and deploy logs stream over NDJSON (`/api/deploy`, `/api/deploy/all`), not SSE.
 
 ### Client Usage
 
@@ -230,9 +236,13 @@ export const load = async () => {
 
 | Service          | Dependencies                      | Purpose                            |
 | ---------------- | --------------------------------- | ---------------------------------- |
-| `PM2Service`     | `PM2Repository`                   | Process management, status mapping |
-| `MetricsService` | `MetricsRepository`, `PM2Service` | Metrics recording, aggregation     |
+| `PM2Service`     | `PM2Repository`                   | Process management, status mapping, restart fallback |
+| `MetricsService` | `PM2Service`                      | Live aggregation (CPU/RAM/uptime) — no DB persistence |
 | `EnvVarService`  | `PM2Repository`, `PM2Service`     | Environment variable management    |
+| `AuditService`   | `IAuditLogRepository`             | List/filter audit logs, CSV export |
+| `ProjectSharingService` | `IProjectMemberRepository`, `IAuditLogRepository`, `IProjectRepository`, `ITeamRepository` | Project members, roles, team assignment |
+| `TeamService`    | `ITeamRepository`, `IAuditLogRepository` | Team CRUD and member management |
+| `UserService`    | `IAuthRepository`, `IAuditLogRepository` | User CRUD, roles, ban/unban |
 
 ### Why Not Module-Level Singletons?
 
@@ -260,6 +270,23 @@ PM2 View communicates with PM2 via CLI commands:
 | Stop             | `pm2 stop '<name>'`                                              |
 | Delete           | `pm2 delete '<name>'`                                            |
 | Read logs        | `tail -n <lines> <logfile>` (efficient, reads only last N lines) |
+| Clear logs       | truncates the log file (`fs.truncate`)                           |
+
+### Restart Fallback (recreate)
+
+When `pm2 restart` fails — PM2 cannot restart processes stuck in `errored`/`waiting-restart` state — `PM2Service.restartProcess()` falls back to **delete + start**: it resolves the original script (`pm_exec_path`), deletes the PM2 entry, and starts it again from the correct project directory (`resolveProjectDir()`), so the daemon re-snapshots `pm_cwd` and the app reloads its own `.env`.
+
+### Resolving the project directory
+
+`resolveProjectDir()` trusts `pm_cwd` **only** when it actually contains the executed script; otherwise it falls back to the script's directory. This fixes processes that were originally started from the wrong folder.
+
+### Deleting processes (and files)
+
+`deleteProcess(id, deleteFiles)`:
+
+- Removes the PM2 entry (tolerates an already-missing process).
+- Cleans up the DB record — including removing a single member from a group's `pm2Names` array (deleting the whole project only when the last member is removed).
+- Optionally deletes the project directory from disk (`deleteFiles` flag).
 
 ### Security
 
@@ -273,7 +300,15 @@ await execAsync(`pm2 restart ${escapeShellArg(name)}`);
 
 ### Log Reading
 
-Logs are read efficiently using `tail -n <path>` — only the last N lines are fetched, never the entire file. This prevents loading megabytes of logs into memory. The UI includes a "Load more" button that fetches 200 additional lines per click.
+Logs are read efficiently using `tail -n <path>` — only the last N lines are fetched, never the entire file. This prevents loading megabytes of logs into memory. The UI includes a "Load more" button that fetches additional lines per click.
+
+Each log line is post-processed:
+
+- **Timestamp parsing** — extracts a `YYYY-MM-DD HH:MM:SS` prefix when present (PM2 only adds timestamps when started with `--time`); lines without one render as a dash instead of epoch.
+- **Level classification** — `classifyLogLevel()` infers `info`/`warn`/`error` from content (explicit tags, error patterns like `EADDRINUSE`/`stack trace`, framework false-positives on stderr) rather than trusting the stream alone.
+- **Log path caching** — the `out`/`err` file paths are cached per process (`logPathCache`) and invalidated on restart/stop/delete.
+- **Clearing** — `DELETE /projects/[id]/logs?stream=out|err` truncates the log file.
+- **Filtering** — the `LogViewer` component supports a datetime-range filter on top of the fetched lines.
 
 ---
 
@@ -336,7 +371,7 @@ const result = paginate(items, total, limit, offset);
 | Method                           | Supports Pagination            |
 | -------------------------------- | ------------------------------ |
 | `PM2Repository.list()`           | ✅ Optional `PaginationParams` |
-| `MetricsRepository.getHistory()` | ✅ Optional `PaginationParams` |
+| `AuditLogRepository.findAll()`   | ✅ `limit` / `offset`          |
 
 When no params are passed, returns the full array (backward compatible).
 
@@ -408,6 +443,16 @@ users ──< team_members >── teams ──< projects
 | `team_admin`  | Manage members, invite/remove users                     |
 | `team_member` | View team projects, no management                       |
 
+### Team → Project role mapping
+
+When a project is assigned to a team, every team member gains access to it. The team role is mapped to a project role (`src/lib/server/project-access.ts`):
+
+| Team role      | Project role |
+| -------------- | ------------ |
+| `team_owner`   | `owner`      |
+| `team_admin`   | `editor`     |
+| `team_member`  | `viewer`     |
+
 ### Team-Based Project Filtering
 
 The `ProjectListingService` filters PM2 processes based on the user's team memberships. Users only see projects that belong to their teams or are personally owned.
@@ -445,6 +490,152 @@ Unique index on `(user_id, pm2_name)` prevents duplicates.
 - **Filter button** to show only favorited projects
 - **Star button** in the project detail page header
 - Toggle via `POST /projects/favorites` — returns `{ isFavorite: boolean }`
+
+---
+
+## Roles & Permissions
+
+Three independent role tiers coexist:
+
+| Tier     | Stored in                 | Values                                   |
+| -------- | ------------------------- | ---------------------------------------- |
+| Global   | `users.role`              | `admin`, `user`, `viewer`                |
+| Team     | `team_members.role`       | `team_owner`, `team_admin`, `team_member` |
+| Project  | `project_members.role`    | `owner`, `editor`, `viewer`              |
+
+The full guide is in [docs/sharing-permissions.md](docs/sharing-permissions.md). Key points:
+
+### Global permission matrix
+
+Defined in `src/lib/auth/permissions.ts` via better-auth's access plugin:
+
+| Resource       | `admin` | `user` | `viewer` |
+| -------------- | ------- | ------- | -------- |
+| `user`         | create, read, list, get, update, delete, set-role, ban, set-password, impersonate, impersonate-admins | create, read, list, get | read, list, get |
+| `project`      | create, read, update, delete | create, read, update | read |
+| `project_member` | create, read, update, delete | create, read | read |
+| `team`         | create, read, update, delete | create, read | read |
+| `team_member`  | create, read, update, delete | create, read | read |
+| `audit_log`    | create, read, delete | — | — |
+
+### Project access resolution
+
+`getProjectRole()` (`src/lib/server/project-access.ts`) resolves a user's effective role on a project in this order:
+
+1. **Admin bypass** → `owner`-level access to everything.
+2. **`project_members`** entry (highest priority).
+3. **Project creator** (`projects.userId`) → `owner`.
+4. **Team membership** → mapped role (`team_owner`→`owner`, `team_admin`→`editor`, `team_member`→`viewer`).
+
+Route guards: `requireAdmin()`, `requireRole()`, `requireProjectAccess()`, and the `adminHandler()` wrapper (`src/lib/server/route-guards.ts`, `src/lib/server/admin-handler.ts`).
+
+### Safety guards (HTTP 409/403)
+
+- An admin cannot change their own role.
+- The **last admin** cannot be demoted, banned, or deleted.
+- The **last owner** of a project or the **last `team_owner`** cannot be removed or demoted.
+
+---
+
+## Audit Module
+
+An **append-only** trail of administrative actions.
+
+### Schema
+
+`src/lib/db/schema/audit-logs.ts` → table `audit_logs`:
+
+| Column         | Description                              |
+| -------------- | ---------------------------------------- |
+| `action`       | e.g. `user_role_change`, `team_create`   |
+| `actor_id`     | FK → `users` (who performed the action)  |
+| `target_id`    | Optional user/resource affected          |
+| `resource_type`| `user`, `project`, `team`                |
+| `resource_id`  | ID of the specific resource              |
+| `details`      | JSON string with extra context           |
+| `timestamp`    | Unix epoch (defaults to `unixepoch()`)   |
+
+### Writing entries
+
+`logAudit()` (`src/lib/server/audit.ts`) inserts an entry. `AuditLogRepository.create()` does the same through the repository layer. Logs are never updated or deleted.
+
+### Reading & exporting
+
+- `AuditService.listLogs()` — paginated (20/page, up to 100).
+- `AuditService.exportCSV()` — fetches up to 10,000 rows and builds a CSV.
+- Filters: `action`, `actorId`, `actorQuery` (partial name/email/id), `targetId`, `resourceType`, `startDate`, `endDate`.
+
+### Actions logged
+
+| Action | Emitted by |
+| ------ | ---------- |
+| `user_create`, `user_role_change`, `user_ban`, `user_unban`, `user_delete` | `UserService` |
+| `team_create`, `team_update`, `team_delete`, `team_member_add`, `team_member_remove`, `team_member_role_change` | `TeamService` |
+| `project_member_add`, `project_member_remove`, `project_member_role_change`, `project_team_assign` | `ProjectSharingService` |
+| `project_register` | `POST /api/projects/register` |
+
+Full guide with a step-by-step walkthrough: [docs/audit-module.md](docs/audit-module.md).
+
+---
+
+## Project Sharing
+
+Projects can be shared with individual users or with a whole team.
+
+### Data model
+
+`project_members` (`src/lib/db/schema/project-members.ts`): `project_id`, `user_id`, `role` (`owner` / `editor` / `viewer`).
+
+### Service
+
+`ProjectSharingService` (`src/lib/services/admin/project-sharing.service.ts`):
+
+- `listMembers()`, `addMember()`, `removeMember()`, `updateRole()`.
+- `assignToTeam(projectId, teamId)` — assigns (or unassigns) the project to a team.
+- Enforces: `409` on duplicate member, `404` on missing member, `409` when removing/demoting the last `owner`.
+
+### UI
+
+- Project detail → **Sharing** tab → "Manage Collaborators" → `/projects/[id]/sharing`.
+- Members list with a role dropdown (`viewer`/`editor`/`owner`) and remove.
+- "Invite User" modal (elevated roles prompt a confirmation).
+- "Team Assignment" card (admin only) — assigns the project to a team, mapping team roles to project roles.
+
+Full guide: [docs/sharing-permissions.md](docs/sharing-permissions.md).
+
+---
+
+## Multi-process Groups
+
+Monorepo/workspace projects (e.g. Atlas with `atlas-backend` + `atlas-frontend`) are grouped into a **single project** via the `projects.pm2_names` JSON column (array of PM2 process names), with the primary name in `projects.pm2_name`.
+
+Grouping happens through:
+
+- **Workspace detection** — `WORKSPACE_INDICATORS` (`pnpm-workspace.yaml`, `lerna.json`, `nx.json`, `turbo.json`, `rush.json`, `.yarnrc.yml`) plus `package.json` `"workspaces"`, searched up to 4 levels from each process `pm_cwd`.
+- **Ecosystem file detection** — `findEcosystemFiles()` / `parseEcosystemAppNames()` (`src/lib/utils/ecosystem.ts`) look for `ecosystem.config.js` / `pm2.config.js` / `ecosystem.json` and extract app names.
+- **Listing** — `ProjectListingService.getVisibleProjects()` groups processes by project and auto-upgrades individual DB records to groups when the workspace has >1 process.
+- **Registration** — `POST /api/projects/register` accepts a `pm2Names` array + team/members; `GET /api/pm2/unregistered` returns groups detected by cwd/workspace.
+- **Import** — the GitHub import wizard detects ecosystem apps and lets the user pick which ones to register as a group.
+
+Full guide: [docs/multi-process-groups.md](docs/multi-process-groups.md).
+
+---
+
+## Auto-deploy
+
+Pushes to a configured GitHub repository + branch trigger a full background deployment:
+
+1. GitHub `push` webhook → `/api/webhooks/github`.
+2. HMAC-SHA256 signature verified → repository/branch matched against projects with `auto_deploy_enabled`.
+3. A `deployments` row is queued (idempotent on `delivery_id`).
+4. `DeploymentWorker` (in-process, DB-backed queue) claims jobs one at a time.
+5. `DeploymentRunner` executes: `git` (fetch/checkout/pull `--ff-only`) → `install` → `build` → `pm2 restart --update-env` → verify online.
+6. **Multi-process**: the runner restarts **every** name in `pm2Names` sequentially and verifies each is online; the webhook resolves a group member to its parent project so one config covers the whole monorepo.
+7. Result is emailed to the owner + `notify_email` via SMTP (`DeploymentNotifier`).
+
+A **Deploy All** button (`/api/deploy/all`) sequentially deploys every online process, streaming NDJSON.
+
+Full guide: [docs/auto-deploy.md](docs/auto-deploy.md).
 
 ---
 

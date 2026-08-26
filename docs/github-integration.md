@@ -10,8 +10,11 @@ This guide walks you through the complete GitHub integration for PM2 View: creat
 | ---------- | ------------ |
 | **Connection** | Each user installs your GitHub App into their account/org after authorizing via OAuth |
 | **Repository access** | The app lists only repos the installation grants access to |
-| **Import** | Clones a repo (`--depth 1`) into a temporary workspace using an installation access token, then cleans up |
+| **Import** | Clones a repo (`--depth 1`) into a **persistent** target path using an installation access token, installs deps, builds, and detects ecosystem files |
+| **Multi-app import** | Detects apps declared in an ecosystem file and lets the user pick which to register as a group |
+| **Env on import** | Writes a `.env` (optionally into a subdirectory) before starting the process |
 | **Sync** | Webhooks keep the installation record in sync when it's created/removed |
+| **Account management** | Search/sort the repo list and fully disconnect the account |
 
 ## Flow diagram
 
@@ -46,8 +49,11 @@ sequenceDiagram
     U->>A: Clicks "Import" on a repository
     A->>G: POST /app/installations/{id}/access_tokens (contents: read)
     G-->>A: Installation access token (1h)
-    A->>A: git clone --depth 1 <repo> into tmp workspace
-    A-->>U: "Repository imported successfully"
+    A->>A: git clone --depth 1 <repo> into target path
+    A->>A: install → build → detect ecosystem files/apps
+    A-->>U: Streams NDJSON progress (clone/install/build/ecosystem)
+    U->>A: Selects ecosystem apps / writes .env (optional)
+    A->>A: pm2 start <ecosystem file> + save project (pm2Names)
     Note over A,G: Webhooks (async):<br/>installation.deleted → deletes record<br/>installation_repositories.added/removed → logs change
 ```
 
@@ -223,6 +229,7 @@ GITHUB_PRIVATE_KEY=-----BEGIN RSA PRIVATE KEY-----\nMIIEpAIBAAKCAQEA...\n-----EN
 | `GITHUB_CLIENT_SECRET` | GitHub App → OAuth page → generate client secret | |
 | `GITHUB_WEBHOOK_SECRET` | Step 1.4 (`openssl rand -hex 32`) | Must match the webhook secret configured on GitHub. |
 | `GITHUB_PRIVATE_KEY` | The `.pem` file from Step 3 | Keep on a single line with `\n` for line breaks (see below). |
+| `REPOS_PATH` | Optional | Base directory where imports are cloned (default `/opt/repos`). |
 
 ### Correct `GITHUB_PRIVATE_KEY` format
 
@@ -306,8 +313,21 @@ pm2 restart pm2-view          # production (or whatever your app name is)
 4. If installation is needed: click **Install GitHub App** → select account/org and repo access → click **Install**.
 5. GitHub redirects to `{base}/github/setup?installation_id=...&setup_action=install` → the app validates and saves the installation.
 6. You're back on `/github`, now showing **Connected** plus the list of accessible repositories.
-7. Click **Import** on any repository — it clones the repo (`--depth 1`) into a temp workspace with a fresh installation token, then cleans up.
+7. Click **Import** on any repository — the import wizard opens (see [Import pipeline](#import-pipeline-detailed) below).
 8. If you uninstall the app, the `installation` webhook with `action=deleted` removes the DB record automatically.
+
+### Import pipeline (detailed)
+
+The import is a multi-step wizard (`src/lib/ui/components/github-import-modal.svelte`), streamed over NDJSON:
+
+1. **Configure** — target directory (absolute path, default `{REPOS_PATH}/{repo.name}`) and process name. Optional advanced custom install/build commands.
+2. **Clone & install & build & detect** (`POST /api/github/repositories/[id]/import`) — `GitHubImportPipelineService.runPhase1()` clones `--depth 1` with a fresh installation token, installs dependencies (auto-detects pnpm/bun/npm), builds (if a build script exists), then detects ecosystem files and parses app names.
+   - **pnpm native builds** that require approval surface a `needsApproval` state; clicking **Approve & Continue** runs `pnpm approve-builds --all` and resumes.
+3. **Select apps** — if more than one app is declared in an ecosystem file, tick which apps to register (they become a `pm2Names` group). Otherwise pick the ecosystem file to start.
+4. **Environment (optional)** — paste or upload `.env` variables, optionally targeting a subdirectory (e.g. `app/backend`) via the `.env Location` field. `POST .../write-env` writes the file. Can be skipped.
+5. **Start** (`POST /api/github/repositories/[id]/start`) — runs `pm2 start <ecosystem file> --update-env` and saves/updates the project record (with `pm2Names` for groups) in the DB.
+
+The repository list supports **search and sort**, and you can **disconnect** the GitHub account entirely (`POST /api/github/disconnect`).
 
 ### Multi-user org installations
 
@@ -347,9 +367,16 @@ This means the first user who installs the app creates the installation record, 
 | `src/lib/github/infrastructure/github-app-client.ts` | Octokit setup, install URL, installation/repo queries |
 | `src/lib/github/github-setup.service.ts` | Validates + saves the installation after the callback |
 | `src/lib/github/github-repositories.service.ts` | Lists repos for the connected user |
-| `src/lib/github/github-import.service.ts` | Clones the repo with a scoped installation token |
+| `src/lib/github/github-import-pipeline.service.ts` | Full import pipeline: clone → install → build → ecosystem detect → pm2 start |
+| `src/lib/github/github-import.service.ts` | Repository clone helper |
 | `src/lib/github/infrastructure/github-webhook-verifier.ts` | Verifies webhook signatures (`x-hub-signature-256`) |
+| `src/lib/utils/ecosystem.ts` | `findEcosystemFiles` / `parseEcosystemAppNames` |
 | `src/routes/(app)/github/+page.server.ts` | Loads connection state + repos for `/github` |
 | `src/routes/(app)/github/setup/+page.server.ts` | Handles OAuth and installation callbacks |
-| `src/routes/api/webhooks/github/+server.ts` | Receives `installation` / `installation_repositories` events |
+| `src/routes/api/webhooks/github/+server.ts` | Receives `installation` / `installation_repositories` / `push` events |
+| `src/routes/api/github/repositories/[repositoryId]/import/+server.ts` | Clone + install + build + detect (NDJSON) |
+| `src/routes/api/github/repositories/[repositoryId]/approve-builds/+server.ts` | `pnpm approve-builds` then resume |
+| `src/routes/api/github/repositories/[repositoryId]/write-env/+server.ts` | Writes `.env` (optional subdir) |
+| `src/routes/api/github/repositories/[repositoryId]/start/+server.ts` | `pm2 start` + saves project record |
+| `src/routes/api/github/disconnect/+server.ts` | Disconnects the GitHub account |
 | `src/lib/db/schema/github-installations.ts` | Drizzle schema for the `github_installations` table |

@@ -12,20 +12,23 @@ A beautiful, modern visual dashboard for managing PM2 processes. Monitor CPU, RA
 - **Authentication** — Email/password with Better Auth, **Google sign-in**, and **password reset** (email or console fallback)
 - **Dashboard** — Overview of all PM2 processes with real-time status
 - **Project Cards** — Beautiful cards showing CPU, RAM, uptime, and status
+- **Multi-process Groups** — Monorepo/workspace projects (e.g. Atlas) grouped as a single card across all flows (see [docs/multi-process-groups.md](docs/multi-process-groups.md))
 - **Favorites** — Star projects to quickly find them, filter by favorites in the list
-- **Process Actions** — Restart, stop, and delete processes directly from the UI
+- **Process Actions** — Restart, stop, and delete processes directly from the UI (restart falls back to recreate on failure)
+- **Admin Process Registration** — Register unregistered PM2 processes as projects with team/member assignment (admin only)
 - **PM2 Save & Startup** — Persist the process list (`pm2 save`) and enable boot startup (`pm2 startup`) from the UI (admin only)
 - **One-Click Update** — Pull, rebuild, and restart the app from the UI (admin only)
-- **Real-time Logs** — Live log streaming via Server-Sent Events (SSE) with auto-scroll
-- **Efficient Log Reading** — Uses `tail -n` for fast log loading, "Load more" button for history
-- **Real-time Metrics** — Push-based CPU/RAM updates every 10s via SSE
+- **Logs** — Efficient `tail -n` reading, content-based level classification (info/warn/error), datetime-range filter, "Load more", and log clearing
+- **Real-time Metrics** — Push-based CPU/RAM updates every 10s via SSE (live-only, no DB persistence)
 - **Environment Variables** — View, edit, add, and delete env vars (applied on next deploy)
-- **GitHub Integration** — Connect a GitHub App, list accessible repositories, and import them (see [GitHub Integration](#github-integration))
+- **GitHub Integration** — Connect a GitHub App, list/import accessible repositories, multi-app ecosystem detection (see [docs/github-integration.md](docs/github-integration.md))
+- **Auto-deploy** — Trigger full deploys (git → install → build → pm2 restart) from GitHub push webhooks, with email notifications and per-stage history (see [docs/auto-deploy.md](docs/auto-deploy.md))
+- **Deploy All** — Sequentially deploy every online process from one button
 - **Teams** — Manage teams, invite members, assign roles (team_owner, team_admin, team_member), team-based project access
-- **Project Sharing** — Invite users to projects with viewer/editor/owner roles
+- **Project Sharing** — Invite users with owner/editor/viewer roles, assign projects to teams (see [docs/sharing-permissions.md](docs/sharing-permissions.md))
 - **Metrics Dashboard** — Visual CPU/RAM bars, aggregated stats
-- **Admin Panel** — Manage users, teams, and audit logs; role-based access control (admin/user/viewer)
-- **Audit Logs** — Track admin actions with filters and CSV export
+- **Admin Panel** — Manage users, teams, and audit logs; role-based access control (see [docs/sharing-permissions.md](docs/sharing-permissions.md))
+- **Audit Logs** — Append-only trail of admin actions with filters (action/actor/date), pagination, and CSV export (see [docs/audit-module.md](docs/audit-module.md))
 - **Dark/Light Mode** — Toggle between themes with smooth transitions
 - **Premium Animations** — Page transitions, staggered lists, smooth tab switching
 
@@ -358,19 +361,21 @@ Flow:
 
 ## Real-time (SSE)
 
-PM2 View uses **Server-Sent Events** for real-time updates — no polling, no WebSockets:
+PM2 View uses **Server-Sent Events** for real-time updates:
 
-- **Logs**: Push new log lines as they arrive
 - **Metrics**: CPU/RAM updates every 10 seconds
 - **Process Status**: State change notifications (online → stopped → error)
+- **Deploy Logs**: Per-stage log lines streamed during a deploy
+
+Project log *viewing* is separate from SSE — it reads the PM2 log files with `tail -n` (fast, only the last N lines) and classifies each line by content level. See [Logs](#logs).
 
 The SSE endpoint is at `/api/sse`. Connect from any browser:
 
 ```javascript
 const es = new EventSource("/api/sse");
-es.addEventListener("log", (e) => console.log(JSON.parse(e.data)));
 es.addEventListener("metrics", (e) => console.log(JSON.parse(e.data)));
 es.addEventListener("process-status", (e) => console.log(JSON.parse(e.data)));
+es.addEventListener("deploy-log", (e) => console.log(JSON.parse(e.data)));
 ```
 
 ## Design System

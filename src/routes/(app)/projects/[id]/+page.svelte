@@ -53,8 +53,10 @@
   let deployModal = $state({ open: false });
   let isDeploying = $state(false);
   let isFavorite = $state(initialIsFavorite ?? false);
+  let togglingFavorite = $state(false);
 
   async function toggleFavorite() {
+    togglingFavorite = true;
     try {
       const res = await fetch(`${base}/projects/favorites`, {
         method: "POST",
@@ -67,6 +69,8 @@
       }
     } catch {
       // Silent fail
+    } finally {
+      togglingFavorite = false;
     }
   }
 
@@ -350,11 +354,18 @@
         {/if}
         <button
           class="transition-colors self-center"
-          style="font-size: 1.25rem; line-height: 1; color: {isFavorite ? '#FFD740' : 'var(--text-muted)'};"
+          disabled={togglingFavorite}
+          style="font-size: 1.25rem; line-height: 1; color: {isFavorite ? '#FFD740' : 'var(--text-muted)'}; opacity: {togglingFavorite ? 0.5 : 1};"
           onclick={toggleFavorite}
           title={isFavorite ? "Remove from favorites" : "Add to favorites"}
         >
-          {isFavorite ? "★" : "☆"}
+          {#if togglingFavorite}
+            <svg class="w-4 h-4 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+            </svg>
+          {:else}
+            {isFavorite ? "★" : "☆"}
+          {/if}
         </button>
       </div>
       <div

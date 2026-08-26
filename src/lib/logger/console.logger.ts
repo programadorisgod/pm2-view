@@ -1,3 +1,4 @@
+import { dev } from '$app/environment';
 import type { Logger } from './logger.interface';
 
 export class ConsoleLogger implements Logger {
@@ -8,6 +9,7 @@ export class ConsoleLogger implements Logger {
   }
 
   info(message: string, context?: Record<string, unknown>): void {
+    if (!dev) return;
     console.log(`[${this.prefix}] ℹ️  ${this.formatMessage(message, context)}`);
   }
 
@@ -20,9 +22,8 @@ export class ConsoleLogger implements Logger {
   }
 
   debug(message: string, context?: Record<string, unknown>): void {
-    if (process.env.DEBUG === 'true') {
-      console.debug(`[${this.prefix}] 🔍 ${this.formatMessage(message, context)}`);
-    }
+    if (!dev) return;
+    console.debug(`[${this.prefix}] 🔍 ${this.formatMessage(message, context)}`);
   }
 
   private formatMessage(message: string, context?: Record<string, unknown>): string {

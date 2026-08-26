@@ -6,6 +6,25 @@ import { dirname } from 'path';
 
 const execAsync = promisify(exec);
 
+export type ProcessStatus = 'online' | 'stopped' | 'error' | 'offline';
+
+export function mapStatus(pm2Status: string): ProcessStatus {
+	switch (pm2Status) {
+		case 'online':
+		case 'launching':
+			return 'online';
+		case 'stopped':
+		case 'stopping':
+			return 'stopped';
+		case 'errored':
+		case 'error':
+		case 'waiting restart':
+			return 'error';
+		default:
+			return 'offline';
+	}
+}
+
 export interface ProcessSummary {
 	total: number;
 	running: number;
@@ -260,7 +279,7 @@ export class PM2Service {
 	}
 
 	private enrichProcess(process: PM2Process): ProcessWithStatus {
-		const status = this.mapStatus(process.pm2_env.status);
+		const status = mapStatus(process.pm2_env.status);
 		return {
 			...process,
 			status,
@@ -268,23 +287,6 @@ export class PM2Service {
 			memoryMB: Math.round(process.monit.memory / 1024 / 1024),
 			uptimeFormatted: this.formatUptime(process.pm2_env.pm_uptime)
 		};
-	}
-
-	private mapStatus(pm2Status: string): 'online' | 'stopped' | 'error' | 'offline' {
-		switch (pm2Status) {
-			case 'online':
-			case 'launching':
-				return 'online';
-			case 'stopped':
-			case 'stopping':
-				return 'stopped';
-			case 'errored':
-			case 'error':
-			case 'waiting restart':
-				return 'error';
-			default:
-				return 'offline';
-		}
 	}
 
 	private formatUptime(uptimeMs: number): string {

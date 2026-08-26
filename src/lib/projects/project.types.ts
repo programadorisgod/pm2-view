@@ -17,4 +17,5 @@ export interface IProjectRepository {
 	delete(id: string): Promise<void>;
 	getByUserId(userId: string): Promise<Project[]>;
 	findByAccess(options: FindByAccessOptions): Promise<Project[]>;
+	getByPm2Name(pm2Name: string): Promise<Project | null>;
 }

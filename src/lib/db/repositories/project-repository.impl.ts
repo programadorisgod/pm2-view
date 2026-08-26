@@ -45,6 +45,13 @@ export class ProjectRepository implements IProjectRepository {
 		await db.delete(projects).where(eq(projects.id, id));
 	}
 
+	async getByPm2Name(pm2Name: string): Promise<Project | null> {
+		const project = await db.query.projects.findFirst({
+			where: eq(projects.pm2Name, pm2Name)
+		});
+		return project ?? null;
+	}
+
 	async getByUserId(userId: string): Promise<Project[]> {
 		return await db.query.projects.findMany({
 			where: eq(projects.userId, userId)

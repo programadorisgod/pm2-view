@@ -9,19 +9,20 @@
 5. [Real-time Communication (SSE)](#real-time-communication-sse)
 6. [Service Layer & DI](#service-layer--di)
 7. [PM2 Integration](#pm2-integration)
-8. [Rate Limiting](#rate-limiting)
-9. [Pagination](#pagination)
-10. [Logging](#logging)
-11. [Security](#security)
-12. [Teams](#teams)
-13. [Favorites](#favorites)
-14. [Roles & Permissions](#roles--permissions)
-15. [Audit Module](#audit-module)
-16. [Project Sharing](#project-sharing)
-17. [Multi-process Groups](#multi-process-groups)
-18. [Auto-deploy](#auto-deploy)
-19. [Development](#development)
-20. [Deployment](#deployment)
+8. [Process Error Alerts](#process-error-alerts)
+9. [Rate Limiting](#rate-limiting)
+10. [Pagination](#pagination)
+11. [Logging](#logging)
+12. [Security](#security)
+13. [Teams](#teams)
+14. [Favorites](#favorites)
+15. [Roles & Permissions](#roles--permissions)
+16. [Audit Module](#audit-module)
+17. [Project Sharing](#project-sharing)
+18. [Multi-process Groups](#multi-process-groups)
+19. [Auto-deploy](#auto-deploy)
+20. [Development](#development)
+21. [Deployment](#deployment)
 
 ---
 
@@ -309,6 +310,60 @@ Each log line is post-processed:
 - **Log path caching** — the `out`/`err` file paths are cached per process (`logPathCache`) and invalidated on restart/stop/delete.
 - **Clearing** — `DELETE /projects/[id]/logs?stream=out|err` truncates the log file.
 - **Filtering** — the `LogViewer` component supports a datetime-range filter on top of the fetched lines.
+
+---
+
+## Process Error Alerts
+
+PM2 View automatically sends email alerts when monitored processes crash or enter an error state. This helps teams respond quickly to production issues without manual monitoring.
+
+### How It Works
+
+A background watcher polls PM2 status every 10 seconds. When a process transitions from `online` or `stopped` to `error`, the system sends an email notification to configured recipients.
+
+```
+Status Watcher → Detects error transition → Resolves recipients → Sends email
+```
+
+### Recipients
+
+Alerts are sent to:
+
+- The project owner's email
+- The project's `notifyEmail` (if configured)
+- All team members (if the project belongs to a team)
+
+### Cooldown
+
+To prevent email spam, each process has a **5-minute cooldown** between alerts. If a process crashes repeatedly, only one email is sent per 5-minute window.
+
+### Configuration
+
+No configuration is required — the feature is enabled automatically for all registered projects. The SMTP settings are configured via environment variables:
+
+```env
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=465
+SMTP_USER=your-email@gmail.com
+SMTP_PASS=your-app-password
+SMTP_FROM=your-email@gmail.com
+```
+
+### Email Content
+
+Alert emails include:
+
+- Process name and project name
+- Previous status (`online` or `stopped`)
+- Current status (`error`)
+- Timestamp of the event
+
+### Development Notes
+
+- The watcher interval is 10 seconds
+- Cooldown period is 5 minutes per process
+- The feature uses Dependency Injection (`createProcessAlertNotifier`)
+- Tests: `src/tests/notifications/process-alert-notifier.test.ts`
 
 ---
 

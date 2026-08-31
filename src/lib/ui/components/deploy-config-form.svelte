@@ -74,11 +74,12 @@
 		isSaving = true;
 		try {
 			const method = existingId ? 'PUT' : 'POST';
-			const url = existingId ? `${base}/api/deploy-config/${existingId}` : `${base}/api/deploy-config`;
+			const url = `${base}/api/deploy-config`;
 			const res = await fetch(url, {
 				method,
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({
+					...(existingId && { id: existingId }),
 					project_id: projectId,
 					command_type: commandType,
 					label: labelInput.trim(),

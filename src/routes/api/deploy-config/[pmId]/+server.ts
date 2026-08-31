@@ -15,7 +15,8 @@ export const GET: RequestHandler = async ({ params, request }) => {
 	const { pmId } = params;
 
 	// Check project access
-	const role = await getProjectRole(session.user.id, pmId);
+	const userRole = (session.user as { role?: string }).role;
+	const role = await getProjectRole(session.user.id, pmId, userRole);
 	if (!role) {
 		return json({ error: 'Access denied' }, { status: 403 });
 	}

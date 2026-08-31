@@ -20,6 +20,7 @@ if (!building) {
 		logger.info('SIGINT received, shutting down...');
 		stopMetricsEmitter();
 		stopStatusWatcher();
+		process.exit(0);
 	});
 }
 

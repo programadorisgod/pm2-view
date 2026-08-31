@@ -30,7 +30,8 @@ export const POST: RequestHandler = async ({ request }) => {
 	const { project_id, command_type, label, command } = validationResult.data;
 
 	// Check project access
-	const role = await getProjectRole(session.user.id, project_id);
+	const userRole = (session.user as { role?: string }).role;
+	const role = await getProjectRole(session.user.id, project_id, userRole);
 	if (!role) {
 		return json({ error: 'Access denied' }, { status: 403 });
 	}
@@ -89,7 +90,8 @@ export const PUT: RequestHandler = async ({ request }) => {
 	}
 
 	// Check project access using the command's projectId
-	const role = await getProjectRole(session.user.id, cmd.projectId);
+	const userRole = (session.user as { role?: string }).role;
+	const role = await getProjectRole(session.user.id, cmd.projectId, userRole);
 	if (!role) {
 		return json({ error: 'Access denied' }, { status: 403 });
 	}
@@ -130,7 +132,8 @@ export const DELETE: RequestHandler = async ({ request }) => {
 	}
 
 	// Check project access using the command's projectId
-	const role = await getProjectRole(session.user.id, cmd.projectId);
+	const userRole = (session.user as { role?: string }).role;
+	const role = await getProjectRole(session.user.id, cmd.projectId, userRole);
 	if (!role) {
 		return json({ error: 'Access denied' }, { status: 403 });
 	}

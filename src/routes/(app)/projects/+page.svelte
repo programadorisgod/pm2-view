@@ -312,7 +312,7 @@
           Favorites
         </h2>
         <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-md">
-          {#each favoriteProcesses as process, i (process.pm_id)}
+          {#each favoriteProcesses as process, i (process.name)}
             <div class="stagger-item" style="--stagger-index: {i};">
               <Card class="group">
                 <!-- Header -->
@@ -466,7 +466,7 @@
 
     {#if displayedNonFavorites.length > 0 && othersExpanded}
       <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-md">
-        {#each displayedNonFavorites as process, i (process.pm_id)}
+        {#each displayedNonFavorites as process, i (process.name)}
           <div class="stagger-item" style="--stagger-index: {i};">
             <Card class="group">
               <!-- Header -->

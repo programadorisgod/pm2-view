@@ -129,7 +129,7 @@
 			</div>
 		{:else}
 			<div class="space-y-md">
-				{#each processes as process, i (process.pm_id)}
+				{#each processes as process, i (process.name)}
 					<div class="p-md rounded-lg stagger-item" style="--stagger-index: {i + 4}; background: var(--bg-surface); border: 1px solid var(--border-color);">
 						<!-- Header -->
 						<div class="flex items-center justify-between mb-md">

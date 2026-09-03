@@ -16,9 +16,7 @@ const DEPLOYMENT = {
 const PROJECT = {
 	id: 'project-1',
 	name: 'Project One',
-	pm2Name: 'project-one',
-	userId: 'user-1',
-	notifyEmail: null
+	pm2Name: 'project-one'
 };
 
 function makeDeps(overrides: Partial<DeploymentNotifierDeps> = {}): {
@@ -29,7 +27,7 @@ function makeDeps(overrides: Partial<DeploymentNotifierDeps> = {}): {
 	return {
 		sent,
 		deps: {
-			getUserEmail: vi.fn().mockResolvedValue('owner@example.com'),
+			collectRecipients: vi.fn().mockResolvedValue(['owner@example.com']),
 			sendEmail: vi.fn().mockImplementation(async (message: EmailMessage) => {
 				sent.push(message);
 				return true;
@@ -50,7 +48,7 @@ describe('DeploymentNotifier', () => {
 			durationMs: 6100
 		});
 
-		expect(deps.getUserEmail).toHaveBeenCalledWith('user-1');
+		expect(deps.collectRecipients).toHaveBeenCalledWith('project-1');
 		expect(sent).toHaveLength(1);
 		expect(sent[0].to).toEqual(['owner@example.com']);
 		expect(sent[0].subject).toContain('Deploy succeeded');
@@ -82,12 +80,12 @@ describe('DeploymentNotifier', () => {
 
 	it('skips sending when no recipient emails are available and does not throw', async () => {
 		const { deps } = makeDeps({
-			getUserEmail: vi.fn().mockResolvedValue(null)
+			collectRecipients: vi.fn().mockResolvedValue([])
 		});
 		const notifier = createDeploymentNotifier(deps);
 
 		await expect(
-			notifier.notifyResult(DEPLOYMENT, { ...PROJECT, notifyEmail: null }, {
+			notifier.notifyResult(DEPLOYMENT, PROJECT, {
 				status: 'success',
 				commitSha: null,
 				durationMs: 10
@@ -96,32 +94,28 @@ describe('DeploymentNotifier', () => {
 		expect(deps.sendEmail).not.toHaveBeenCalled();
 	});
 
-	it('sends to both the owner and the captured session email when they differ', async () => {
-		const { deps, sent } = makeDeps();
+	it('uses recipients resolved from all access models', async () => {
+		const { deps, sent } = makeDeps({
+			collectRecipients: vi.fn().mockResolvedValue([
+				'owner@example.com',
+				'editor@example.com',
+				'teamadmin@example.com'
+			])
+		});
 		const notifier = createDeploymentNotifier(deps);
 
-		await notifier.notifyResult(
-			DEPLOYMENT,
-			{ ...PROJECT, notifyEmail: 'configurator@example.com' },
-			{ status: 'success', commitSha: 'a'.repeat(40), durationMs: 1000 }
-		);
+		await notifier.notifyResult(DEPLOYMENT, PROJECT, {
+			status: 'success',
+			commitSha: 'a'.repeat(40),
+			durationMs: 1000
+		});
 
 		expect(sent).toHaveLength(1);
-		expect(sent[0].to).toEqual(['owner@example.com', 'configurator@example.com']);
-	});
-
-	it('deduplicates case-insensitively when the session email equals the owner email', async () => {
-		const { deps, sent } = makeDeps();
-		const notifier = createDeploymentNotifier(deps);
-
-		await notifier.notifyResult(
-			DEPLOYMENT,
-			{ ...PROJECT, notifyEmail: '  Owner@Example.com  ' },
-			{ status: 'failed', stage: 'git', error: 'boom', durationMs: 5 }
-		);
-
-		expect(sent).toHaveLength(1);
-		expect(sent[0].to).toEqual(['owner@example.com']);
+		expect(sent[0].to).toEqual([
+			'owner@example.com',
+			'editor@example.com',
+			'teamadmin@example.com'
+		]);
 	});
 
 	it('never throws when sendEmail rejects', async () => {

@@ -1,7 +1,6 @@
 import { DeploymentRepository } from '$lib/db/repositories/deployment-repository.impl';
 import { ProjectRepository } from '$lib/db/repositories/project-repository.impl';
 import { DeployConfigRepository } from '$lib/db/repositories/deploy-config-repository.impl';
-import { BetterAuthUserRepository } from '$lib/db/repositories/better-auth-user-repository.impl';
 import { GitHubInstallationRepository } from '$lib/db/repositories/github-installation-repository.impl';
 import { GitHubAppClient } from '$lib/github/infrastructure/github-app-client';
 import { PM2Repository } from '$lib/pm2/pm2-repository.impl';
@@ -11,16 +10,15 @@ import { DeploymentRunner } from './deployment-runner';
 import { createDeploymentNotifier } from './deployment-notifier';
 import { DeploymentWorker } from './deployment-worker';
 import { runCommand, type EnvMap } from './process-runner';
-import { sendNotificationEmail } from '$lib/notifications';
+import { sendNotificationEmail, collectProjectNotificationEmails } from '$lib/notifications';
 
 let worker: DeploymentWorker | null = null;
 
 export function getDeploymentWorker(): DeploymentWorker {
 	if (!worker) {
 		const deploymentRepo = new DeploymentRepository();
-		const userRepo = new BetterAuthUserRepository();
 		const notifier = createDeploymentNotifier({
-			getUserEmail: async (userId) => (await userRepo.getUserById(userId))?.email ?? null,
+			collectRecipients: (projectId) => collectProjectNotificationEmails(projectId, null),
 			sendEmail: (message) => sendNotificationEmail(message)
 		});
 		const runner = new DeploymentRunner({

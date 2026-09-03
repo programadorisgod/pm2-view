@@ -12,9 +12,9 @@ export const registerProjectSchema = z.object({
     role: z.enum(['owner', 'editor', 'viewer'])
   })).optional().default([]),
 }).refine(
-  (data) => !data.targetPath || data.targetPath.startsWith('/'),
+  (data) => !data.targetPath || /^[A-Z]:[/\\]/i.test(data.targetPath) || data.targetPath.startsWith('/'),
   {
-    message: 'Target path must start with / if provided',
+    message: 'Target path must be an absolute path',
     path: ['targetPath'],
   }
 );

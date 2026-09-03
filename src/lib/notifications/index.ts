@@ -3,6 +3,7 @@ import { createNotificationProvider } from './factory';
 import type { EmailMessage, NotificationProvider } from './provider.interface';
 
 export type { EmailMessage };
+export { collectProjectNotificationEmails } from './collect-recipients';
 
 let cachedProviders: NotificationProvider[] | null = null;
 

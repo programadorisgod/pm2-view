@@ -89,7 +89,7 @@
 			</div>
 		{:else}
 			<div class="space-y-xs">
-				{#each processes as process, i (process.pm_id)}
+				{#each processes as process, i (process.name)}
 					{#if process.pm_id === -1 && process.ecosystemFiles?.length}
 						<!-- Offline project with ecosystem file -->
 						<div class="flex items-center justify-between py-sm px-md rounded-md transition-colors hover:bg-[var(--bg-surface)] group stagger-item" style="--stagger-index: {i + 4};">

@@ -14,6 +14,7 @@
   import { base } from "$app/paths";
   import type { PageData } from "./$types";
   import { goto, invalidateAll } from "$app/navigation";
+  import { parseEnv } from "$lib/utils/env-parser";
 
   let { data }: { data: PageData } = $props();
 
@@ -88,6 +89,17 @@
   let envFeedback = $state<{ type: "success" | "error"; text: string } | null>(null);
   let envPath = $state<string | null>(null);
   let envRestarting = $state(false);
+  let envFileInput = $state<HTMLInputElement | null>(null);
+  let importPreview = $state<{
+    fileName: string;
+    content: string;
+    varCount: number;
+    targetDir: string;
+    targetName: string;
+  } | null>(null);
+  let importSaving = $state(false);
+  let importDirs = $state<string[]>(["."]);
+  let importDirsLoading = $state(false);
 
   // Load env vars from .env file on mount
   async function loadEnvVars() {
@@ -276,28 +288,105 @@
     }
   }
 
-  async function importFromEnvFile() {
-    envLoading = true;
+  function openEnvFilePicker() {
     envFeedback = null;
+    envFileInput?.click();
+  }
+
+  async function handleEnvFileSelected(event: Event) {
+    const input = event.target as HTMLInputElement;
+    const file = input.files?.[0];
+    input.value = "";
+    if (!file) return;
     try {
-      const res = await fetch(`${base}/api/projects/${process.pm_id}/env`);
+      const content = await file.text();
+      importPreview = {
+        fileName: file.name,
+        content,
+        varCount: Object.keys(parseEnv(content)).length,
+        targetDir: ".",
+        targetName: ".env",
+      };
+      void loadImportDirs();
+    } catch {
+      envFeedback = { type: "error", text: "Could not read the selected file" };
+    }
+  }
+
+  async function loadImportDirs() {
+    importDirsLoading = true;
+    try {
+      const res = await fetch(`${base}/api/projects/${process.pm_id}/env/dirs`);
       if (res.ok) {
         const data = await res.json();
-        envVars = data.envVars || {};
-        envPath = data.envPath;
+        importDirs = Array.isArray(data.dirs) ? data.dirs : ["."];
+      }
+    } catch {
+      // Non-critical: folder dropdown falls back to project root
+    } finally {
+      importDirsLoading = false;
+    }
+  }
+
+  function importDestPath(): string {
+    if (!importPreview) return "";
+    const name = importPreview.targetName.trim() || ".env";
+    return importPreview.targetDir === "."
+      ? name
+      : `${importPreview.targetDir}/${name}`;
+  }
+
+  async function confirmEnvImport() {
+    if (!importPreview) return;
+    const targetPath = importDestPath();
+    importSaving = true;
+    envFeedback = null;
+    try {
+      const res = await fetch(`${base}/api/projects/${process.pm_id}/env`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ fileContent: importPreview.content, targetPath }),
+      });
+      const result = await res.json();
+      if (res.ok) {
+        envVars = result.envVars || {};
+        envPath = result.envPath;
         envRows = Object.entries(envVars).map(([key, value]) => ({ key, value }));
         envDirty = false;
         envLoaded = true;
-        envFeedback = { type: "success", text: `Loaded ${Object.keys(envVars).length} variables from .env` };
+        importPreview = null;
+        envFeedback = {
+          type: "success",
+          text: `Imported ${result.varCount ?? Object.keys(envVars).length} variables to ${result.envPath}`,
+        };
       } else {
-        const result = await res.json();
-        envFeedback = { type: "error", text: result.error || "Failed to load .env" };
+        envFeedback = { type: "error", text: result.error || "Failed to import .env" };
       }
     } catch {
-      envFeedback = { type: "error", text: "Failed to load .env file" };
+      envFeedback = { type: "error", text: "Failed to import .env file" };
     } finally {
-      envLoading = false;
+      importSaving = false;
     }
+  }
+
+  function handleEnvPaste(index: number, event: ClipboardEvent) {
+    const text = event.clipboardData?.getData("text");
+    if (!text || (!text.includes("=") && !text.includes("\n"))) return;
+    const entries = Object.entries(parseEnv(text));
+    if (entries.length === 0) return;
+    event.preventDefault();
+    const rows = [...envRows];
+    const [[firstKey, firstValue], ...rest] = entries;
+    rows[index] = { key: firstKey, value: firstValue };
+    if (rest.length > 0) {
+      rows.splice(
+        index + 1,
+        0,
+        ...rest.map(([key, value]) => ({ key, value })),
+      );
+    }
+    envRows = rows;
+    envDirty = true;
   }
 </script>
 
@@ -551,7 +640,7 @@
             <div class="flex items-center gap-sm">
               <button
                 class="btn-secondary px-3 py-1.5 text-body-sm inline-flex items-center gap-1"
-                onclick={importFromEnvFile}
+                onclick={openEnvFilePicker}
                 disabled={envLoading}
               >
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -559,6 +648,13 @@
                 </svg>
                 Import from .env
               </button>
+              <input
+                type="file"
+                accept=".env,*.env,text/plain"
+                class="hidden"
+                bind:this={envFileInput}
+                onchange={handleEnvFileSelected}
+              />
               <button
                 class="btn-secondary px-3 py-1.5 text-body-sm inline-flex items-center gap-1"
                 onclick={addEnvRow}
@@ -602,13 +698,83 @@
             </div>
           {/if}
 
+          {#if importPreview}
+            <div
+              class="mb-md py-sm px-md rounded-md border"
+              style="background: var(--bg-surface); border-color: var(--border-color);"
+            >
+              <p class="text-body-sm font-semibold" style="color: var(--text-primary);">
+                Import .env file
+              </p>
+              <p class="text-body-sm mb-md" style="color: var(--text-secondary);">
+                Found <strong>{importPreview.varCount} variables</strong> in
+                <code class="font-mono">{importPreview.fileName}</code>.
+                Choose where to save them inside this project.
+              </p>
+              <div class="flex items-end gap-sm flex-wrap mb-sm">
+                <label class="flex flex-col gap-1 min-w-[180px]">
+                  <span class="text-caption-xs" style="color: var(--text-muted);">Folder</span>
+                  <select
+                    class="font-mono text-body-sm px-2 py-1 rounded border"
+                    style="background: var(--bg-base); color: var(--text-primary); border-color: var(--border-color);"
+                    value={importPreview.targetDir}
+                    disabled={importDirsLoading}
+                    onchange={(e) => {
+                      if (importPreview) {
+                        importPreview = { ...importPreview, targetDir: e.currentTarget.value };
+                      }
+                    }}
+                  >
+                    {#each importDirs as dir (dir)}
+                      <option value={dir}>{dir === "." ? "Project root" : dir}</option>
+                    {/each}
+                  </select>
+                </label>
+                <label class="flex flex-col gap-1 flex-1 min-w-[160px]">
+                  <span class="text-caption-xs" style="color: var(--text-muted);">File name</span>
+                  <input
+                    class="font-mono text-body-sm px-2 py-1 rounded border"
+                    style="background: var(--bg-base); color: var(--text-primary); border-color: var(--border-color);"
+                    value={importPreview.targetName}
+                    placeholder=".env"
+                    spellcheck="false"
+                    oninput={(e) => {
+                      if (importPreview) {
+                        importPreview = { ...importPreview, targetName: e.currentTarget.value };
+                      }
+                    }}
+                  />
+                </label>
+                <div class="flex items-center gap-sm">
+                  <button
+                    class="btn-primary px-3 py-1.5 text-body-sm"
+                    onclick={confirmEnvImport}
+                    disabled={importSaving}
+                  >
+                    {importSaving ? "Saving..." : "Save .env here"}
+                  </button>
+                  <button
+                    class="btn-secondary px-3 py-1.5 text-body-sm"
+                    onclick={() => (importPreview = null)}
+                    disabled={importSaving}
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+              <p class="text-caption-xs" style="color: var(--text-muted);">
+                Will be saved as: <code class="font-mono">{importDestPath()}</code>
+              </p>
+            </div>
+          {/if}
+
           {#if envLoading}
             <p class="text-center py-xl" style="color: var(--text-muted);">
               Loading environment variables...
             </p>
           {:else if envRows.length === 0}
             <p class="text-center py-xl" style="color: var(--text-muted);">
-              No environment variables found. Click "Import from .env" to load existing variables or "Add Variable" to create new ones.
+              No environment variables found. Click "Import from .env" to upload a .env file from your machine or "Add Variable" to create new ones. You can also paste KEY=value lines into any row and they will be split automatically.
             </p>
           {:else}
             <div class="space-y-xs">
@@ -624,6 +790,7 @@
                     placeholder="KEY_NAME"
                     spellcheck="false"
                     oninput={(e) => updateEnvRow(i, "key", e.currentTarget.value)}
+                    onpaste={(e) => handleEnvPaste(i, e)}
                   />
                   <input
                     class="flex-1 min-w-0 font-mono text-body-sm px-2 py-1 rounded border"
@@ -632,6 +799,7 @@
                     placeholder="value"
                     spellcheck="false"
                     oninput={(e) => updateEnvRow(i, "value", e.currentTarget.value)}
+                    onpaste={(e) => handleEnvPaste(i, e)}
                   />
                   <button
                     class="shrink-0 p-1.5 rounded"

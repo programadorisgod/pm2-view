@@ -1,23 +1,21 @@
 import { env } from '$env/dynamic/private';
 import { logger } from '$lib/logger';
-import { sendNotificationEmail, type EmailMessage } from '$lib/notifications';
+import { type EmailMessage } from '$lib/notifications';
 import type { Deployment } from './deployment.types';
 
 export type DeploymentOutcome =
 	| { status: 'success'; commitSha: string | null; durationMs: number }
 	| { status: 'failed'; stage: string; error: string; durationMs: number };
 
+/** Minimal project info needed for notification message rendering. */
 export interface DeployedProjectInfo {
 	id: string;
 	name: string;
 	pm2Name: string;
-	userId: string;
-	/** Session email captured when deployment settings were last saved; receives emails alongside the owner. */
-	notifyEmail?: string | null;
 }
 
 export interface DeploymentNotifierDeps {
-	getUserEmail(userId: string): Promise<string | null>;
+	collectRecipients(projectId: string): Promise<string[]>;
 	sendEmail(message: EmailMessage): Promise<boolean>;
 }
 
@@ -43,8 +41,8 @@ export function createDeploymentNotifier(deps: DeploymentNotifierDeps): Deployme
 	return {
 		async notifyResult(deployment, project, outcome) {
 			try {
-				const ownerEmail = await deps.getUserEmail(project.userId);
-				const recipients = dedupeEmails([ownerEmail, project.notifyEmail ?? null]);
+				// Resolve recipients from all access models: owner, project members (editor+), team members (team_admin+)
+				const recipients = await deps.collectRecipients(project.id);
 				if (recipients.length === 0) {
 					logger.warn('Deployment notification skipped: no recipient emails available', {
 						projectId: project.id
@@ -132,19 +130,6 @@ function buildMessage(
 </html>`;
 
 	return { text, html };
-}
-
-function dedupeEmails(emails: (string | null | undefined)[]): string[] {
-	const seen = new Set<string>();
-	const result: string[] = [];
-	for (const email of emails) {
-		if (!email) continue;
-		const key = email.trim().toLowerCase();
-		if (!key || seen.has(key)) continue;
-		seen.add(key);
-		result.push(email.trim());
-	}
-	return result;
 }
 
 function escapeHtml(value: string): string {

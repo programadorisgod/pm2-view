@@ -25,8 +25,7 @@ function makeDeps(overrides: Partial<ProcessAlertDeps> = {}): {
 		sent,
 		deps: {
 			findProjectByPm2Name: vi.fn().mockResolvedValue(PROJECT),
-			getUserEmail: vi.fn().mockResolvedValue('owner@example.com'),
-			getTeamMemberEmails: vi.fn().mockResolvedValue([]),
+			collectRecipients: vi.fn().mockResolvedValue(['owner@example.com']),
 			sendEmail: vi.fn().mockImplementation(async (message: EmailMessage) => {
 				sent.push(message);
 				return true;
@@ -42,14 +41,14 @@ describe('ProcessAlertNotifier', () => {
 		vi.useFakeTimers();
 	});
 
-	it('sends an error email to the project owner', async () => {
+	it('sends an error email to the resolved recipients', async () => {
 		const { deps, sent } = makeDeps();
 		const notifier = createProcessAlertNotifier(deps);
 
 		await notifier.notifyProcessError('project-one', 'online');
 
 		expect(deps.findProjectByPm2Name).toHaveBeenCalledWith('project-one');
-		expect(deps.getUserEmail).toHaveBeenCalledWith('user-1');
+		expect(deps.collectRecipients).toHaveBeenCalledWith('project-1');
 		expect(sent).toHaveLength(1);
 		expect(sent[0].to).toEqual(['owner@example.com']);
 		expect(sent[0].subject).toContain('Process ERRORED');
@@ -58,31 +57,10 @@ describe('ProcessAlertNotifier', () => {
 		expect(sent[0].text).toContain('Previous status: online');
 	});
 
-	it('includes notifyEmail in recipients when present', async () => {
-		const { deps, sent } = makeDeps();
-		const notifier = createProcessAlertNotifier(deps);
-
-		await notifier.notifyProcessError('project-one', 'online');
-
-		expect(sent).toHaveLength(1);
-		expect(sent[0].to).toEqual(['owner@example.com']);
-	});
-
-	it('sends to owner + notifyEmail when they differ', async () => {
-		const { deps, sent } = makeDeps();
-		const notifier = createProcessAlertNotifier(deps);
-
-		await notifier.notifyProcessError('project-one', 'online');
-
-		expect(sent).toHaveLength(1);
-		expect(sent[0].to).toEqual(['owner@example.com']);
-	});
-
-	it('includes team member emails when project has a team', async () => {
-		const projectWithTeam = { ...PROJECT, teamId: 'team-1' };
+	it('includes all recipients resolved from access models', async () => {
 		const { deps, sent } = makeDeps({
-			findProjectByPm2Name: vi.fn().mockResolvedValue(projectWithTeam),
-			getTeamMemberEmails: vi.fn().mockResolvedValue([
+			collectRecipients: vi.fn().mockResolvedValue([
+				'owner@example.com',
 				'team1@example.com',
 				'team2@example.com'
 			])
@@ -91,28 +69,10 @@ describe('ProcessAlertNotifier', () => {
 
 		await notifier.notifyProcessError('project-one', 'online');
 
-		expect(deps.getTeamMemberEmails).toHaveBeenCalledWith('team-1');
 		expect(sent).toHaveLength(1);
 		expect(sent[0].to).toContain('owner@example.com');
 		expect(sent[0].to).toContain('team1@example.com');
 		expect(sent[0].to).toContain('team2@example.com');
-	});
-
-	it('deduplicates emails case-insensitively', async () => {
-		const projectWithTeam = { ...PROJECT, teamId: 'team-1' };
-		const { deps, sent } = makeDeps({
-			findProjectByPm2Name: vi.fn().mockResolvedValue(projectWithTeam),
-			getTeamMemberEmails: vi.fn().mockResolvedValue([
-				'  Owner@Example.com  ',
-				'other@example.com'
-			])
-		});
-		const notifier = createProcessAlertNotifier(deps);
-
-		await notifier.notifyProcessError('project-one', 'online');
-
-		expect(sent).toHaveLength(1);
-		expect(sent[0].to).toEqual(['owner@example.com', 'other@example.com']);
 	});
 
 	it('skips sending when project is not registered', async () => {
@@ -129,7 +89,7 @@ describe('ProcessAlertNotifier', () => {
 
 	it('skips sending when no recipient emails are available', async () => {
 		const { deps } = makeDeps({
-			getUserEmail: vi.fn().mockResolvedValue(null)
+			collectRecipients: vi.fn().mockResolvedValue([])
 		});
 		const notifier = createProcessAlertNotifier(deps);
 
@@ -198,20 +158,9 @@ describe('ProcessAlertNotifier', () => {
 		).resolves.toBeUndefined();
 	});
 
-	it('never throws when getUserEmail rejects', async () => {
+	it('never throws when collectRecipients rejects', async () => {
 		const { deps } = makeDeps({
-			getUserEmail: vi.fn().mockRejectedValue(new Error('DB timeout'))
-		});
-		const notifier = createProcessAlertNotifier(deps);
-
-		await expect(
-			notifier.notifyProcessError('project-one', 'online')
-		).resolves.toBeUndefined();
-	});
-
-	it('never throws when getTeamMemberEmails rejects', async () => {
-		const { deps } = makeDeps({
-			getTeamMemberEmails: vi.fn().mockRejectedValue(new Error('DB timeout'))
+			collectRecipients: vi.fn().mockRejectedValue(new Error('DB timeout'))
 		});
 		const notifier = createProcessAlertNotifier(deps);
 

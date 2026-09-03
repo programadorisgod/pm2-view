@@ -1,8 +1,8 @@
 import { env } from '$env/dynamic/private';
 import { logger } from '$lib/logger';
-import { sendNotificationEmail, type EmailMessage } from './index';
+import { sendNotificationEmail, type EmailMessage, collectProjectNotificationEmails } from './index';
 import { db } from '$lib/db/db';
-import { projects, users, teamMembers } from '$lib/db/schema';
+import { projects } from '$lib/db/schema';
 import { eq } from 'drizzle-orm';
 
 const COOLDOWN_MS = 5 * 60 * 1000;
@@ -18,8 +18,7 @@ export interface ProcessAlertProject {
 
 export interface ProcessAlertDeps {
 	findProjectByPm2Name(pm2Name: string): Promise<ProcessAlertProject | null>;
-	getUserEmail(userId: string): Promise<string | null>;
-	getTeamMemberEmails(teamId: string): Promise<string[]>;
+	collectRecipients(projectId: string): Promise<string[]>;
 	sendEmail(message: EmailMessage): Promise<boolean>;
 	cooldownMs?: number;
 }
@@ -47,7 +46,8 @@ export function createProcessAlertNotifier(deps: ProcessAlertDeps): ProcessAlert
 					return;
 				}
 
-				const recipientEmails = await collectRecipients(deps, project);
+				// Resolve recipients from all access models: owner, project members, team members
+				const recipientEmails = await deps.collectRecipients(project.id);
 				if (recipientEmails.length === 0) {
 					logger.warn('Process error alert skipped: no recipient emails', { processName });
 					return;
@@ -81,33 +81,6 @@ export function createProcessAlertNotifier(deps: ProcessAlertDeps): ProcessAlert
 			}
 		}
 	};
-}
-
-async function collectRecipients(
-	deps: ProcessAlertDeps,
-	project: ProcessAlertProject
-): Promise<string[]> {
-	const emails = new Set<string>();
-
-	const ownerEmail = await deps.getUserEmail(project.userId);
-	if (ownerEmail) {
-		emails.add(ownerEmail.trim().toLowerCase());
-	}
-
-	if (project.notifyEmail) {
-		const normalized = project.notifyEmail.trim().toLowerCase();
-		if (normalized) emails.add(normalized);
-	}
-
-	if (project.teamId) {
-		const teamEmails = await deps.getTeamMemberEmails(project.teamId);
-		for (const email of teamEmails) {
-			const normalized = email.trim().toLowerCase();
-			if (normalized) emails.add(normalized);
-		}
-	}
-
-	return [...emails];
 }
 
 export function buildMessage(
@@ -169,26 +142,7 @@ export function createDefaultProcessAlertNotifier(): ProcessAlertNotifier {
 			});
 			return project ?? null;
 		},
-		async getUserEmail(userId) {
-			const user = await db.query.users.findFirst({
-				where: eq(users.id, userId),
-				columns: { email: true }
-			});
-			return user?.email ?? null;
-		},
-		async getTeamMemberEmails(teamId) {
-			const members = await db.query.teamMembers.findMany({
-				where: eq(teamMembers.teamId, teamId),
-				with: {
-					user: {
-						columns: { email: true }
-					}
-				}
-			});
-			return members
-				.map((m) => m.user?.email)
-				.filter((email): email is string => !!email);
-		},
+		collectRecipients: (projectId) => collectProjectNotificationEmails(projectId, null),
 		sendEmail: sendNotificationEmail
 	});
 }

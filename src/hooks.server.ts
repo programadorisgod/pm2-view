@@ -6,22 +6,40 @@ import { startMetricsEmitter, stopMetricsEmitter, startStatusWatcher, stopStatus
 import { logger } from '$lib/logger';
 import type { Handle } from '@sveltejs/kit';
 
+declare global {
+	var __pm2_cleanup: (() => void) | undefined;
+}
+
 if (!building) {
+	if (globalThis.__pm2_cleanup) {
+		globalThis.__pm2_cleanup();
+	}
+
 	startMetricsEmitter(10000);
 	startStatusWatcher(10000);
 
-	process.on('SIGTERM', () => {
+	const handleSigterm = () => {
 		logger.info('SIGTERM received, shutting down...');
 		stopMetricsEmitter();
 		stopStatusWatcher();
-	});
+	};
 
-	process.on('SIGINT', () => {
+	const handleSigint = () => {
 		logger.info('SIGINT received, shutting down...');
 		stopMetricsEmitter();
 		stopStatusWatcher();
 		process.exit(0);
-	});
+	};
+
+	process.on('SIGTERM', handleSigterm);
+	process.on('SIGINT', handleSigint);
+
+	globalThis.__pm2_cleanup = () => {
+		stopMetricsEmitter();
+		stopStatusWatcher();
+		process.removeListener('SIGTERM', handleSigterm);
+		process.removeListener('SIGINT', handleSigint);
+	};
 }
 
 export const handle: Handle = async ({ event, resolve }) => {

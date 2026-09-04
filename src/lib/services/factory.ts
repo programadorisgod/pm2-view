@@ -5,6 +5,9 @@ import { EnvVarService } from '$lib/env-vars/env-var.service';
 import { EnvVarRepository } from '$lib/db/repositories/env-var-repository.impl';
 import { DeployConfigRepository } from '$lib/db/repositories/deploy-config-repository.impl';
 import { DeployConfigService } from '$lib/deploy-config/deploy-config.service';
+import { PortScannerService } from '$lib/ports/port-scanner.service';
+import { PortManagerService } from '$lib/ports/port-manager.service';
+import { PortOtpService } from '$lib/ports/port-otp.service';
 import { logger } from '$lib/logger';
 
 export interface ServiceContainer {
@@ -14,6 +17,9 @@ export interface ServiceContainer {
   envVarService: EnvVarService;
   envVarRepo: EnvVarRepository;
   deployConfigService: DeployConfigService;
+  portScannerService: PortScannerService;
+  portManagerService: PortManagerService;
+  portOtpService: PortOtpService;
 }
 
 let container: ServiceContainer | null = null;
@@ -27,6 +33,9 @@ export function createServices(): ServiceContainer {
     const envVarService = new EnvVarService(envVarRepo);
     const deployConfigRepo = new DeployConfigRepository();
     const deployConfigService = new DeployConfigService(deployConfigRepo);
+    const portScannerService = new PortScannerService();
+    const portManagerService = new PortManagerService(portScannerService);
+    const portOtpService = new PortOtpService();
 
     container = {
       pm2Service,
@@ -35,6 +44,9 @@ export function createServices(): ServiceContainer {
       envVarService,
       envVarRepo,
       deployConfigService,
+      portScannerService,
+      portManagerService,
+      portOtpService,
     };
   }
   return container;

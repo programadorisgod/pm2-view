@@ -2,7 +2,7 @@ import { json } from '@sveltejs/kit';
 import { z } from 'zod';
 import { adminHandler } from '$lib/server/admin-handler';
 import { rateLimiter } from '$lib/rate-limiter';
-import { PortOtpService, PortManagerService } from '$lib/ports';
+import { createServices } from '$lib/services/factory';
 
 const confirmSchema = z.object({
 	code: z.string().length(6, 'Code must be 6 digits')
@@ -27,8 +27,8 @@ export const POST = adminHandler(async ({ request, getClientAddress }, user) => 
 		return json({ error: msg }, { status: 400 });
 	}
 
-	const otpService = new PortOtpService();
-	const payload = otpService.verify(user.id, validation.data.code);
+	const { portOtpService, portManagerService } = createServices();
+	const payload = portOtpService.verify(user.id, validation.data.code);
 
 	if (!payload) {
 		return json(
@@ -37,11 +37,9 @@ export const POST = adminHandler(async ({ request, getClientAddress }, user) => 
 		);
 	}
 
-	const manager = new PortManagerService();
-
 	const result = payload.pid
-		? await manager.killByPid(payload.pid, user.id)
-		: await manager.killByPort(payload.port, user.id);
+		? await portManagerService.killByPid(payload.pid, user.id)
+		: await portManagerService.killByPort(payload.port, user.id);
 
 	return json({
 		success: result.success,

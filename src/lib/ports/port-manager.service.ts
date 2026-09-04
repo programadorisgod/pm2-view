@@ -16,8 +16,13 @@ export interface KillResult {
 }
 
 export class PortManagerService {
-	private scanner = new PortScannerService();
-	private auditRepo = new AuditLogRepository();
+	private readonly scanner: PortScannerService;
+	private readonly auditRepo: AuditLogRepository;
+
+	constructor(scanner: PortScannerService, auditRepo?: AuditLogRepository) {
+		this.scanner = scanner;
+		this.auditRepo = auditRepo ?? new AuditLogRepository();
+	}
 
 	async getPorts(): Promise<{ ports: PortInfo[]; summary: ReturnType<PortScannerService['getSummary']> }> {
 		const ports = await this.scanner.scan();

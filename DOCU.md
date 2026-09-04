@@ -21,8 +21,9 @@
 17. [Project Sharing](#project-sharing)
 18. [Multi-process Groups](#multi-process-groups)
 19. [Auto-deploy](#auto-deploy)
-20. [Development](#development)
-21. [Deployment](#deployment)
+20. [Port Manager](#port-manager)
+21. [Development](#development)
+22. [Deployment](#deployment)
 
 ---
 
@@ -244,6 +245,9 @@ export const load = async () => {
 | `ProjectSharingService` | `IProjectMemberRepository`, `IAuditLogRepository`, `IProjectRepository`, `ITeamRepository` | Project members, roles, team assignment |
 | `TeamService`    | `ITeamRepository`, `IAuditLogRepository` | Team CRUD and member management |
 | `UserService`    | `IAuthRepository`, `IAuditLogRepository` | User CRUD, roles, ban/unban |
+| `PortScannerService` | —                            | System port scanning (`ss`/`lsof`) + dedup |
+| `PortManagerService` | `PortScannerService`, `AuditLogRepository` | Port/PID kill + audit logging |
+| `PortOtpService` | notification providers              | OTP generation, email, verification |
 
 ### Why Not Module-Level Singletons?
 
@@ -310,6 +314,7 @@ Each log line is post-processed:
 - **Log path caching** — the `out`/`err` file paths are cached per process (`logPathCache`) and invalidated on restart/stop/delete.
 - **Clearing** — `DELETE /projects/[id]/logs?stream=out|err` truncates the log file.
 - **Filtering** — the `LogViewer` component supports a datetime-range filter on top of the fetched lines.
+- **Toolbar** — two aligned rows (level filter, date range, sort order toggle newest↔oldest, clear/load-more), with new-error highlighting and dismissed items.
 
 ---
 
@@ -382,7 +387,12 @@ Alert emails include:
 | --------------- | -------------------------- |
 | `/projects/api` | ✅                         |
 | `/api/logout`   | ✅                         |
+| `/api/ports*`   | ✅                         |
 | `/api/sse`      | ❌ (long-lived connection) |
+
+### Metrics Recording
+
+Metrics are **live-only** for the dashboard (SSE, no DB reads on the charts), but the `MetricsRecorder` + metrics schema/repository persist periodic snapshots for historical queries. The recorder samples process metrics on a fixed interval and writes them through the repository — keep the write interval well above the SSE interval so the dashboard doesn't overload the DB.
 
 ### Adding Rate Limiting to New Endpoints
 
@@ -694,6 +704,38 @@ Full guide: [docs/auto-deploy.md](docs/auto-deploy.md).
 
 ---
 
+## Port Manager
+
+Admin-only module to inspect and free ports in use on the server. See the full guide: [docs/port-manager.md](docs/port-manager.md).
+
+### Scanning
+
+`PortScannerService` (`src/lib/ports/port-scanner.service.ts`) runs `ss -tlnp`/`ss -ulnp` (with `lsof` fallback) and deduplicates by `port-protocol-address-pid-processName-state`. `ss` duplicates the same socket for IPv4/IPv6 loopback pairs, so the key includes address + pid to collapse real duplicates without merging distinct bound addresses.
+
+### Kill flow (OTP-verified)
+
+```
+POST /api/ports/kill → 6-digit OTP (5 min TTL, in-memory, per user)
+  → emailed via the shared notification module → POST /api/ports/confirm
+  → verify (single-use) → kill -9 <pid> | fuser -k <port>/tcp → audit_logs
+```
+
+- `from` resolves to `SMTP_FROM_EMAIL || SMTP_USER`; if neither is set the request fails fast rather than silently succeeding.
+- The "Free" button spins while the OTP request endpoint runs, and the confirm modal **only opens after the email was actually sent**.
+- Every kill is audited (`port_kill` action).
+
+### Endpoints
+
+| Endpoint                | Method | Purpose               |
+| ----------------------- | ------ | --------------------- |
+| `/api/ports`            | GET    | List ports (admin)    |
+| `/api/ports/kill`       | POST   | Request OTP           |
+| `/api/ports/confirm`    | POST   | Verify + execute kill |
+
+All are wrapped in `adminHandler()` and rate-limited.
+
+---
+
 ## Development
 
 ### Setup
@@ -701,9 +743,9 @@ Full guide: [docs/auto-deploy.md](docs/auto-deploy.md).
 ```bash
 git clone <repo-url>
 cd pm2-view
-npm install
+pnpm install
 cp .env.example .env
-npm run dev
+pnpm dev
 ```
 
 ### Code Style
@@ -719,8 +761,8 @@ npm run dev
 ### Testing
 
 ```bash
-npm test              # Run all tests
-npm test -- --watch   # Watch mode
+pnpm vitest run          # Run all tests
+pnpm vitest run --watch  # Watch mode
 ```
 
 ### Commit Messages
@@ -741,8 +783,8 @@ Use [Conventional Commits](https://www.conventionalcommits.org/):
 ### Production Build
 
 ```bash
-npm run build
-npm run preview  # Test production build locally
+pnpm build
+pnpm preview  # Test production build locally
 ```
 
 ### Environment Variables (Production)

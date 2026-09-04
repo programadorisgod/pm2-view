@@ -93,6 +93,7 @@
   let dateFrom = $state('');
   let dateTo = $state('');
   let viewMode = $state<'unified' | 'split'>('unified');
+  let sortOrder = $state<'newest' | 'oldest'>('oldest');
   let showDismissed = $state(false);
 
   // New error tracking
@@ -176,6 +177,9 @@
         result = result.filter((l) => l.timestamp <= to);
       }
     }
+    result = sortOrder === 'newest'
+      ? [...result].sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime())
+      : result;
     return result;
   });
 
@@ -325,8 +329,13 @@
       requestAnimationFrame(() => {
         const container = viewMode === 'unified' ? unifiedContainer : outContainer;
         if (container) {
-          const atBottom = container.scrollTop + container.clientHeight >= container.scrollHeight - 20;
-          if (atBottom) container.scrollTop = container.scrollHeight;
+          if (sortOrder === 'newest') {
+            const atTop = container.scrollTop < 20;
+            if (atTop) container.scrollTop = 0;
+          } else {
+            const atBottom = container.scrollTop + container.clientHeight >= container.scrollHeight - 20;
+            if (atBottom) container.scrollTop = container.scrollHeight;
+          }
         }
       });
     }
@@ -445,6 +454,23 @@
         Split
       </button>
     </div>
+
+    <!-- Sort order toggle -->
+    <button
+      class="flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-md border transition-colors"
+      style="border-color: var(--border-color); background: var(--bg-base); color: var(--text-muted);"
+      onclick={() => (sortOrder = sortOrder === 'newest' ? 'oldest' : 'newest')}
+      title={sortOrder === 'newest' ? 'Newest first — click to show oldest first' : 'Oldest first — click to show newest first'}
+    >
+      <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        {#if sortOrder === 'newest'}
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 5v14m0 0l-4-4m4 4l4-4"/>
+        {:else}
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19V5m0 0l-4 4m4-4l4 4"/>
+        {/if}
+      </svg>
+      {sortOrder === 'newest' ? 'Newest' : 'Oldest'}
+    </button>
   </div>
 
   <!-- Date filters row -->

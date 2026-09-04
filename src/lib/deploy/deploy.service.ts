@@ -127,7 +127,10 @@ function runCommand(
 	return new Promise((resolve) => {
 		const proc = spawn(command, args, {
 			cwd,
-			shell: false,
+			// Use the shell so package-manager and PM2 shims (e.g. npm.cmd,
+			// pm2.cmd) resolve correctly on Windows. Commands come from the
+			// project's own deploy config (admin-controlled), not from payloads.
+			shell: true,
 			env: env ?? { ...process.env },
 		});
 

@@ -39,6 +39,7 @@
 
 	let lines = $state<LogLine[]>([]);
 	let isDeploying = $state(false);
+	let confirmed = $state(false);
 	let deploySuccess = $state<boolean | null>(null);
 	let totalProcesses = $state(0);
 	let completedProcesses = $state(0);
@@ -48,19 +49,25 @@
 	$effect(() => {
 		if (open) {
 			lines = [];
-			isDeploying = true;
+			isDeploying = false;
+			confirmed = false;
 			deploySuccess = null;
 			totalProcesses = 0;
 			completedProcesses = 0;
 			processResults = [];
 			expandedProcesses = new Set();
 			dialogRef?.showModal();
-			onDeploying?.(true);
-			startMultiDeploy();
 		} else {
 			dialogRef?.close();
 		}
 	});
+
+	function confirmDeploy() {
+		confirmed = true;
+		isDeploying = true;
+		onDeploying?.(true);
+		startMultiDeploy();
+	}
 
 	// Auto-scroll
 	$effect(() => {
@@ -262,14 +269,62 @@
 			class="relative w-full max-w-3xl rounded-xl shadow-2xl"
 			style="background: var(--bg-surface); border: 1px solid var(--border-color);"
 		>
-			<!-- Header -->
-			<div class="flex items-center justify-between p-lg pb-0">
-				<div class="flex items-center gap-md">
-					<div
-						class="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0"
-						style="background: {deploySuccess === true ? 'rgba(0, 230, 118, 0.15)' : deploySuccess === false ? 'rgba(255, 82, 82, 0.15)' : 'rgba(56, 205, 255, 0.15)'};"
-					>
-						{#if isDeploying}
+			{#if !confirmed}
+				<!-- Confirmation prompt -->
+				<div class="p-lg">
+					<div class="flex items-center gap-md mb-lg">
+						<div
+							class="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0"
+							style="background: rgba(255, 215, 64, 0.15);"
+						>
+							<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="color: #FFD740;">
+								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.072 16.5c-.77.833.192 2.5 1.732 2.5z"/>
+							</svg>
+						</div>
+						<div>
+							<h3 class="text-h3 font-semibold" style="color: var(--text-primary);">
+								Deploy All Apps
+							</h3>
+							<p class="text-caption" style="color: var(--text-muted);">
+								This will deploy all online applications sequentially
+							</p>
+						</div>
+					</div>
+
+					<p class="text-body-sm mb-lg" style="color: var(--text-secondary);">
+						Are you sure you want to deploy all apps? This action will restart every online process one by one.
+					</p>
+
+					<div class="flex gap-sm justify-end">
+						<button
+							type="button"
+							class="btn-secondary px-3 py-1.5 text-body-sm"
+							onclick={handleClose}
+						>
+							Cancel
+						</button>
+						<button
+							type="button"
+							class="btn-primary px-3 py-1.5 text-body-sm inline-flex items-center gap-1.5"
+							onclick={confirmDeploy}
+						>
+							<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m9-13V1a1 1 0 00-1 1v2.582a5.009 5.009 0 00-3.412 1.918m7.422 2.476V4a1 1 0 00-2 0v1.582"/>
+							</svg>
+							Yes, Deploy All
+						</button>
+					</div>
+				</div>
+			{:else}
+				<!-- Deploy progress (shown after confirmation) -->
+				<!-- Header -->
+				<div class="flex items-center justify-between p-lg pb-0">
+					<div class="flex items-center gap-md">
+						<div
+							class="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0"
+							style="background: {deploySuccess === true ? 'rgba(0, 230, 118, 0.15)' : deploySuccess === false ? 'rgba(255, 82, 82, 0.15)' : 'rgba(56, 205, 255, 0.15)'};"
+						>
+							{#if isDeploying}
 							<svg class="w-5 h-5 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="color: #38CDFF;">
 								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
 							</svg>
@@ -439,6 +494,7 @@
 					{/each}
 				{/if}
 			</div>
+			{/if}
 		</div>
 	</dialog>
 {/if}

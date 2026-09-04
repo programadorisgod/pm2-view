@@ -111,19 +111,20 @@
 				buildCommand = config.build[0].command;
 			}
 
-			// Show selection step if there are any custom commands
-			const hasCustomCommands = installCommand || buildCommand || (config.restart && config.restart.length > 0);
-			
-			if (hasCustomCommands) {
+			// Show the selection step only when there are restart commands to choose from.
+			// Install/build commands are passed through automatically, so projects with
+			// install/build configured but no restart commands go straight to deploying
+			// (the default `pm2 restart` step is used).
+			const hasRestartCommands = config.restart && config.restart.length > 0;
+
+			if (hasRestartCommands) {
 				// Pre-select all restart commands by default
-				if (config.restart && config.restart.length > 0) {
-					selectedCommandIds = config.restart.map(cmd => cmd.id);
-				}
+				selectedCommandIds = config.restart.map((cmd) => cmd.id);
 				view = 'selecting';
 				isDeploying = false;
 				onDeploying?.(false);
 			} else {
-				// No custom commands: deploy immediately with defaults
+				// No restart commands to choose: deploy immediately with defaults
 				view = 'deploying';
 				startDeploy();
 			}

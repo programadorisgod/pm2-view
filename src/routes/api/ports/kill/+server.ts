@@ -2,7 +2,7 @@ import { json } from '@sveltejs/kit';
 import { z } from 'zod';
 import { adminHandler } from '$lib/server/admin-handler';
 import { rateLimiter } from '$lib/rate-limiter';
-import { PortOtpService } from '$lib/ports';
+import { createServices } from '$lib/services/factory';
 
 const killRequestSchema = z.object({
 	port: z.number().int().min(1).max(65535),
@@ -35,10 +35,10 @@ export const POST = adminHandler(async ({ request, getClientAddress }, user) => 
 		return json({ error: 'User email not found' }, { status: 400 });
 	}
 
-	const otpService = new PortOtpService();
-	const code = otpService.generate(user.id, port, pid ?? null, processName ?? null);
+	const { portOtpService } = createServices();
+	const code = portOtpService.generate(user.id, port, pid ?? null, processName ?? null);
 
-	const sent = await otpService.sendCode(user.email, code, port, processName ?? null);
+	const sent = await portOtpService.sendCode(user.email, code, port, processName ?? null);
 
 	if (!sent) {
 		return json(

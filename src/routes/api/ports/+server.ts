@@ -1,7 +1,7 @@
 import { json } from '@sveltejs/kit';
 import { adminHandler } from '$lib/server/admin-handler';
 import { rateLimiter } from '$lib/rate-limiter';
-import { PortManagerService } from '$lib/ports';
+import { createServices } from '$lib/services/factory';
 
 export const GET = adminHandler(async ({ getClientAddress }) => {
 	const ip = getClientAddress();
@@ -14,7 +14,7 @@ export const GET = adminHandler(async ({ getClientAddress }) => {
 		);
 	}
 
-	const service = new PortManagerService();
-	const { ports, summary } = await service.getPorts();
+	const { portManagerService } = createServices();
+	const { ports, summary } = await portManagerService.getPorts();
 	return json({ ports, summary });
 });

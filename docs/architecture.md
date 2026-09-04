@@ -138,11 +138,12 @@ Data access is abstracted behind interfaces — the domain layer doesn't know ab
 | Auth | `src/lib/auth/` | Pluggable provider (Better Auth default) |
 | Database | `src/lib/db/` | Dialect-agnostic drivers + Drizzle schema/repositories |
 | PM2 | `src/lib/pm2/` | `pm2 jlist`-based process management, log reading, restart fallback |
-| Metrics | `src/lib/metrics/` | **Live-only** aggregation (no DB persistence) |
+| Metrics | `src/lib/metrics/` | **Live-only** aggregation (no DB persistence) + optional recorder snapshots |
 | Env vars | `src/lib/env-vars/` | Environment variable management |
 | Deploy | `src/lib/deploy/` | Webhook-driven deployment pipeline (runner + worker) |
 | Deploy config | `src/lib/deploy-config/` | Per-project install/build/restart commands |
 | GitHub | `src/lib/github/` | App install, repo listing, import pipeline |
+| Ports | `src/lib/ports/` | Port scanning (`ss`/`lsof`), OTP-verified kill (see [docs/port-manager.md](port-manager.md)) |
 | Services | `src/lib/services/` | `ProjectListingService` (grouping) + admin services (audit/sharing/team/user) |
 | SSE | `src/lib/sse/` | Real-time metrics/status emission |
 | Notifications | `src/lib/notifications/` | Pluggable notification channel (nodemailer) |

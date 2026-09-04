@@ -173,8 +173,8 @@
             <button
               class="text-center text-xs py-1.5 rounded transition-colors {isSelected(day) ? 'font-bold' : ''}"
               style="
-                color: {isSelected(day) ? 'var(--bg-base)' : (isToday(day) ? '#38CDFF' : 'var(--text-primary)')};
-                background: {isSelected(day) ? '#38CDFF' : (isToday(day) ? 'rgba(56, 205, 255, 0.1)' : 'transparent')};
+                color: {isSelected(day) ? 'var(--bg-base)' : (isToday(day) ? '#0070F3' : 'var(--text-primary)')};
+                background: {isSelected(day) ? '#0070F3' : (isToday(day) ? 'rgba(0, 112, 243, 0.1)' : 'transparent')};
               "
               onclick={() => selectDay(day)}
             >

@@ -77,7 +77,7 @@
 	<div class="w-[480px] relative z-10">
 		<!-- Logo -->
 		<div class="flex items-center justify-center gap-2.5 mb-2xl">
-			<div class="w-10 h-10 rounded-lg flex items-center justify-center" style="background: linear-gradient(135deg, #38CDFF, #009DCD); box-shadow: 0 0 20px rgba(56, 205, 255, 0.3);">
+			<div class="w-10 h-10 rounded-lg flex items-center justify-center" style="background: #0070F3; box-shadow: 0 0 12px rgba(0, 112, 243, 0.15);">
 				<svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
 					<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
 				</svg>
@@ -93,7 +93,7 @@
 
 			<form onsubmit={handleSubmit} class="space-y-md">
 				{#if error}
-					<div class="rounded-md p-sm text-body-sm" style="background: rgba(255, 82, 82, 0.1); color: #FF5252; border: 1px solid rgba(255, 82, 82, 0.2);">
+					<div class="rounded-md p-sm text-body-sm" style="background: rgba(255, 91, 79, 0.1); color: #FF5B4F; border: 1px solid rgba(255, 91, 79, 0.2);">
 						{error}
 					</div>
 				{/if}
@@ -163,7 +163,7 @@
 			<div class="text-center mt-lg">
 				<p class="text-caption" style="color: var(--text-muted);">
 					Don't have an account?
-					<a href="{base}/register" class="font-medium" style="color: #38CDFF;">Sign Up</a>
+					<a href="{base}/register" class="font-medium" style="color: #0070F3;">Sign Up</a>
 				</p>
 			</div>
 		</div>

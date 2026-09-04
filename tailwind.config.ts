@@ -9,54 +9,54 @@ const config: Config = {
 	theme: {
 		extend: {
 			colors: {
-				// Accent palette (blue-cyan)
+				// Accent palette (Vercel blue)
 				accent: {
-					1: '#CAF8FF',
-					2: '#89DBFE',
-					3: '#38CDFF',
-					4: '#009DCD',
-					5: '#007CA2',
-					6: '#005C79'
+					1: '#E8F4FD',
+					2: '#B3D9F2',
+					3: '#0070F3',
+					4: '#0060DF',
+					5: '#004CC0',
+					6: '#003A99'
 				},
 
-				// Dark mode surfaces
+				// Dark mode surfaces (Vercel + Material Design)
 				base: {
-					DEFAULT: '#0A0E17',
-					2: '#0F1623',
-					3: '#141D2F',
-					4: '#1A2540'
+					DEFAULT: '#0A0A0A',
+					2: '#111111',
+					3: '#1A1A1A',
+					4: '#222222'
 				},
 
-				// Light mode surfaces
+				// Light mode surfaces (Vercel)
 				surface: {
-					DEFAULT: '#F0F4F8',
-					2: '#E8EDF2',
+					DEFAULT: '#FAFAFA',
+					2: '#F5F5F5',
 					3: '#FFFFFF'
 				},
 
 				// Text
 				text: {
-					primary: '#E8EDF2',
-					secondary: '#8B95A5',
-					muted: '#5A6474',
-					dark: '#0A0E17',
-					'dark-secondary': '#4A5568'
+					primary: '#EDEDED',
+					secondary: '#888888',
+					muted: '#666666',
+					dark: '#171717',
+					'dark-secondary': '#666666'
 				},
 
 				// Status
 				status: {
 					online: '#00E676',
-					offline: '#5A6474',
+					offline: '#666666',
 					stopped: '#FFB74D',
-					error: '#FF5252',
+					error: '#FF5B4F',
 					warning: '#FFD740'
 				},
 
 				// Border
 				border: {
-					DEFAULT: 'rgba(137, 219, 254, 0.1)',
-					light: 'rgba(137, 219, 254, 0.06)',
-					hover: 'rgba(56, 205, 255, 0.3)'
+					DEFAULT: 'rgba(255, 255, 255, 0.06)',
+					light: 'rgba(255, 255, 255, 0.04)',
+					hover: 'rgba(255, 255, 255, 0.12)'
 				}
 			},
 			fontFamily: {
@@ -94,13 +94,13 @@ const config: Config = {
 				'3xl': '32px'
 			},
 			boxShadow: {
-				'glow': '0 0 20px rgba(56, 205, 255, 0.15)',
-				'glow-sm': '0 0 10px rgba(56, 205, 255, 0.1)',
-				'glow-lg': '0 0 30px rgba(56, 205, 255, 0.2)',
-				'card': '0 1px 3px rgba(0, 0, 0, 0.3), 0 1px 2px rgba(0, 0, 0, 0.2)',
-				'card-hover': '0 4px 12px rgba(0, 0, 0, 0.4), 0 2px 4px rgba(0, 0, 0, 0.3)',
-				'card-light': '0 1px 3px rgba(0, 0, 0, 0.08), 0 1px 2px rgba(0, 0, 0, 0.04)',
-				'card-light-hover': '0 4px 12px rgba(0, 0, 0, 0.12), 0 2px 4px rgba(0, 0, 0, 0.08)'
+				'glow': '0 0 12px rgba(0, 112, 243, 0.08)',
+				'glow-sm': '0 0 8px rgba(0, 112, 243, 0.06)',
+				'glow-lg': '0 0 16px rgba(0, 112, 243, 0.1)',
+				'card': '0 0 0 1px rgba(255, 255, 255, 0.06), 0 2px 4px rgba(0, 0, 0, 0.4)',
+				'card-hover': '0 0 0 1px rgba(255, 255, 255, 0.1), 0 4px 8px rgba(0, 0, 0, 0.5)',
+				'card-light': '0 0 0 1px rgba(0, 0, 0, 0.08), 0 2px 4px rgba(0, 0, 0, 0.04)',
+				'card-light-hover': '0 0 0 1px rgba(0, 0, 0, 0.12), 0 4px 8px rgba(0, 0, 0, 0.04)'
 			},
 			animation: {
 				'pulse-glow': 'pulse-glow 2s ease-in-out infinite',

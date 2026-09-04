@@ -237,7 +237,7 @@
 
 	function roleColor(role: string): string {
 		switch (role) {
-			case 'team_owner': return '#FF5252';
+			case 'team_owner': return '#FF5B4F';
 			case 'team_admin': return '#00E676';
 			default: return 'var(--text-muted)';
 		}
@@ -280,7 +280,7 @@
 							<span class="text-caption font-mono" style="color: var(--text-muted);">ID: {team.id.slice(0, 12)}…</span>
 							<button
 								class="text-caption px-1 py-0.5 rounded transition-colors hover:bg-[var(--bg-card)]"
-								style="color: {copiedId === team.id ? '#00E676' : '#38CDFF'};"
+								style="color: {copiedId === team.id ? '#00E676' : '#0070F3'};"
 								onclick={() => handleCopyId(team.id)}
 								title="Copy full Team ID"
 							>
@@ -449,14 +449,14 @@
 {#if showDeleteConfirm}
 	<div class="fixed inset-0 z-50 flex items-center justify-center" style="background: rgba(0,0,0,0.5);">
 		<div class="w-full max-w-md p-xl rounded-lg" style="background: var(--bg-surface); border: 1px solid var(--border-color);">
-			<h2 class="text-h3 font-semibold mb-lg" style="color: #FF5252;">Delete Team</h2>
+			<h2 class="text-h3 font-semibold mb-lg" style="color: #FF5B4F;">Delete Team</h2>
 			<p class="text-body-sm mb-lg" style="color: var(--text-secondary);">
 				Are you sure you want to delete <strong>{deleteTeamName}</strong>? This will also remove all team members. This action cannot be undone.
 			</p>
 
 			{#if deleteFeedback}
 				<div class="mb-lg p-sm rounded-md text-body-sm"
-					style="background: rgba(255, 82, 82, 0.1); color: #FF5252; border: 1px solid rgba(255, 82, 82, 0.2);">
+					style="background: rgba(255, 91, 79, 0.1); color: #FF5B4F; border: 1px solid rgba(255, 91, 79, 0.2);">
 					{deleteFeedback.text}
 				</div>
 			{/if}
@@ -491,9 +491,9 @@
 
 				{#if memberFeedback}
 					<div class="mt-md p-sm rounded-md text-body-sm"
-						style="background: {memberFeedback.type === 'success' ? 'rgba(0, 230, 118, 0.1)' : 'rgba(255, 82, 82, 0.1)'};
-							color: {memberFeedback.type === 'success' ? '#00E676' : '#FF5252'};
-							border: 1px solid {memberFeedback.type === 'success' ? 'rgba(0, 230, 118, 0.2)' : 'rgba(255, 82, 82, 0.2)'};">
+						style="background: {memberFeedback.type === 'success' ? 'rgba(0, 230, 118, 0.1)' : 'rgba(255, 91, 79, 0.1)'};
+							color: {memberFeedback.type === 'success' ? '#00E676' : '#FF5B4F'};
+							border: 1px solid {memberFeedback.type === 'success' ? 'rgba(0, 230, 118, 0.2)' : 'rgba(255, 91, 79, 0.2)'};">
 						{memberFeedback.text}
 					</div>
 				{/if}

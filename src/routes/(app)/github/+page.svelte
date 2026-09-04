@@ -180,7 +180,7 @@
 						<button
 							type="button"
 							class="px-3 py-1.5 text-caption font-semibold rounded-lg"
-							style="background: rgba(255, 82, 82, 0.15); color: #FF5252; border: 1px solid rgba(255, 82, 82, 0.3);"
+							style="background: rgba(255, 91, 79, 0.15); color: #FF5B4F; border: 1px solid rgba(255, 91, 79, 0.3);"
 							onclick={handleDisconnect}
 							disabled={disconnecting}
 						>
@@ -191,7 +191,7 @@
 					<button
 						type="button"
 						class="btn-secondary px-3 py-1.5 text-caption"
-						style="color: #FF5252;"
+						style="color: #FF5B4F;"
 						onclick={() => showDisconnectConfirm = true}
 					>
 						Disconnect Account
@@ -225,23 +225,23 @@
 									<button
 										type="button"
 										class="w-full flex items-center justify-between px-3 py-2 rounded-md text-caption"
-										style="background: {sortBy === 'name' ? 'rgba(56, 205, 255, 0.1)' : 'transparent'}; color: var(--text-primary);"
+										style="background: {sortBy === 'name' ? 'rgba(0, 112, 243, 0.1)' : 'transparent'}; color: var(--text-primary);"
 										onclick={() => setSortBy('name')}
 									>
 										<span>Name</span>
 										{#if sortBy === 'name'}
-											<span style="color: #38CDFF;">{sortOrder === 'asc' ? '↑' : '↓'}</span>
+											<span style="color: #0070F3;">{sortOrder === 'asc' ? '↑' : '↓'}</span>
 										{/if}
 									</button>
 									<button
 										type="button"
 										class="w-full flex items-center justify-between px-3 py-2 rounded-md text-caption"
-										style="background: {sortBy === 'updated' ? 'rgba(56, 205, 255, 0.1)' : 'transparent'}; color: var(--text-primary);"
+										style="background: {sortBy === 'updated' ? 'rgba(0, 112, 243, 0.1)' : 'transparent'}; color: var(--text-primary);"
 										onclick={() => setSortBy('updated')}
 									>
 										<span>Last Updated</span>
 										{#if sortBy === 'updated'}
-											<span style="color: #38CDFF;">{sortOrder === 'asc' ? '↑' : '↓'}</span>
+											<span style="color: #0070F3;">{sortOrder === 'asc' ? '↑' : '↓'}</span>
 										{/if}
 									</button>
 									<div class="border-t my-1" style="border-color: var(--border-color);"></div>

@@ -11,9 +11,9 @@
 
 	const statusConfig = {
 		online: { dot: '#00E676', glow: 'rgba(0, 230, 118, 0.4)' },
-		offline: { dot: '#5A6474', glow: 'transparent' },
+		offline: { dot: '#666666', glow: 'transparent' },
 		stopped: { dot: '#FFB74D', glow: 'rgba(255, 183, 77, 0.4)' },
-		error: { dot: '#FF5252', glow: 'rgba(255, 82, 82, 0.4)' }
+		error: { dot: '#FF5B4F', glow: 'rgba(255, 91, 79, 0.4)' }
 	};
 
 	let config = $derived(statusConfig[status]);

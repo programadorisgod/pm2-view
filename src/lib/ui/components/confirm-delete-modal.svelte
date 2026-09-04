@@ -67,8 +67,8 @@
 		>
 			<!-- Header -->
 			<div class="flex items-center gap-md mb-lg">
-				<div class="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0" style="background: rgba(255, 82, 82, 0.15);">
-					<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="color: #FF5252;">
+				<div class="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0" style="background: rgba(255, 91, 79, 0.15);">
+					<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="color: #FF5B4F;">
 						<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z"/>
 					</svg>
 				</div>
@@ -82,7 +82,7 @@
 		<p class="text-body-sm mb-md" style="color: var(--text-secondary);">
 			Please type <strong class="font-mono" style="color: var(--text-primary);">{itemName}</strong> to confirm deletion.
 			{#if processCount > 1}
-				<br><span class="text-caption" style="color: #FF5252;">This will delete {processCount} processes in the group.</span>
+				<br><span class="text-caption" style="color: #FF5B4F;">This will delete {processCount} processes in the group.</span>
 			{/if}
 		</p>
 
@@ -96,7 +96,7 @@
 			/>
 
 			<!-- Delete files option -->
-			<label class="flex items-start gap-sm p-sm rounded-lg cursor-pointer mb-lg" style="background: rgba(255, 82, 82, 0.05); border: 1px solid rgba(255, 82, 82, 0.2);">
+			<label class="flex items-start gap-sm p-sm rounded-lg cursor-pointer mb-lg" style="background: rgba(255, 91, 79, 0.05); border: 1px solid rgba(255, 91, 79, 0.2);">
 				<input
 					type="checkbox"
 					bind:checked={deleteFiles}

@@ -35,7 +35,7 @@
 	function statusColor(status: string): string {
 		switch (status) {
 			case 'success': return '#4CAF50';
-			case 'failed': return '#FF5252';
+			case 'failed': return '#FF5B4F';
 			case 'running': return '#2196F3';
 			case 'pending': return '#FFB74D';
 			default: return 'var(--text-muted)';
@@ -140,7 +140,7 @@
 	{#if loadError}
 		<div
 			class="rounded-md p-sm text-body-sm mb-md"
-			style="background: rgba(255, 82, 82, 0.1); color: #FF5252; border: 1px solid rgba(255, 82, 82, 0.2);"
+			style="background: rgba(255, 91, 79, 0.1); color: #FF5B4F; border: 1px solid rgba(255, 91, 79, 0.2);"
 		>
 			{loadError}
 		</div>
@@ -212,7 +212,7 @@
 							{#if d.status === 'failed' && d.error}
 								<div
 									class="rounded-md p-sm text-body-sm mb-sm"
-									style="background: rgba(255, 82, 82, 0.08); color: #FF5252;"
+									style="background: rgba(255, 91, 79, 0.08); color: #FF5B4F;"
 								>
 									<strong>Error ({d.stage}):</strong> {d.error}
 								</div>

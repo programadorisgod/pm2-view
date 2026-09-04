@@ -364,7 +364,7 @@
 
   function levelColor(level: 'info' | 'warn' | 'error'): string {
     switch (level) {
-      case 'error': return '#FF5252';
+      case 'error': return '#FF5B4F';
       case 'warn': return '#FFB74D';
       case 'info': return '#00E676';
     }
@@ -372,7 +372,7 @@
 
   function levelBg(level: 'info' | 'warn' | 'error'): string {
     switch (level) {
-      case 'error': return 'rgba(255, 82, 82, 0.12)';
+      case 'error': return 'rgba(255, 91, 79, 0.12)';
       case 'warn': return 'rgba(255, 183, 77, 0.12)';
       case 'info': return 'transparent';
     }
@@ -480,7 +480,7 @@
     {#if hasActiveFilters}
       <button
         class="text-sm px-3 py-1.5 rounded-md"
-        style="color: #38CDFF;"
+        style="color: #0070F3;"
         onclick={clearFilters}
       >
         Clear filters
@@ -496,7 +496,7 @@
     {#if newErrCount > 0}
       <span
         class="px-2.5 py-1 text-sm rounded-full font-medium"
-        style="background: rgba(255, 82, 82, 0.15); color: #FF5252;"
+        style="background: rgba(255, 91, 79, 0.15); color: #FF5B4F;"
       >
         +{newErrCount} new errors
       </span>
@@ -514,9 +514,9 @@
       <button
         class="px-3 py-1.5 text-sm rounded-md font-medium transition-colors"
         style="
-          background: {showDismissed ? 'rgba(56, 205, 255, 0.12)' : 'transparent'};
-          color: {showDismissed ? '#38CDFF' : 'var(--text-muted)'};
-          border: 1px solid {showDismissed ? '#38CDFF40' : 'var(--border-color)'};
+          background: {showDismissed ? 'rgba(0, 112, 243, 0.12)' : 'transparent'};
+          color: {showDismissed ? '#0070F3' : 'var(--text-muted)'};
+          border: 1px solid {showDismissed ? '#0070F340' : 'var(--border-color)'};
         "
         onclick={() => (showDismissed = !showDismissed)}
       >
@@ -525,7 +525,7 @@
       {#if showDismissed}
         <button
           class="text-sm px-3 py-1.5 rounded-md"
-          style="color: #38CDFF;"
+          style="color: #0070F3;"
           onclick={restoreAllErrors}
         >
           Restore all
@@ -580,9 +580,9 @@
             <div
               class="flex items-start gap-0 px-4 py-1.5 border-b group"
               style="
-                background: {isNewErr ? 'rgba(255, 82, 82, 0.08)' : 'transparent'};
+                background: {isNewErr ? 'rgba(255, 91, 79, 0.08)' : 'transparent'};
                 border-color: var(--border-color);
-                {isNewErr ? 'border-left: 3px solid #FF5252; padding-left: 13px;' : 'border-left: 3px solid transparent;'}
+                {isNewErr ? 'border-left: 3px solid #FF5B4F; padding-left: 13px;' : 'border-left: 3px solid transparent;'}
                 {log.dismissed ? 'opacity: 0.4;' : ''}
               "
             >
@@ -605,7 +605,7 @@
               </span>
               <span
                 class="shrink-0 text-[11px] uppercase ml-3 font-medium"
-                style="color: {log.type === 'err' ? '#FF525280' : '#00E67680'};"
+                style="color: {log.type === 'err' ? '#FF5B4F80' : '#00E67680'};"
               >
                 {log.type}
               </span>
@@ -616,7 +616,7 @@
                 {#if log.dismissed && showDismissed}
                   <button
                     class="shrink-0 ml-2 opacity-0 group-hover:opacity-100 transition-opacity text-xs px-1.5 py-0.5 rounded"
-                    style="color: #38CDFF;"
+                    style="color: #0070F3;"
                     onclick={() => { log.dismissed = false; logs = [...logs]; }}
                     title="Restore this error"
                   >
@@ -691,8 +691,8 @@
       <!-- ERRORS Panel -->
       <Card>
         <div class="flex items-center justify-between mb-md">
-          <h3 class="text-h4 font-semibold" style="color: #FF5252;">
-            <span class="inline-block w-2 h-2 rounded-full mr-2" style="background: #FF5252;"></span>
+          <h3 class="text-h4 font-semibold" style="color: #FF5B4F;">
+            <span class="inline-block w-2 h-2 rounded-full mr-2" style="background: #FF5B4F;"></span>
             STDERR
             <span class="text-xs font-normal ml-1 opacity-60">({filteredErrLogs.length})</span>
           </h3>
@@ -700,7 +700,7 @@
             {#if newErrCount > 0}
               <span
                 class="px-2 py-0.5 text-xs rounded-full font-medium"
-                style="background: rgba(255, 82, 82, 0.15); color: #FF5252;"
+                style="background: rgba(255, 91, 79, 0.15); color: #FF5B4F;"
               >
                 +{newErrCount} new
               </span>
@@ -730,7 +730,7 @@
                 class="py-1 group flex items-start"
                 style="
                   color: {levelColor(log.level)};
-                  {isNew ? 'background: rgba(255, 82, 82, 0.12); border-left: 3px solid #FF5252; padding-left: 13px;' : 'background: transparent;'}
+                  {isNew ? 'background: rgba(255, 91, 79, 0.12); border-left: 3px solid #FF5B4F; padding-left: 13px;' : 'background: transparent;'}
                   {log.dismissed ? 'opacity: 0.4;' : ''}
                 "
               >
@@ -742,7 +742,7 @@
                 {#if log.dismissed && showDismissed}
                   <button
                     class="shrink-0 ml-2 opacity-0 group-hover:opacity-100 transition-opacity text-xs px-1.5 py-0.5 rounded"
-                    style="color: #38CDFF;"
+                    style="color: #0070F3;"
                     onclick={() => { log.dismissed = false; logs = [...logs]; }}
                     title="Restore"
                   >

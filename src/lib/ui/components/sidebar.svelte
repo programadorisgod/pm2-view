@@ -59,7 +59,7 @@
 	<!-- Logo -->
 	<div class="px-lg flex items-center h-[52px] border-b" style="border-color: var(--border-color);">
 		<div class="flex items-center gap-2.5">
-			<div class="w-7 h-7 rounded-md flex items-center justify-center" style="background: linear-gradient(135deg, #38CDFF, #009DCD);">
+			<div class="w-7 h-7 rounded-md flex items-center justify-center" style="background: #0070F3;">
 				<svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
 					<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
 				</svg>
@@ -81,7 +81,7 @@
 								item.active ? 'font-medium' : 'hover:bg-[var(--bg-card)]'
 							)}
 							style={item.active
-								? 'background: rgba(56, 205, 255, 0.08); color: #38CDFF;'
+								? 'background: rgba(0, 112, 243, 0.08); color: #0070F3;'
 								: 'color: var(--text-secondary);'
 							}
 							onclick={() => toggleExpand(item.label)}
@@ -113,11 +113,11 @@
 													: 'hover:bg-[var(--bg-card)]'
 											)}
 											style={child.active
-												? 'background: rgba(56, 205, 255, 0.08); color: #38CDFF;'
+												? 'background: rgba(0, 112, 243, 0.08); color: #0070F3;'
 												: 'color: var(--text-muted);'
 											}
 										>
-											<span class="w-1.5 h-1.5 rounded-full" style={child.active ? 'background: #38CDFF;' : 'background: var(--text-muted); opacity: 0.5;'}></span>
+											<span class="w-1.5 h-1.5 rounded-full" style={child.active ? 'background: #0070F3;' : 'background: var(--text-muted); opacity: 0.5;'}></span>
 											<span>{child.label}</span>
 										</a>
 									</li>
@@ -135,7 +135,7 @@
 									: 'hover:bg-[var(--bg-card)]'
 							)}
 							style={item.active
-								? 'background: rgba(56, 205, 255, 0.08); color: #38CDFF;'
+								? 'background: rgba(0, 112, 243, 0.08); color: #0070F3;'
 								: 'color: var(--text-secondary);'
 							}
 						>

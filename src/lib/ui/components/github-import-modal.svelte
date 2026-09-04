@@ -594,10 +594,10 @@ import type { GitHubRepoDTO } from '$lib/github/github.types';
 				<div class="flex items-center gap-md">
 					<div
 						class="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0"
-						style="background: {startSuccess === true ? 'rgba(0, 230, 118, 0.15)' : startSuccess === false ? 'rgba(255, 82, 82, 0.15)' : 'rgba(56, 205, 255, 0.15)'};"
+						style="background: {startSuccess === true ? 'rgba(0, 230, 118, 0.15)' : startSuccess === false ? 'rgba(255, 91, 79, 0.15)' : 'rgba(0, 112, 243, 0.15)'};"
 					>
 						{#if isRunning}
-							<svg class="w-5 h-5 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="color: #38CDFF;">
+							<svg class="w-5 h-5 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="color: #0070F3;">
 								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
 							</svg>
 						{:else if startSuccess === true || importSuccess === true}
@@ -605,11 +605,11 @@ import type { GitHubRepoDTO } from '$lib/github/github.types';
 								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
 							</svg>
 						{:else if startSuccess === false || importSuccess === false}
-							<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="color: #FF5252;">
+							<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="color: #FF5B4F;">
 								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
 							</svg>
 						{:else}
-							<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="color: #38CDFF;">
+							<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="color: #0070F3;">
 								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
 							</svg>
 						{/if}
@@ -741,7 +741,7 @@ import type { GitHubRepoDTO } from '$lib/github/github.types';
 					<button
 						type="button"
 						class="btn-primary px-4 py-2 text-caption font-semibold"
-						style="background: #38CDFF; color: #1a1a2e;"
+						style="background: #0070F3; color: #FFFFFF;"
 						onclick={handleCloneAndInstall}
 					>
 						Clone & Install
@@ -759,7 +759,7 @@ import type { GitHubRepoDTO } from '$lib/github/github.types';
 							class:rounded-md={true}
 							style={cn(
 								'background: var(--bg-base); border: 1px solid var(--border-color);',
-								lines.some((l) => l.step === step) ? 'border-color: #38CDFF;' : ''
+								lines.some((l) => l.step === step) ? 'border-color: #0070F3;' : ''
 							)}
 						>
 							<span
@@ -767,8 +767,8 @@ import type { GitHubRepoDTO } from '$lib/github/github.types';
 								style={cn(
 									'background: var(--bg-surface); color: var(--text-muted);',
 									stepIcon(step) === '✓' ? 'background: rgba(0, 230, 118, 0.2); color: #00E676;' : '',
-									stepIcon(step) === '✗' ? 'background: rgba(255, 82, 82, 0.2); color: #FF5252;' : '',
-									stepIcon(step) === '…' ? 'background: rgba(56, 205, 255, 0.2); color: #38CDFF;' : ''
+									stepIcon(step) === '✗' ? 'background: rgba(255, 91, 79, 0.2); color: #FF5B4F;' : '',
+									stepIcon(step) === '…' ? 'background: rgba(0, 112, 243, 0.2); color: #0070F3;' : ''
 								)}
 							>
 								{stepIcon(step)}
@@ -794,11 +794,11 @@ import type { GitHubRepoDTO } from '$lib/github/github.types';
 								class="py-2xs"
 								style={cn(
 									'color: var(--text-secondary);',
-									log.isError ? 'color: #FF5252;' : '',
-									log.line.includes('Starting') ? 'color: #38CDFF; font-weight: 600;' : '',
+									log.isError ? 'color: #FF5B4F;' : '',
+									log.line.includes('Starting') ? 'color: #0070F3; font-weight: 600;' : '',
 									log.line.includes('Completed') ? 'color: #00E676; font-weight: 600;' : '',
 									log.line.includes('Skipped') ? 'color: #FFD740; font-weight: 600;' : '',
-									log.line.includes('Failed') ? 'color: #FF5252; font-weight: 600;' : ''
+									log.line.includes('Failed') ? 'color: #FF5B4F; font-weight: 600;' : ''
 								)}
 							>
 								{log.line}
@@ -852,7 +852,7 @@ import type { GitHubRepoDTO } from '$lib/github/github.types';
 								{#each ecosystemAppNames as appName}
 									<label
 										class="flex items-center gap-sm p-sm rounded-lg cursor-pointer transition-colors"
-										style="background: var(--bg-base); border: 1px solid {selectedApps.includes(appName) ? '#38CDFF' : 'var(--border-color)'};"
+										style="background: var(--bg-base); border: 1px solid {selectedApps.includes(appName) ? '#0070F3' : 'var(--border-color)'};"
 									>
 										<input
 											type="checkbox"
@@ -930,7 +930,7 @@ import type { GitHubRepoDTO } from '$lib/github/github.types';
 					<button
 						type="button"
 						class="btn-primary px-4 py-2 text-caption font-semibold"
-						style="background: #38CDFF; color: #1a1a2e;"
+						style="background: #0070F3; color: #FFFFFF;"
 						onclick={() => { view = 'env'; }}
 						disabled={!selectedEcosystemFile || (ecosystemAppNames.length > 1 && selectedApps.length === 0)}
 						title={!selectedEcosystemFile ? 'No ecosystem file selected' : ecosystemAppNames.length > 1 && selectedApps.length === 0 ? 'Select at least one app' : ''}
@@ -975,7 +975,7 @@ import type { GitHubRepoDTO } from '$lib/github/github.types';
 							type="button"
 							class="flex-1 px-3 py-2 text-caption rounded-lg border"
 							style={cn(
-								envMode === 'paste' ? 'background: rgba(56, 205, 255, 0.1); border-color: #38CDFF; color: #38CDFF;' : 'background: var(--bg-base); border-color: var(--border-color); color: var(--text-secondary);'
+								envMode === 'paste' ? 'background: rgba(0, 112, 243, 0.1); border-color: #0070F3; color: #0070F3;' : 'background: var(--bg-base); border-color: var(--border-color); color: var(--text-secondary);'
 							)}
 							onclick={() => envMode = 'paste'}
 						>
@@ -985,7 +985,7 @@ import type { GitHubRepoDTO } from '$lib/github/github.types';
 							type="button"
 							class="flex-1 px-3 py-2 text-caption rounded-lg border"
 							style={cn(
-								envMode === 'upload' ? 'background: rgba(56, 205, 255, 0.1); border-color: #38CDFF; color: #38CDFF;' : 'background: var(--bg-base); border-color: var(--border-color); color: var(--text-secondary);'
+								envMode === 'upload' ? 'background: rgba(0, 112, 243, 0.1); border-color: #0070F3; color: #0070F3;' : 'background: var(--bg-base); border-color: var(--border-color); color: var(--text-secondary);'
 							)}
 							onclick={() => envMode = 'upload'}
 						>
@@ -1053,7 +1053,7 @@ import type { GitHubRepoDTO } from '$lib/github/github.types';
 									class="py-2xs"
 									style={cn(
 										'color: var(--text-secondary);',
-										log.isError ? 'color: #FF5252;' : '',
+										log.isError ? 'color: #FF5B4F;' : '',
 										log.line.includes('Wrote') ? 'color: #00E676; font-weight: 600;' : ''
 									)}
 								>
@@ -1083,7 +1083,7 @@ import type { GitHubRepoDTO } from '$lib/github/github.types';
 					<button
 						type="button"
 						class="btn-primary px-4 py-2 text-caption font-semibold"
-						style="background: #38CDFF; color: #1a1a2e;"
+						style="background: #0070F3; color: #FFFFFF;"
 						onclick={handleWriteEnv}
 						disabled={!envText.trim() && Object.keys(envVars).length === 0}
 					>
@@ -1101,7 +1101,7 @@ import type { GitHubRepoDTO } from '$lib/github/github.types';
 							class="flex items-center gap-xs px-sm py-2xs rounded-md text-caption font-medium"
 							style={cn(
 								'background: var(--bg-base); border: 1px solid var(--border-color);',
-								lines.some((l) => l.step === step) ? 'border-color: #38CDFF;' : ''
+								lines.some((l) => l.step === step) ? 'border-color: #0070F3;' : ''
 							)}
 						>
 							<span
@@ -1109,8 +1109,8 @@ import type { GitHubRepoDTO } from '$lib/github/github.types';
 								style={cn(
 									'background: var(--bg-surface); color: var(--text-muted);',
 									stepIcon(step) === '✓' ? 'background: rgba(0, 230, 118, 0.2); color: #00E676;' : '',
-									stepIcon(step) === '✗' ? 'background: rgba(255, 82, 82, 0.2); color: #FF5252;' : '',
-									stepIcon(step) === '…' ? 'background: rgba(56, 205, 255, 0.2); color: #38CDFF;' : ''
+									stepIcon(step) === '✗' ? 'background: rgba(255, 91, 79, 0.2); color: #FF5B4F;' : '',
+									stepIcon(step) === '…' ? 'background: rgba(0, 112, 243, 0.2); color: #0070F3;' : ''
 								)}
 							>
 								{stepIcon(step)}
@@ -1122,7 +1122,7 @@ import type { GitHubRepoDTO } from '$lib/github/github.types';
 						class="flex items-center gap-xs px-sm py-2xs rounded-md text-caption font-medium"
 						style={cn(
 							'background: var(--bg-base); border: 1px solid var(--border-color);',
-							lines.some((l) => l.step === 'pm2-start') ? 'border-color: #38CDFF;' : ''
+							lines.some((l) => l.step === 'pm2-start') ? 'border-color: #0070F3;' : ''
 						)}
 					>
 						<span
@@ -1130,8 +1130,8 @@ import type { GitHubRepoDTO } from '$lib/github/github.types';
 							style={cn(
 								'background: var(--bg-surface); color: var(--text-muted);',
 								stepIcon('pm2-start') === '✓' ? 'background: rgba(0, 230, 118, 0.2); color: #00E676;' : '',
-								stepIcon('pm2-start') === '✗' ? 'background: rgba(255, 82, 82, 0.2); color: #FF5252;' : '',
-								stepIcon('pm2-start') === '…' ? 'background: rgba(56, 205, 255, 0.2); color: #38CDFF;' : ''
+								stepIcon('pm2-start') === '✗' ? 'background: rgba(255, 91, 79, 0.2); color: #FF5B4F;' : '',
+								stepIcon('pm2-start') === '…' ? 'background: rgba(0, 112, 243, 0.2); color: #0070F3;' : ''
 							)}
 						>
 							{stepIcon('pm2-start')}
@@ -1156,11 +1156,11 @@ import type { GitHubRepoDTO } from '$lib/github/github.types';
 								class="py-2xs"
 								style={cn(
 									'color: var(--text-secondary);',
-									log.isError ? 'color: #FF5252;' : '',
-									log.line.includes('Starting') ? 'color: #38CDFF; font-weight: 600;' : '',
+									log.isError ? 'color: #FF5B4F;' : '',
+									log.line.includes('Starting') ? 'color: #0070F3; font-weight: 600;' : '',
 									log.line.includes('Completed') ? 'color: #00E676; font-weight: 600;' : '',
 									log.line.includes('Skipped') ? 'color: #FFD740; font-weight: 600;' : '',
-									log.line.includes('Failed') ? 'color: #FF5252; font-weight: 600;' : '',
+									log.line.includes('Failed') ? 'color: #FF5B4F; font-weight: 600;' : '',
 									log.line.includes('success') && log.line.includes('Complete') ? 'color: #00E676; font-weight: 600;' : ''
 								)}
 							>

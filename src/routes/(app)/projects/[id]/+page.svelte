@@ -437,7 +437,7 @@
           >{process.status}</Badge
         >
         {#if hasGroup}
-          <span class="text-caption px-2 py-0.5 rounded-full" style="background: rgba(56, 205, 255, 0.15); color: #38CDFF;">
+          <span class="text-caption px-2 py-0.5 rounded-full" style="background: rgba(0, 112, 243, 0.15); color: #0070F3;">
             {groupProcesses.length} processes
           </span>
         {/if}
@@ -521,7 +521,7 @@
       {#each groupProcesses as proc}
         <button
           class="flex items-center gap-sm px-3 py-1.5 rounded-md text-caption font-medium transition-colors"
-          style="background: {proc.name === activeProcessName ? 'rgba(56, 205, 255, 0.15)' : 'transparent'}; color: {proc.name === activeProcessName ? '#38CDFF' : 'var(--text-muted)'};"
+          style="background: {proc.name === activeProcessName ? 'rgba(0, 112, 243, 0.15)' : 'transparent'}; color: {proc.name === activeProcessName ? '#0070F3' : 'var(--text-muted)'};"
           onclick={() => { activeProcessName = proc.name; }}
         >
           <StatusIndicator status={getStatusVariant(proc.pm2_env?.status ?? 'stopped')} />
@@ -540,9 +540,9 @@
       <button
         class="px-md py-sm text-caption font-medium transition-colors border-b-2"
         style="border-color: {activeTab === tab.id
-          ? '#38CDFF'
+          ? '#0070F3'
           : 'transparent'}; color: {activeTab === tab.id
-          ? '#38CDFF'
+          ? '#0070F3'
           : 'var(--text-muted)'};"
         onclick={() => (activeTab = tab.id)}
       >
@@ -803,7 +803,7 @@
                   />
                   <button
                     class="shrink-0 p-1.5 rounded"
-                    style="color: #FF5252;"
+                    style="color: #FF5B4F;"
                     onclick={() => removeEnvRow(i)}
                     title="Remove variable"
                     aria-label="Remove variable"
@@ -938,8 +938,8 @@
       style="background: var(--bg-surface); border: 1px solid var(--border-color);"
     >
       <div class="flex items-center gap-md mb-lg">
-        <div class="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0" style="background: rgba(255, 82, 82, 0.15);">
-          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="color: #FF5252;">
+        <div class="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0" style="background: rgba(255, 91, 79, 0.15);">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="color: #FF5B4F;">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 10a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1v-4z"/>
           </svg>
         </div>

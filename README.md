@@ -7,6 +7,11 @@ A beautiful, modern visual dashboard for managing PM2 processes. Monitor CPU, RA
 ![Database](https://img.shields.io/badge/DB-PostgreSQL%20%7C%20SQLite-4ff5d9)
 ![Real-time](https://img.shields.io/badge/Real--time-SSE-00E676)
 
+![PM2 View Projects Dashboard](snapshots/00.png)
+
+> 📖 **Visual Modules Guide:** For walkthroughs and screenshots of all modules (Authentication, Port Manager, User Management, Teams, and Audit Logs), check out the [Modules Guide](docs/modules-guide.md).
+
+
 ## Features
 
 - **Authentication** — Email/password with Better Auth, **Google sign-in**, and **password reset** (email or console fallback)
@@ -14,11 +19,13 @@ A beautiful, modern visual dashboard for managing PM2 processes. Monitor CPU, RA
 - **Project Cards** — Beautiful cards showing CPU, RAM, uptime, and status
 - **Multi-process Groups** — Monorepo/workspace projects (e.g. Atlas) grouped as a single card across all flows (see [docs/multi-process-groups.md](docs/multi-process-groups.md))
 - **Favorites** — Star projects to quickly find them, filter by favorites in the list
+- **Projects** — Restart, stop, delete processes from the UI (restart falls back to recreate on failure); favorites filter with collapsible Favorites/Others sections
 - **Process Actions** — Restart, stop, and delete processes directly from the UI (restart falls back to recreate on failure)
 - **Admin Process Registration** — Register unregistered PM2 processes as projects with team/member assignment (admin only)
 - **PM2 Save & Startup** — Persist the process list (`pm2 save`) and enable boot startup (`pm2 startup`) from the UI (admin only)
 - **One-Click Update** — Pull, rebuild, and restart the app from the UI (admin only)
 - **Logs** — Efficient `tail -n` reading, content-based level classification (info/warn/error), datetime-range filter, "Load more", and log clearing
+- **Log Viewer toolbar** — Reorganized into two aligned rows with a newest↔oldest sort order toggle, new-error highlighting, and dismiss
 - **Real-time Metrics** — Push-based CPU/RAM updates every 10s via SSE (live-only, no DB persistence)
 - **Environment Variables** — View, edit, add, and delete env vars (applied on next deploy)
 - **GitHub Integration** — Connect a GitHub App, list/import accessible repositories, multi-app ecosystem detection (see [docs/github-integration.md](docs/github-integration.md))
@@ -27,6 +34,10 @@ A beautiful, modern visual dashboard for managing PM2 processes. Monitor CPU, RA
 - **Teams** — Manage teams, invite members, assign roles (team_owner, team_admin, team_member), team-based project access
 - **Project Sharing** — Invite users with owner/editor/viewer roles, assign projects to teams (see [docs/sharing-permissions.md](docs/sharing-permissions.md))
 - **Metrics Dashboard** — Visual CPU/RAM bars, aggregated stats
+- **Port Manager** — Scan system ports in use (TCP/UDP), search/filter by port/process/address, and free ports with OTP email verification before killing (admin only)
+- **Metrics Recording** — Persistent metrics snapshots stored in the database with repository layer for historical queries
+- **Env Import** — Import environment variables from a local `.env` file with folder picker and paste-to-split rows
+- **Deploy Confirmation** — Confirmation modal before Deploy All to prevent accidental bulk deployments
 - **Admin Panel** — Manage users, teams, and audit logs; role-based access control (see [docs/sharing-permissions.md](docs/sharing-permissions.md))
 - **Audit Logs** — Append-only trail of admin actions with filters (action/actor/date), pagination, and CSV export (see [docs/audit-module.md](docs/audit-module.md))
 - **Dark/Light Mode** — Toggle between themes with smooth transitions
@@ -70,6 +81,7 @@ src/lib/
 │   ├── metrics-emitter.ts
 │   └── status-watcher.ts
 ├── services/          # Service container (DI factory)
+├── ports/             # Port scanning + OTP-verified kill (see docs/port-manager.md)
 ├── logger/            # Structured logging
 ├── rate-limiter/      # In-memory rate limiting
 ├── pagination/        # Pagination types and helpers
@@ -96,7 +108,7 @@ src/lib/
 ### Prerequisites
 
 - Node.js 20+
-- npm (or pnpm/yarn)
+- pnpm (or npm/yarn)
 - PM2 installed globally (`npm i -g pm2`)
 
 ### Installation
@@ -106,8 +118,8 @@ src/lib/
 git clone <your-repo-url>
 cd pm2-view
 
-# Install dependencies
-npm install
+# Install dependencies (committed lockfile is pnpm-lock.yaml)
+pnpm install
 
 # Copy environment variables
 cp .env.example .env
@@ -275,19 +287,19 @@ DEBUG=true  # Enable debug-level logging
 
 ```bash
 # Development
-npm run dev
+pnpm dev
 
 # Build for production
-npm run build
+pnpm build
 
 # Preview production build
-npm run preview
+pnpm preview
 
-# Run tests
-npm test
+# Run tests (vitest)
+pnpm vitest run
 
 # Type check
-npm run check
+pnpm check
 ```
 
 ### Database Setup
@@ -426,13 +438,13 @@ Visual performance metrics with progress bars and auto-refresh.
 
 ```bash
 # Run all tests
-npm test
+pnpm vitest run
 
 # Run with coverage
-npm test -- --coverage
+pnpm vitest run --coverage
 
 # Watch mode
-npm test -- --watch
+pnpm vitest
 ```
 
 ## Project Structure
@@ -447,6 +459,7 @@ pm2-view/
 │   │   │   └── repositories/ # Data access implementations
 │   │   ├── sse/            # Real-time SSE communication
 │   │   ├── services/       # DI factory
+│   │   ├── ports/          # Port scanning + OTP-verified kill
 │   │   ├── logger/         # Structured logging
 │   │   ├── rate-limiter/   # Rate limiting
 │   │   ├── pagination/     # Pagination helpers
@@ -459,8 +472,8 @@ pm2-view/
 │   │   └── config/         # Configuration
 │   ├── routes/
 │   │   ├── (auth)/         # Login, register
-│   │   ├── (app)/          # Protected routes (projects, teams, admin)
-│   │   └── api/            # API endpoints (including /api/sse)
+│   │   ├── (app)/          # Protected routes (projects, teams, ports, admin)
+│   │   └── api/            # API endpoints (including /api/sse, /api/ports)
 │   ├── app.css             # Global styles
 │   └── app.html            # HTML shell
 ├── drizzle/                # Migrations

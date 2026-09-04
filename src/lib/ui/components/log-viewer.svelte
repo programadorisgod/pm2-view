@@ -473,79 +473,83 @@
     </button>
   </div>
 
-  <!-- Date filters row -->
-  <div class="flex flex-wrap items-center gap-sm">
-    <DateTimePicker id="log-date-from" label="From" bind:value={dateFrom} />
-    <DateTimePicker id="log-date-to" label="To" bind:value={dateTo} />
-    {#if hasActiveFilters}
-      <button
-        class="text-sm px-3 py-1.5 rounded-md"
-        style="color: #0070F3;"
-        onclick={clearFilters}
-      >
-        Clear filters
-      </button>
-    {/if}
+  <!-- Date range + lines row -->
+  <div class="flex flex-wrap items-end gap-sm">
+    <div class="flex items-end gap-2">
+      <DateTimePicker id="log-date-from" label="From" bind:value={dateFrom} class="w-[180px]" />
+      <DateTimePicker id="log-date-to" label="To" bind:value={dateTo} class="w-[180px]" />
+      {#if hasActiveFilters}
+        <button
+          class="text-sm px-3 py-2 rounded-md h-[38px]"
+          style="color: #0070F3;"
+          onclick={clearFilters}
+        >
+          Clear
+        </button>
+      {/if}
+    </div>
 
     <div class="flex-1"></div>
 
-    <!-- Right side: counts + actions -->
-    <span class="text-sm" style="color: var(--text-muted);">
-      {filteredLogs.length}{hasActiveFilters ? ` / ${logs.length}` : ''} lines
-    </span>
-    {#if newErrCount > 0}
-      <span
-        class="px-2.5 py-1 text-sm rounded-full font-medium"
-        style="background: rgba(255, 91, 79, 0.15); color: #FF5B4F;"
-      >
-        +{newErrCount} new errors
-      </span>
-      <button class="text-sm px-3 py-1.5 rounded-md" style="color: var(--text-muted);" onclick={markErrorsSeen}>
-        Mark seen
-      </button>
-    {/if}
-    <button
-      class="btn-secondary px-3 py-1.5 text-sm"
-      onclick={dismissAllErrors}
-    >
-      Dismiss all errors
-    </button>
-    {#if dismissedCount > 0}
-      <button
-        class="px-3 py-1.5 text-sm rounded-md font-medium transition-colors"
-        style="
-          background: {showDismissed ? 'rgba(0, 112, 243, 0.12)' : 'transparent'};
-          color: {showDismissed ? '#0070F3' : 'var(--text-muted)'};
-          border: 1px solid {showDismissed ? '#0070F340' : 'var(--border-color)'};
-        "
-        onclick={() => (showDismissed = !showDismissed)}
-      >
-        {showDismissed ? 'Hide' : 'Show'} dismissed ({dismissedCount})
-      </button>
-      {#if showDismissed}
-        <button
-          class="text-sm px-3 py-1.5 rounded-md"
-          style="color: #0070F3;"
-          onclick={restoreAllErrors}
+    <div class="flex items-end gap-3">
+      <!-- Line count + selector -->
+      <div class="flex items-center gap-2 text-sm" style="color: var(--text-muted);">
+        <span class="whitespace-nowrap">
+          {filteredLogs.length}{hasActiveFilters ? ` / ${logs.length}` : ''} lines
+        </span>
+        <select
+          bind:value={lineCount}
+          class="px-2 py-2 text-sm rounded-md border"
+          style="background: var(--bg-base); color: var(--text-primary); border-color: var(--border-color);"
         >
-          Restore all
+          <option value={100}>100</option>
+          <option value={200}>200</option>
+          <option value={300}>300</option>
+          <option value={400}>400</option>
+          <option value={500}>500</option>
+        </select>
+      </div>
+
+      {#if newErrCount > 0}
+        <span
+          class="px-2.5 py-1 text-sm rounded-full font-medium h-[38px] flex items-center"
+          style="background: rgba(255, 91, 79, 0.15); color: #FF5B4F;"
+        >
+          +{newErrCount} new
+        </span>
+        <button class="text-sm px-3 py-2 rounded-md h-[38px]" style="color: var(--text-muted);" onclick={markErrorsSeen}>
+          Mark seen
         </button>
       {/if}
-    {/if}
-    <label class="flex items-center gap-1.5 text-sm" style="color: var(--text-muted);">
-      Lines:
-      <select
-        bind:value={lineCount}
-        class="px-2 py-1.5 text-sm rounded-md border"
-        style="background: var(--bg-base); color: var(--text-primary); border-color: var(--border-color);"
+      <button
+        class="btn-secondary px-3 py-2 text-sm h-[38px]"
+        onclick={dismissAllErrors}
       >
-        <option value={100}>100</option>
-        <option value={200}>200</option>
-        <option value={300}>300</option>
-        <option value={400}>400</option>
-        <option value={500}>500</option>
-      </select>
-    </label>
+        Dismiss all
+      </button>
+      {#if dismissedCount > 0}
+        <button
+          class="px-3 py-2 text-sm rounded-md font-medium transition-colors h-[38px]"
+          style="
+            background: {showDismissed ? 'rgba(0, 112, 243, 0.12)' : 'transparent'};
+            color: {showDismissed ? '#0070F3' : 'var(--text-muted)'};
+            border: 1px solid {showDismissed ? '#0070F340' : 'var(--border-color)'};
+          "
+          onclick={() => (showDismissed = !showDismissed)}
+        >
+          {showDismissed ? 'Hide' : 'Show'} dismissed ({dismissedCount})
+        </button>
+        {#if showDismissed}
+          <button
+            class="text-sm px-3 py-2 rounded-md h-[38px]"
+            style="color: #0070F3;"
+            onclick={restoreAllErrors}
+          >
+            Restore all
+          </button>
+        {/if}
+      {/if}
+    </div>
   </div>
 
   <!-- Log display -->

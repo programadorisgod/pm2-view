@@ -25,6 +25,7 @@
 		{ label: 'Projects', href: `${base}/projects`, active: page.url.pathname.startsWith(`${base}/projects`) && !page.url.pathname.includes('/sharing') },
 		{ label: 'Teams', href: `${base}/teams`, active: page.url.pathname.startsWith(`${base}/teams`) },
 		{ label: 'GitHub', href: `${base}/github`, active: page.url.pathname.startsWith(`${base}/github`) },
+		{ label: 'Ports', href: `${base}/ports`, active: page.url.pathname.startsWith(`${base}/ports`) },
 		{ label: 'Metrics', href: `${base}/metrics`, active: page.url.pathname === `${base}/metrics` },
 		...(isAdmin ? [
 			{

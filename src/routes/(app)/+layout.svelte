@@ -185,7 +185,7 @@
 								<!-- Avatar -->
 								<div
 									class="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold"
-									style="background: linear-gradient(135deg, #38CDFF, #009DCD); color: white;"
+									style="background: #0070F3; color: white;"
 								>
 									{initials}
 								</div>
@@ -210,7 +210,7 @@
 											<p class="text-caption" style="color: var(--text-muted);">{user.email}</p>
 										{/if}
 										{#if isAdmin}
-											<p class="text-caption" style="color: #38CDFF;">Admin</p>
+											<p class="text-caption" style="color: #0070F3;">Admin</p>
 										{/if}
 									</div>
 

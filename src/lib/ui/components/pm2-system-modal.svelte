@@ -264,10 +264,10 @@
 				<div class="flex items-center gap-md">
 					<div
 						class="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0"
-						style="background: {success === true ? 'rgba(0, 230, 118, 0.15)' : success === false ? 'rgba(255, 82, 82, 0.15)' : 'rgba(56, 205, 255, 0.15)'};"
+						style="background: {success === true ? 'rgba(0, 230, 118, 0.15)' : success === false ? 'rgba(255, 91, 79, 0.15)' : 'rgba(0, 112, 243, 0.15)'};"
 					>
 						{#if view === 'loading' || view === 'running'}
-							<svg class="w-5 h-5 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="color: #38CDFF;">
+							<svg class="w-5 h-5 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="color: #0070F3;">
 								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
 							</svg>
 						{:else if success === true}
@@ -275,11 +275,11 @@
 								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
 							</svg>
 						{:else if success === false}
-							<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="color: #FF5252;">
+							<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="color: #FF5B4F;">
 								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
 							</svg>
 						{:else}
-							<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="color: #38CDFF;">
+							<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="color: #0070F3;">
 								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
 							</svg>
 						{/if}
@@ -412,11 +412,11 @@
 							style={cn(
 								'color: var(--text-secondary);',
 								log.isCommand ? 'color: var(--text-muted); font-style: italic;' : '',
-								log.isError ? 'color: #FF5252;' : '',
+								log.isError ? 'color: #FF5B4F;' : '',
 								log.text.includes('Successfully') ? 'color: #00E676; font-weight: 600;' : '',
 								log.text.includes('Command successfully executed') ? 'color: #00E676; font-weight: 600;' : '',
-								log.text.includes('Failed') ? 'color: #FF5252; font-weight: 600;' : '',
-								log.text.includes('error') ? 'color: #FF5252; font-weight: 600;' : ''
+								log.text.includes('Failed') ? 'color: #FF5B4F; font-weight: 600;' : '',
+								log.text.includes('error') ? 'color: #FF5B4F; font-weight: 600;' : ''
 							)}
 						>
 							{log.text}
@@ -428,7 +428,7 @@
 			{#if view === 'done'}
 				<div
 					class="mx-lg mb-lg rounded-lg px-md py-sm text-body-sm font-semibold text-center"
-					style="background: {success ? 'rgba(0, 230, 118, 0.12)' : 'rgba(255, 82, 82, 0.12)'}; border: 1px solid {success ? 'rgba(0, 230, 118, 0.45)' : 'rgba(255, 82, 82, 0.45)'}; color: {success ? '#00E676' : '#FF5252'};"
+					style="background: {success ? 'rgba(0, 230, 118, 0.12)' : 'rgba(255, 91, 79, 0.12)'}; border: 1px solid {success ? 'rgba(0, 230, 118, 0.45)' : 'rgba(255, 91, 79, 0.45)'}; color: {success ? '#00E676' : '#FF5B4F'};"
 				>
 					{success ? '✓ ' + doneMessage : '✗ ' + doneMessage}
 				</div>

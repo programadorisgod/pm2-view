@@ -67,8 +67,8 @@
 						<p class="text-caption font-medium mb-1" style="color: var(--text-muted);">{stat.label}</p>
 						<p class="text-h1 font-bold" style="color: var(--text-primary);">{stat.value}</p>
 					</div>
-					<div class="w-9 h-9 rounded-lg flex items-center justify-center" style="background: rgba(56, 205, 255, 0.08);">
-						<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="color: #38CDFF;">
+					<div class="w-9 h-9 rounded-lg flex items-center justify-center" style="background: rgba(0, 112, 243, 0.08);">
+						<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="color: #0070F3;">
 							<path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d={stat.icon}/>
 						</svg>
 					</div>
@@ -116,9 +116,9 @@
 							<div class="flex items-center gap-md">
 								<StatusIndicator status={getStatusVariant(process.status)} />
 								<div>
-									<p class="text-body-sm font-medium process-name group-hover:text-[#38CDFF] transition-colors" style="color: var(--text-primary);">
+									<p class="text-body-sm font-medium process-name group-hover:text-[#0070F3] transition-colors" style="color: var(--text-primary);">
 										{process.name}
-										<span class="text-caption font-normal ml-xs" style="color: #38CDFF;">
+										<span class="text-caption font-normal ml-xs" style="color: #0070F3;">
 											({process.groupMembers.length} processes)
 										</span>
 									</p>
@@ -129,7 +129,7 @@
 										{#each process.groupMembers as member}
 											<span
 												class="px-2 py-0.5 rounded-full text-caption"
-												style="background: {member.status === 'online' ? 'rgba(0, 230, 118, 0.15)' : member.status === 'error' ? 'rgba(255, 82, 82, 0.15)' : 'rgba(128, 128, 128, 0.15)'}; color: {member.status === 'online' ? '#00E676' : member.status === 'error' ? '#FF5252' : '#808080'};"
+												style="background: {member.status === 'online' ? 'rgba(0, 230, 118, 0.15)' : member.status === 'error' ? 'rgba(255, 91, 79, 0.15)' : 'rgba(102, 102, 102, 0.15)'}; color: {member.status === 'online' ? '#00E676' : member.status === 'error' ? '#FF5B4F' : '#666666'};"
 											>
 												{member.name}
 											</span>
@@ -147,7 +147,7 @@
 							<div class="flex items-center gap-md">
 								<StatusIndicator status={getStatusVariant(process.status)} />
 								<div>
-									<p class="text-body-sm font-medium process-name group-hover:text-[#38CDFF] transition-colors" style="color: var(--text-primary);">{process.name}</p>
+									<p class="text-body-sm font-medium process-name group-hover:text-[#0070F3] transition-colors" style="color: var(--text-primary);">{process.name}</p>
 									<p class="text-caption" style="color: var(--text-muted);">
 										CPU: {process.cpu}% · RAM: {process.memoryMB}MB · {process.uptimeFormatted}
 									</p>

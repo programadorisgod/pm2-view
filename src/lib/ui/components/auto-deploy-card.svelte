@@ -122,7 +122,7 @@
 	{#if serverError}
 		<div
 			class="rounded-md p-sm text-body-sm mb-md"
-			style="background: rgba(255, 82, 82, 0.1); color: #FF5252; border: 1px solid rgba(255, 82, 82, 0.2);"
+			style="background: rgba(255, 91, 79, 0.1); color: #FF5B4F; border: 1px solid rgba(255, 91, 79, 0.2);"
 		>
 			{serverError}
 		</div>
@@ -173,7 +173,7 @@
 				<button
 					type="button"
 					class="text-caption px-2 py-1 rounded"
-					style="color: #38CDFF; background: transparent; border: 1px solid var(--border-color);"
+					style="color: #0070F3; background: transparent; border: 1px solid var(--border-color);"
 					onclick={() => { pm2NamesInput = [...pm2NamesInput, '']; }}
 				>
 					+ Add Process
@@ -196,7 +196,7 @@
 							<button
 								type="button"
 								class="p-2 rounded"
-								style="color: #FF5252;"
+								style="color: #FF5B4F;"
 								onclick={() => { pm2NamesInput = pm2NamesInput.filter((_, j) => j !== i); }}
 								title="Remove process"
 								aria-label="Remove process"

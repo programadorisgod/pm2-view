@@ -25,7 +25,7 @@
 	<!-- Role Definitions -->
 	<div class="grid grid-cols-1 md:grid-cols-3 gap-lg mb-xl">
 		<div class="p-lg rounded-lg" style="background: var(--bg-surface); border: 1px solid var(--border-color);">
-			<h3 class="text-h3 font-semibold mb-2" style="color: #FF5252;">Admin</h3>
+			<h3 class="text-h3 font-semibold mb-2" style="color: #FF5B4F;">Admin</h3>
 			<p class="text-caption mb-md" style="color: var(--text-muted);">Full system access</p>
 			<ul class="text-caption space-y-1" style="color: var(--text-secondary);">
 				<li>• Manage all users</li>
@@ -37,7 +37,7 @@
 		</div>
 
 		<div class="p-lg rounded-lg" style="background: var(--bg-surface); border: 1px solid var(--border-color);">
-			<h3 class="text-h3 font-semibold mb-2" style="color: #38CDFF;">User</h3>
+			<h3 class="text-h3 font-semibold mb-2" style="color: #0070F3;">User</h3>
 			<p class="text-caption mb-md" style="color: var(--text-muted);">Standard access</p>
 			<ul class="text-caption space-y-1" style="color: var(--text-secondary);">
 				<li>• Create projects</li>
@@ -49,7 +49,7 @@
 		</div>
 
 		<div class="p-lg rounded-lg" style="background: var(--bg-surface); border: 1px solid var(--border-color);">
-			<h3 class="text-h3 font-semibold mb-2" style="color: #8B95A5;">Viewer</h3>
+			<h3 class="text-h3 font-semibold mb-2" style="color: #888888;">Viewer</h3>
 			<p class="text-caption mb-md" style="color: var(--text-muted);">Read-only access</p>
 			<ul class="text-caption space-y-1" style="color: var(--text-secondary);">
 				<li>• View projects (read-only)</li>
@@ -90,7 +90,7 @@
 										{#if hasPermission(role, resource, action)}
 											<span class="text-xs" style="color: #00E676;">✓</span>
 										{:else}
-											<span class="text-xs" style="color: #FF5252;">✗</span>
+											<span class="text-xs" style="color: #FF5B4F;">✗</span>
 										{/if}
 									</td>
 								{/each}

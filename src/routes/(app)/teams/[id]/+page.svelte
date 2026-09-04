@@ -223,9 +223,9 @@
         <button
             class="px-md py-sm text-caption font-medium transition-colors border-b-2"
             style="border-color: {activeTab === 'overview'
-                ? '#38CDFF'
+                ? '#0070F3'
                 : 'transparent'}; color: {activeTab === 'overview'
-                ? '#38CDFF'
+                ? '#0070F3'
                 : 'var(--text-muted)'};"
             onclick={() => (activeTab = "overview")}
         >
@@ -235,9 +235,9 @@
             <button
                 class="px-md py-sm text-caption font-medium transition-colors border-b-2"
                 style="border-color: {activeTab === 'members'
-                    ? '#38CDFF'
+                    ? '#0070F3'
                     : 'transparent'}; color: {activeTab === 'members'
-                    ? '#38CDFF'
+                    ? '#0070F3'
                     : 'var(--text-muted)'};"
                 onclick={() => (activeTab = "members")}
             >
@@ -582,7 +582,7 @@
             class="w-full max-w-md p-xl rounded-lg"
             style="background: var(--bg-surface); border: 1px solid var(--border-color);"
         >
-            <h2 class="text-h3 font-semibold mb-lg" style="color: #FF5252;">
+            <h2 class="text-h3 font-semibold mb-lg" style="color: #FF5B4F;">
                 Leave Team
             </h2>
             <p class="text-body-sm mb-lg" style="color: var(--text-secondary);">

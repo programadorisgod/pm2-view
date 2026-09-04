@@ -105,12 +105,12 @@ export function getAuth() {
 						text: `Reset your PM2 View password by opening this link: ${url}`,
 						html: `<!doctype html>
 <html>
-<body style="margin:0;padding:24px;background:#0B1520;font-family:Arial,sans-serif;">
-	<div style="max-width:480px;margin:0 auto;background:#101B29;border:1px solid #1E2D3D;border-radius:12px;padding:32px;">
-		<h1 style="color:#38CDFF;font-size:20px;margin:0 0 16px;">Reset your password</h1>
-		<p style="color:#C7D5E0;font-size:14px;line-height:1.6;margin:0 0 24px;">We received a request to reset the password for your PM2 View account. Click the button below to choose a new password. This link expires in 1 hour.</p>
-		<a href="${url}" style="display:inline-block;background:linear-gradient(135deg,#009DCD,#007CA2);color:#CAF8FF;text-decoration:none;font-weight:600;font-size:14px;padding:12px 24px;border-radius:999px;">Reset password</a>
-		<p style="color:#5A6B7B;font-size:12px;line-height:1.6;margin:24px 0 0;">If you didn't request this, you can safely ignore this email. Or open this link: <a href="${url}" style="color:#5A9DB8;">${url}</a></p>
+<body style="margin:0;padding:24px;background:#0A0A0A;font-family:Arial,sans-serif;">
+	<div style="max-width:480px;margin:0 auto;background:#111111;border:1px solid #222222;border-radius:12px;padding:32px;">
+		<h1 style="color:#0070F3;font-size:20px;margin:0 0 16px;">Reset your password</h1>
+		<p style="color:#888888;font-size:14px;line-height:1.6;margin:0 0 24px;">We received a request to reset the password for your PM2 View account. Click the button below to choose a new password. This link expires in 1 hour.</p>
+		<a href="${url}" style="display:inline-block;background:#0070F3;color:#FFFFFF;text-decoration:none;font-weight:600;font-size:14px;padding:12px 24px;border-radius:999px;">Reset password</a>
+		<p style="color:#666666;font-size:12px;line-height:1.6;margin:24px 0 0;">If you didn't request this, you can safely ignore this email. Or open this link: <a href="${url}" style="color:#0070F3;">${url}</a></p>
 	</div>
 </body>
 </html>`

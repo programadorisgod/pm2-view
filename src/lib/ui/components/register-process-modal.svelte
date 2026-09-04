@@ -228,9 +228,9 @@
         <div class="flex items-center gap-md">
           <div
             class="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0"
-            style="background: rgba(56, 205, 255, 0.15);"
+            style="background: rgba(0, 112, 243, 0.15);"
           >
-            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="color: #38CDFF;">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="color: #0070F3;">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
             </svg>
           </div>
@@ -282,7 +282,7 @@
                       <button
                         type="button"
                         class="w-full text-left p-md rounded-lg transition-colors"
-                        style="background: var(--bg-base); border: 1px solid rgba(56, 205, 255, 0.3);"
+                        style="background: var(--bg-base); border: 1px solid rgba(0, 112, 243, 0.3);"
                         onclick={() => selectGroup(group)}
                       >
                         <div class="flex items-start justify-between">
@@ -297,7 +297,7 @@
                               {#each group.processes as proc}
                                 <span
                                   class="px-2 py-0.5 rounded-full text-caption"
-                                  style="background: rgba(56, 205, 255, 0.15); color: #38CDFF;"
+                                  style="background: rgba(0, 112, 243, 0.15); color: #0070F3;"
                                 >
                                   {proc.name}
                                 </span>
@@ -306,7 +306,7 @@
                           </div>
                           <span
                             class="px-2 py-0.5 rounded-full text-caption font-medium flex-shrink-0"
-                            style="background: rgba(56, 205, 255, 0.15); color: #38CDFF;"
+                            style="background: rgba(0, 112, 243, 0.15); color: #0070F3;"
                           >
                             {group.processes.length} processes
                           </span>
@@ -342,7 +342,7 @@
                           </div>
                           <span
                             class="px-2 py-0.5 rounded-full text-caption font-medium"
-                            style="background: {process.status === 'online' ? 'rgba(0, 230, 118, 0.15)' : process.status === 'error' ? 'rgba(255, 82, 82, 0.15)' : 'rgba(128, 128, 128, 0.15)'}; color: {process.status === 'online' ? '#00E676' : process.status === 'error' ? '#FF5252' : '#808080'};"
+                            style="background: {process.status === 'online' ? 'rgba(0, 230, 118, 0.15)' : process.status === 'error' ? 'rgba(255, 91, 79, 0.15)' : 'rgba(102, 102, 102, 0.15)'}; color: {process.status === 'online' ? '#00E676' : process.status === 'error' ? '#FF5B4F' : '#666666'};"
                           >
                             {process.status}
                           </span>
@@ -362,7 +362,7 @@
           {#if errorMessage}
             <div
               class="rounded-lg p-md text-body-sm"
-              style="background: rgba(255, 82, 82, 0.12); border: 1px solid rgba(255, 82, 82, 0.45); color: #FF5252;"
+              style="background: rgba(255, 91, 79, 0.12); border: 1px solid rgba(255, 91, 79, 0.45); color: #FF5B4F;"
             >
               {errorMessage}
             </div>
@@ -382,9 +382,9 @@
           {#if selectedGroup}
             <div
               class="rounded-lg p-md"
-              style="background: rgba(56, 205, 255, 0.08); border: 1px solid rgba(56, 205, 255, 0.3);"
+              style="background: rgba(0, 112, 243, 0.08); border: 1px solid rgba(0, 112, 243, 0.3);"
             >
-              <p class="text-caption font-medium mb-xs" style="color: #38CDFF;">
+              <p class="text-caption font-medium mb-xs" style="color: #0070F3;">
                 Group: {selectedGroup.processes.length} processes
               </p>
               <div class="flex flex-wrap gap-xs">
@@ -476,7 +476,7 @@
                   >
                     <div class="flex items-center gap-sm">
                       <span class="text-body-sm" style="color: var(--text-primary);">{member.email}</span>
-                      <span class="px-2 py-0.5 rounded-full text-caption" style="background: rgba(56, 205, 255, 0.15); color: #38CDFF;">
+                      <span class="px-2 py-0.5 rounded-full text-caption" style="background: rgba(0, 112, 243, 0.15); color: #0070F3;">
                         {member.role}
                       </span>
                     </div>
@@ -538,7 +538,7 @@
           <button
             type="button"
             class="btn-primary px-4 py-2 text-caption font-semibold"
-            style="background: #38CDFF; color: #1a1a2e;"
+            style="background: #0070F3; color: #FFFFFF;"
             onclick={handleSubmit}
             disabled={submitting || !name.trim()}
           >

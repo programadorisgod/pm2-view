@@ -88,7 +88,7 @@
 						<td class="p-3 whitespace-nowrap" style="color: var(--text-muted);">{formatTimestamp(log.timestamp)}</td>
 						<td class="p-3 max-w-[160px] truncate" style="color: var(--text-primary);" title="{actorName}">{actorName}</td>
 						<td class="p-3 whitespace-nowrap">
-							<span class="px-2 py-1 rounded text-caption" style="background: rgba(56, 205, 255, 0.1); color: #38CDFF;">
+							<span class="px-2 py-1 rounded text-caption" style="background: rgba(0, 112, 243, 0.1); color: #0070F3;">
 								{formatAction(log.action)}
 							</span>
 						</td>
@@ -127,7 +127,7 @@
 			{@const details = parseDetails(log.details)}
 			<div class="p-4 rounded-lg" style="background: var(--bg-surface); border: 1px solid var(--border-color);">
 				<div class="flex items-start justify-between mb-2">
-					<span class="px-2 py-0.5 rounded text-caption" style="background: rgba(56, 205, 255, 0.1); color: #38CDFF;">
+					<span class="px-2 py-0.5 rounded text-caption" style="background: rgba(0, 112, 243, 0.1); color: #0070F3;">
 						{formatAction(log.action)}
 					</span>
 					<span class="text-caption" style="color: var(--text-muted);">{formatTimestamp(log.timestamp)}</span>

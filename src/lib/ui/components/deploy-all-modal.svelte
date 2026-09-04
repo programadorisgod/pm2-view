@@ -232,8 +232,8 @@
 	function statusColor(status: string): string {
 		switch (status) {
 			case 'success': return '#00E676';
-			case 'error': return '#FF5252';
-			case 'running': return '#38CDFF';
+			case 'error': return '#FF5B4F';
+			case 'running': return '#0070F3';
 			default: return 'var(--text-muted)';
 		}
 	}
@@ -241,8 +241,8 @@
 	function statusBg(status: string): string {
 		switch (status) {
 			case 'success': return 'rgba(0, 230, 118, 0.15)';
-			case 'error': return 'rgba(255, 82, 82, 0.15)';
-			case 'running': return 'rgba(56, 205, 255, 0.15)';
+			case 'error': return 'rgba(255, 91, 79, 0.15)';
+			case 'running': return 'rgba(0, 112, 243, 0.15)';
 			default: return 'var(--bg-base)';
 		}
 	}
@@ -322,10 +322,10 @@
 					<div class="flex items-center gap-md">
 						<div
 							class="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0"
-							style="background: {deploySuccess === true ? 'rgba(0, 230, 118, 0.15)' : deploySuccess === false ? 'rgba(255, 82, 82, 0.15)' : 'rgba(56, 205, 255, 0.15)'};"
+							style="background: {deploySuccess === true ? 'rgba(0, 230, 118, 0.15)' : deploySuccess === false ? 'rgba(255, 91, 79, 0.15)' : 'rgba(0, 112, 243, 0.15)'};"
 						>
 							{#if isDeploying}
-							<svg class="w-5 h-5 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="color: #38CDFF;">
+							<svg class="w-5 h-5 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="color: #0070F3;">
 								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
 							</svg>
 						{:else if deploySuccess === true}
@@ -333,11 +333,11 @@
 								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
 							</svg>
 						{:else if deploySuccess === false}
-							<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="color: #FF5252;">
+							<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="color: #FF5B4F;">
 								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
 							</svg>
 						{:else}
-							<svg class="w-5 h-5 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="color: #38CDFF;">
+							<svg class="w-5 h-5 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="color: #0070F3;">
 								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
 							</svg>
 						{/if}
@@ -374,7 +374,7 @@
 					<div class="w-full h-2 rounded-full" style="background: var(--bg-base);">
 						<div
 							class="h-2 rounded-full transition-all duration-300"
-							style="width: {(completedProcesses / totalProcesses) * 100}%; background: {deploySuccess === false && completedProcesses < totalProcesses ? '#FF5252' : '#00E676'};"
+							style="width: {(completedProcesses / totalProcesses) * 100}%; background: {deploySuccess === false && completedProcesses < totalProcesses ? '#FF5B4F' : '#00E676'};"
 						></div>
 					</div>
 				</div>
@@ -435,11 +435,11 @@
 											class="py-2xs text-xs"
 											style={cn(
 												'color: var(--text-secondary);',
-												log.isError ? 'color: #FF5252;' : '',
-												log.line.includes('Starting') ? 'color: #38CDFF; font-weight: 600;' : '',
+												log.isError ? 'color: #FF5B4F;' : '',
+												log.line.includes('Starting') ? 'color: #0070F3; font-weight: 600;' : '',
 												log.line.includes('Completed') ? 'color: #00E676; font-weight: 600;' : '',
 												log.line.includes('Skipped') ? 'color: #FFD740; font-weight: 600;' : '',
-												log.line.includes('Failed') ? 'color: #FF5252; font-weight: 600;' : ''
+												log.line.includes('Failed') ? 'color: #FF5B4F; font-weight: 600;' : ''
 											)}
 										>
 											{log.line}
@@ -465,29 +465,29 @@
 				{:else}
 					{#each lines as log}
 						{#if log.type === 'summary'}
-							<div class="py-2xs font-semibold" style="color: #38CDFF;">
+							<div class="py-2xs font-semibold" style="color: #0070F3;">
 								{log.line ?? `Deploying ${log.total} apps...`}
 							</div>
 						{:else if log.type === 'process-start'}
-							<div class="py-2xs font-semibold" style="color: #38CDFF;">
+							<div class="py-2xs font-semibold" style="color: #0070F3;">
 								─── Deploying: {log.name} ───
 							</div>
 						{:else if log.type === 'process-complete'}
 							<div
 								class="py-2xs font-semibold"
-								style="color: {log.success ? '#00E676' : '#FF5252'};"
+								style="color: {log.success ? '#00E676' : '#FF5B4F'};"
 							>
 								─── {log.name}: {log.success ? 'Deployed successfully' : 'Failed'} ───
 							</div>
 						{:else if log.type === 'complete'}
 							<div
 								class="py-2xs font-semibold"
-								style="color: {log.success ? '#00E676' : '#FF5252'};"
+								style="color: {log.success ? '#00E676' : '#FF5B4F'};"
 							>
 								{log.line}
 							</div>
 						{:else if log.type === 'error'}
-							<div class="py-2xs font-semibold" style="color: #FF5252;">
+							<div class="py-2xs font-semibold" style="color: #FF5B4F;">
 								{log.line}
 							</div>
 						{/if}

@@ -115,7 +115,7 @@
 							value={cmd.id}
 							bind:group={selectedRestartId}
 							class="w-4 h-4"
-							style="accent-color: #38CDFF;"
+							style="accent-color: #0070F3;"
 						/>
 						<label for="restart-{cmd.id}" class="flex-1 min-w-0 cursor-pointer">
 							<div>

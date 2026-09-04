@@ -43,14 +43,14 @@
 
 	function getBarColor(value: number, max: number = 100): string {
 		const pct = (value / max) * 100;
-		if (pct >= 80) return '#FF5252';
+		if (pct >= 80) return '#FF5B4F';
 		if (pct >= 50) return '#FFB74D';
 		return '#00E676';
 	}
 
 	function getBarBg(value: number, max: number = 100): string {
 		const pct = (value / max) * 100;
-		if (pct >= 80) return 'rgba(255, 82, 82, 0.15)';
+		if (pct >= 80) return 'rgba(255, 91, 79, 0.15)';
 		if (pct >= 50) return 'rgba(255, 183, 77, 0.15)';
 		return 'rgba(0, 230, 118, 0.15)';
 	}
@@ -71,8 +71,8 @@
 					<p class="text-caption font-medium mb-1" style="color: var(--text-muted);">Total CPU</p>
 					<p class="text-h1 font-bold" style="color: var(--text-primary);">{summary?.totalCpu?.toFixed(1) ?? 0}%</p>
 				</div>
-				<div class="w-9 h-9 rounded-lg flex items-center justify-center" style="background: rgba(56, 205, 255, 0.08);">
-					<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="color: #38CDFF;">
+				<div class="w-9 h-9 rounded-lg flex items-center justify-center" style="background: rgba(0, 112, 243, 0.08);">
+					<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="color: #0070F3;">
 						<path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
 					</svg>
 				</div>
@@ -85,8 +85,8 @@
 					<p class="text-caption font-medium mb-1" style="color: var(--text-muted);">Total RAM</p>
 					<p class="text-h1 font-bold" style="color: var(--text-primary);">{summary?.totalRam ? Math.round(summary.totalRam / 1024 / 1024) + ' MB' : '0 MB'}</p>
 				</div>
-				<div class="w-9 h-9 rounded-lg flex items-center justify-center" style="background: rgba(56, 205, 255, 0.08);">
-					<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="color: #38CDFF;">
+				<div class="w-9 h-9 rounded-lg flex items-center justify-center" style="background: rgba(0, 112, 243, 0.08);">
+					<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="color: #0070F3;">
 						<path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4"/>
 					</svg>
 				</div>
@@ -99,8 +99,8 @@
 					<p class="text-caption font-medium mb-1" style="color: var(--text-muted);">Avg Uptime</p>
 					<p class="text-h1 font-bold" style="color: var(--text-primary);">{summary?.avgUptime ?? 'N/A'}</p>
 				</div>
-				<div class="w-9 h-9 rounded-lg flex items-center justify-center" style="background: rgba(56, 205, 255, 0.08);">
-					<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="color: #38CDFF;">
+				<div class="w-9 h-9 rounded-lg flex items-center justify-center" style="background: rgba(0, 112, 243, 0.08);">
+					<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="color: #0070F3;">
 						<path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
 					</svg>
 				</div>
@@ -140,7 +140,7 @@
 									<p class="text-caption" style="color: var(--text-muted);">PM2 ID: {process.pm_id}</p>
 								</div>
 							</div>
-							<a href="{base}/projects/{process.pm_id}" class="text-caption font-medium" style="color: #38CDFF;">View Details</a>
+							<a href="{base}/projects/{process.pm_id}" class="text-caption font-medium" style="color: #0070F3;">View Details</a>
 						</div>
 
 						<!-- Metrics -->

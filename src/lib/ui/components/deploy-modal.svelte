@@ -507,7 +507,7 @@
 				<div class="flex items-center gap-md">
 					<div
 						class="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0"
-						style="background: {deploySuccess === true ? 'rgba(0, 230, 118, 0.15)' : deploySuccess === false ? 'rgba(255, 82, 82, 0.15)' : 'rgba(56, 205, 255, 0.15)'};"
+						style="background: {deploySuccess === true ? 'rgba(0, 230, 118, 0.15)' : deploySuccess === false ? 'rgba(255, 91, 79, 0.15)' : 'rgba(0, 112, 243, 0.15)'};"
 					>
 						{#if isRestarting}
 							<svg class="w-5 h-5 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="color: #FFD740;">
@@ -518,15 +518,15 @@
 								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
 							</svg>
 						{:else if deploySuccess === false}
-							<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="color: #FF5252;">
+							<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="color: #FF5B4F;">
 								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
 							</svg>
 						{:else if view === 'loading'}
-							<svg class="w-5 h-5 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="color: #38CDFF;">
+							<svg class="w-5 h-5 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="color: #0070F3;">
 								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
 							</svg>
 						{:else}
-							<svg class="w-5 h-5 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="color: #38CDFF;">
+							<svg class="w-5 h-5 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="color: #0070F3;">
 								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
 							</svg>
 						{/if}
@@ -566,7 +566,7 @@
 				<!-- Loading state -->
 				<div class="p-lg">
 					<div class="flex items-center justify-center py-xl">
-						<svg class="w-6 h-6 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="color: #38CDFF;">
+						<svg class="w-6 h-6 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="color: #0070F3;">
 							<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
 						</svg>
 						<span class="ml-md text-body-sm" style="color: var(--text-muted);">
@@ -613,7 +613,7 @@
 							class="flex items-center gap-xs px-sm py-2xs rounded-md text-caption font-medium"
 							style={cn(
 								'background: var(--bg-base); border: 1px solid var(--border-color);',
-								lines.some((l) => l.step === step) ? 'border-color: #38CDFF;' : ''
+								lines.some((l) => l.step === step) ? 'border-color: #0070F3;' : ''
 							)}
 						>
 							<span
@@ -621,8 +621,8 @@
 								style={cn(
 									'background: var(--bg-surface); color: var(--text-muted);',
 									stepIcon(step) === '✓' ? 'background: rgba(0, 230, 118, 0.2); color: #00E676;' : '',
-									stepIcon(step) === '✗' ? 'background: rgba(255, 82, 82, 0.2); color: #FF5252;' : '',
-									stepIcon(step) === '…' ? 'background: rgba(56, 205, 255, 0.2); color: #38CDFF;' : ''
+									stepIcon(step) === '✗' ? 'background: rgba(255, 91, 79, 0.2); color: #FF5B4F;' : '',
+									stepIcon(step) === '…' ? 'background: rgba(0, 112, 243, 0.2); color: #0070F3;' : ''
 								)}
 							>
 								{stepIcon(step)}
@@ -648,13 +648,13 @@
 								class="py-2xs"
 								style={cn(
 									'color: var(--text-secondary);',
-									log.isError ? 'color: #FF5252;' : '',
-									log.line.includes('Starting') ? 'color: #38CDFF; font-weight: 600;' : '',
+									log.isError ? 'color: #FF5B4F;' : '',
+									log.line.includes('Starting') ? 'color: #0070F3; font-weight: 600;' : '',
 									log.line.includes('Completed') ? 'color: #00E676; font-weight: 600;' : '',
 									log.line.includes('Skipped') ? 'color: #FFD740; font-weight: 600;' : '',
 									log.line.includes('restarting') ? 'color: #FFD740; font-weight: 600;' : '',
 									log.line.includes('back online') ? 'color: #00E676; font-weight: 600;' : '',
-									log.line.includes('Failed') ? 'color: #FF5252; font-weight: 600;' : '',
+									log.line.includes('Failed') ? 'color: #FF5B4F; font-weight: 600;' : '',
 									log.line.includes('Pending approval') ? 'color: #FFD740; font-weight: 600;' : ''
 								)}
 							>

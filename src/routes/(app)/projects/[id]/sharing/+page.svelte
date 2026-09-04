@@ -174,8 +174,8 @@
 	</div>
 
 	{#if teamMessage}
-		<div class="mb-md p-md rounded-md" style="background: {teamMessage.type === 'success' ? 'rgba(0,230,118,0.1)' : 'rgba(255,82,82,0.1)'}; border: 1px solid {teamMessage.type === 'success' ? '#00E676' : '#FF5252'};">
-			<p class="text-body-sm" style="color: {teamMessage.type === 'success' ? '#00E676' : '#FF5252'};">{teamMessage.text}</p>
+		<div class="mb-md p-md rounded-md" style="background: {teamMessage.type === 'success' ? 'rgba(0,230,118,0.1)' : 'rgba(255,82,82,0.1)'}; border: 1px solid {teamMessage.type === 'success' ? '#00E676' : '#FF5B4F'};">
+			<p class="text-body-sm" style="color: {teamMessage.type === 'success' ? '#00E676' : '#FF5B4F'};">{teamMessage.text}</p>
 		</div>
 	{/if}
 
@@ -219,7 +219,7 @@
 			<div class="p-lg">
 				{#if team}
 					<div class="flex items-center gap-3">
-						<span class="inline-block w-2 h-2 rounded-full" style="background: #38CDFF;"></span>
+						<span class="inline-block w-2 h-2 rounded-full" style="background: #0070F3;"></span>
 						<span class="text-body-sm font-medium" style="color: var(--text-primary);">Assigned to: {team.name}</span>
 						<span class="text-caption" style="color: var(--text-muted);">(All team members have access)</span>
 					</div>
@@ -241,8 +241,8 @@
 
 		{#if memberMessage}
 			<div class="px-lg pt-lg">
-				<div class="p-md rounded-md" style="background: {memberMessage.type === 'success' ? 'rgba(0,230,118,0.1)' : 'rgba(255,82,82,0.1)'}; border: 1px solid {memberMessage.type === 'success' ? '#00E676' : '#FF5252'};">
-					<p class="text-body-sm" style="color: {memberMessage.type === 'success' ? '#00E676' : '#FF5252'};">{memberMessage.text}</p>
+				<div class="p-md rounded-md" style="background: {memberMessage.type === 'success' ? 'rgba(0,230,118,0.1)' : 'rgba(255,82,82,0.1)'}; border: 1px solid {memberMessage.type === 'success' ? '#00E676' : '#FF5B4F'};">
+					<p class="text-body-sm" style="color: {memberMessage.type === 'success' ? '#00E676' : '#FF5B4F'};">{memberMessage.text}</p>
 				</div>
 			</div>
 		{/if}

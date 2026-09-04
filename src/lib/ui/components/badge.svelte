@@ -13,9 +13,9 @@
 
 	const variantConfig = {
 		online: { bg: 'rgba(0, 230, 118, 0.1)', text: '#00E676', dot: '#00E676' },
-		offline: { bg: 'rgba(90, 100, 116, 0.15)', text: '#8B95A5', dot: '#5A6474' },
+		offline: { bg: 'rgba(102, 102, 102, 0.15)', text: '#888888', dot: '#666666' },
 		stopped: { bg: 'rgba(255, 183, 77, 0.1)', text: '#FFB74D', dot: '#FFB74D' },
-		error: { bg: 'rgba(255, 82, 82, 0.1)', text: '#FF5252', dot: '#FF5252' },
+		error: { bg: 'rgba(255, 91, 79, 0.1)', text: '#FF5B4F', dot: '#FF5B4F' },
 		warning: { bg: 'rgba(255, 215, 64, 0.1)', text: '#FFD740', dot: '#FFD740' }
 	};
 

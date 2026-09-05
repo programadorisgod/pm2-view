@@ -46,22 +46,27 @@ sequenceDiagram
 
 | Stage | Actions | On failure |
 | ----- | ------- | ---------- |
-| **git** | Dirty-tree check (tracked files only) → fetch → checkout branch → `pull --ff-only` | Deployment fails fast; nothing touched |
-| **install** | Configured command, or package-manager install fallback (`pnpm`/`npm`/`yarn`) | Fails; build never runs |
-| **build** | Configured command, or `<pm> run build` if script exists; skipped if neither | Fails; **PM2 is NOT restarted** |
+| **git** | Working dir resolution (configured `target_path` or auto-detected monorepo root with `pnpm-lock.yaml` / `.git`) → Dirty-tree check → fetch → checkout branch → `pull --ff-only` | Deployment fails fast; nothing touched |
+| **install** | Configured commands (global or matching target process), or package-manager install fallback (`pnpm`/`npm`/`yarn`) | Fails; build never runs |
+| **build** | Configured commands (global or matching target process, supporting `&&` chaining), or `<pm> run build` if script exists; skipped if neither | Fails; **PM2 is NOT restarted** |
 | **pm2** | For **each** name in `pm2_names` (or `pm2_name`): `pm2 restart <name> --update-env`, then poll until online | Fails if any restart errors or any process never reaches online |
 | **post-deploy** | Optional configured commands, run in sequence after all processes are verified online | Never fails the deploy — a non-zero exit is logged as a warning |
 
 Non-destructive policy: the pipeline never runs `reset --hard`, `clean`, or `checkout .`. Untracked files are ignored by the dirty check (they can't be destroyed by fetch/pull); local modifications to tracked files abort the deployment explicitly.
 
-### Multi-process (group) restarts
+### Multi-process (group) restarts & Per-process Commands
 
-A project configured as a group (a JSON array in `pm2_names`, e.g. `["atlas-backend","atlas-frontend"]`) is restarted as a whole:
+A project configured as a group (a JSON array in `pm2_names`, e.g. `["atlas-backend","atlas-frontend"]`) can customize deployment commands per process:
 
-1. `DeploymentRunner.resolveProcessNames()` reads `pm2_names` (falling back to `pm2_name`).
-2. **Before touching anything**, the runner verifies every name exists in PM2 — if any is missing, the deploy fails with "Start it once manually".
-3. Each process is restarted sequentially with `pm2 restart <name> --update-env`.
-4. Each is then polled until it reports `online`.
+1. **Per-process Build & Install**: Commands in `deploy_commands` carry a `target_process` column (nullable).
+   - If `target_process` is set (e.g. `atlas-backend`), the command only runs when building/installing for that target process.
+   - If `target_process` is `null` (`All Processes`), the command runs as a shared step.
+   - Multiple build/install commands can be configured and run sequentially in `sort_order`.
+   - Custom commands support shell chaining with `&&` (e.g. `pnpm build:deps && pnpm build`).
+2. **Monorepo Working Directory (`target_path`)**: `DeployService.resolveWorkingDir()` uses the project's configured `target_path` (editable in Settings) or searches parent directories for monorepo workspace indicators (`pnpm-lock.yaml`, `pnpm-workspace.yaml`, `.git`, etc.) to prevent running git/install operations inside app subdirectories (e.g. `apps/backend`).
+3. `DeploymentRunner.resolveProcessNames()` reads `pm2_names` (falling back to `pm2_name`).
+4. **Before touching anything**, the runner verifies every name exists in PM2 — if any is missing, the deploy fails with "Start it once manually".
+5. Each process is restarted sequentially with `pm2 restart <name> --update-env` and polled until `online`.
 
 The webhook also resolves **group members** to their **parent project** (`src/routes/api/webhooks/github/+server.ts`), so a single auto-deploy config on the parent covers the entire monorepo — even if the push matched only a member's `github_repo`.
 
@@ -77,7 +82,7 @@ Commands may carry inline environment variables, e.g. `ATLAS_DOCS_BASE=/atlas/do
 
 Common use case: publishing documentation after a deploy (e.g. `pnpm build:docs`), which must run **after** the code is pulled and built, but must not fail the deployment if it errors.
 
-> The `post-deploy` command type lives in the same `deploy_commands` table as install/build/restart. No DB migration is required: `command_type` is a plain `text` column (the enum is TypeScript-only).
+> The `post-deploy` command type lives in the same `deploy_commands` table as install/build/restart. `target_process` column allows filtering post-deploy actions by specific target processes.
 
 ## Setup, step by step
 
@@ -110,6 +115,7 @@ The auto-deploy feature relies on several migrations in `drizzle/`:
 | `0007_add_auto_deploy.sql` | `github_repo`, `deploy_branch`, `auto_deploy_enabled` on `projects`; creates the `deployments` table (which doubles as the job queue) |
 | `0008_add_notify_email.sql` | `notify_email` on `projects` (deploy-result email recipient) |
 | `0010_add_pm2_names.sql` | `pm2_names` on `projects` (multi-process group support) |
+| `0011_add_target_process_to_deploy_commands.sql` | `target_process` on `deploy_commands` (per-process build/install/restart commands) |
 
 > On a fresh checkout, `drizzle-kit push` (or `npm run db:migrate`) applies the full migration set; you don't need to run them individually.
 

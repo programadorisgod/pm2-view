@@ -681,6 +681,7 @@ Grouping happens through:
 - **Listing** — `ProjectListingService.getVisibleProjects()` groups processes by project and auto-upgrades individual DB records to groups when the workspace has >1 process.
 - **Registration** — `POST /api/projects/register` accepts a `pm2Names` array + team/members; `GET /api/pm2/unregistered` returns groups detected by cwd/workspace.
 - **Import** — the GitHub import wizard detects ecosystem apps and lets the user pick which ones to register as a group.
+- **Per-process Deploy Commands** — Build and install commands can be assigned to a specific process in the group (`target_process` column in `deploy_commands`) or marked shared (`All Processes`).
 
 Full guide: [docs/multi-process-groups.md](docs/multi-process-groups.md).
 
@@ -694,9 +695,10 @@ Pushes to a configured GitHub repository + branch trigger a full background depl
 2. HMAC-SHA256 signature verified → repository/branch matched against projects with `auto_deploy_enabled`.
 3. A `deployments` row is queued (idempotent on `delivery_id`).
 4. `DeploymentWorker` (in-process, DB-backed queue) claims jobs one at a time.
-5. `DeploymentRunner` executes: `git` (fetch/checkout/pull `--ff-only`) → `install` → `build` → `pm2 restart --update-env` → verify online.
-6. **Multi-process**: the runner restarts **every** name in `pm2Names` sequentially and verifies each is online; the webhook resolves a group member to its parent project so one config covers the whole monorepo.
-7. Result is emailed to the owner + `notify_email` via SMTP (`DeploymentNotifier`).
+5. `DeploymentRunner` executes: `git` (fetch/checkout/pull `--ff-only`, using safe `http.extraheader="AUTHORIZATION: basic ${basic}"` syntax) → `install` → `build` (executing global commands + process-specific `target_process` commands with `&&` support) → `pm2 restart --update-env` → verify online.
+6. **Monorepo Root Working Directory**: `DeployService.resolveWorkingDir()` uses `target_path` or searches parent directories for `pnpm-lock.yaml`/`.git` so git and install steps execute from the repository root rather than sub-app folders.
+7. **Multi-process**: the runner restarts **every** name in `pm2Names` sequentially and verifies each is online; the webhook resolves a group member to its parent project so one config covers the whole monorepo.
+8. Result is emailed to the owner + `notify_email` via SMTP (`DeploymentNotifier`).
 
 A **Deploy All** button (`/api/deploy/all`) sequentially deploys every online process, streaming NDJSON.
 

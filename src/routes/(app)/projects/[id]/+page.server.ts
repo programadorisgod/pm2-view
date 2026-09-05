@@ -43,20 +43,20 @@ export const load: PageServerLoad = async ({ params, request }) => {
 	// Get deploy configuration (auto-provisions project if not registered)
 	let deployConfig: DeployConfig = { install: [], build: [], restart: [], postDeploy: [] };
 	let projectInternalId: string | null = null;
-	let autoDeploySettings = { autoDeployEnabled: false, githubRepo: null as string | null, deployBranch: 'main', pm2Names: [] as string[], pm2Name: '' as string };
+	let autoDeploySettings = { autoDeployEnabled: false, githubRepo: null as string | null, deployBranch: 'main', targetPath: undefined as string | undefined, pm2Names: [] as string[], pm2Name: '' as string };
 	let groupProcesses: typeof process[] = [];
 	let projectName = process.name;
 	try {
 		// Find project by pm2_name to get internal ID
 		let project = await db.query.projects.findFirst({
 			where: eq(projects.pm2Name, process.name),
-			columns: { id: true, name: true, autoDeployEnabled: true, githubRepo: true, deployBranch: true, pm2Name: true, pm2Names: true }
+			columns: { id: true, name: true, autoDeployEnabled: true, githubRepo: true, deployBranch: true, targetPath: true, pm2Name: true, pm2Names: true }
 		});
 
 		// If not found by pm2Name, check if this process is a member of a group
 		if (!project) {
 			const allProjects = await db.query.projects.findMany({
-				columns: { id: true, name: true, autoDeployEnabled: true, githubRepo: true, deployBranch: true, pm2Name: true, pm2Names: true }
+				columns: { id: true, name: true, autoDeployEnabled: true, githubRepo: true, deployBranch: true, targetPath: true, pm2Name: true, pm2Names: true }
 			});
 			project = allProjects.find(p => {
 				if (!p.pm2Names) return false;
@@ -120,7 +120,7 @@ export const load: PageServerLoad = async ({ params, request }) => {
 			// Refresh project data
 			project = await db.query.projects.findFirst({
 				where: eq(projects.id, project.id),
-				columns: { id: true, name: true, autoDeployEnabled: true, githubRepo: true, deployBranch: true, pm2Name: true, pm2Names: true }
+				columns: { id: true, name: true, autoDeployEnabled: true, githubRepo: true, deployBranch: true, targetPath: true, pm2Name: true, pm2Names: true }
 			}) ?? project;
 		}
 
@@ -145,6 +145,7 @@ export const load: PageServerLoad = async ({ params, request }) => {
 				autoDeployEnabled: projects.autoDeployEnabled,
 				githubRepo: projects.githubRepo,
 				deployBranch: projects.deployBranch,
+				targetPath: projects.targetPath,
 				pm2Name: projects.pm2Name,
 				pm2Names: projects.pm2Names
 			});
@@ -158,6 +159,7 @@ export const load: PageServerLoad = async ({ params, request }) => {
 				autoDeployEnabled: project.autoDeployEnabled,
 				githubRepo: project.githubRepo,
 				deployBranch: project.deployBranch,
+				targetPath: project.targetPath ?? undefined,
 				pm2Names: project.pm2Names ? JSON.parse(project.pm2Names) as string[] : [],
 				pm2Name: project.pm2Name
 			};

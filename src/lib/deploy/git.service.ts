@@ -101,7 +101,7 @@ export class GitService {
 	private authArgs(token?: string): string[] {
 		if (!token) return [];
 		const basic = Buffer.from(`x-access-token:${token}`).toString('base64');
-		return ['-c', `http.extraheader=AUTHORIZATION: basic ${basic}`];
+		return ['-c', `http.extraheader="AUTHORIZATION: basic ${basic}"`];
 	}
 
 	private async capture(cwd: string, args: string[]): Promise<string> {

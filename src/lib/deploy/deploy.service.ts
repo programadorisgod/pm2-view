@@ -195,6 +195,63 @@ export class DeployService {
 		this.pm2Repo = pm2Repo;
 	}
 
+	private async resolveWorkingDir(process: any): Promise<string> {
+		// 1. Check registered DB project targetPath
+		try {
+			const { ProjectRepository } = await import('$lib/db/repositories/project-repository.impl');
+			const projectRepo = new ProjectRepository();
+			const allProjects = await projectRepo.getAll();
+			const project = allProjects.find((p) => {
+				if (p.pm2Name === process.name) return true;
+				if (p.pm2Names) {
+					try {
+						const names = JSON.parse(p.pm2Names) as string[];
+						return names.includes(process.name);
+					} catch {
+						return false;
+					}
+				}
+				return false;
+			});
+
+			if (project?.targetPath && existsSync(project.targetPath)) {
+				return project.targetPath;
+			}
+		} catch {
+			// Ignore DB error, fall back to filesystem workspace search
+		}
+
+		// 2. Search filesystem for workspace root / lockfile upwards
+		const WORKSPACE_INDICATORS = [
+			'pnpm-workspace.yaml', 'lerna.json', 'nx.json',
+			'turbo.json', 'rush.json', '.yarnrc.yml',
+			'pnpm-lock.yaml', 'bun.lockb', 'bun.lock', '.git'
+		];
+		const rawCwd = (process.pm2_env?.pm_cwd || process.pm2_env?.cwd || '').replace(/\/+$/, '');
+		if (rawCwd) {
+			let dir = rawCwd;
+			for (let i = 0; i < 4; i++) {
+				for (const file of WORKSPACE_INDICATORS) {
+					if (existsSync(join(dir, file))) return dir;
+				}
+				const pkgPath = join(dir, 'package.json');
+				if (existsSync(pkgPath)) {
+					try {
+						const pkg = JSON.parse(readFileSync(pkgPath, 'utf-8'));
+						if (pkg.workspaces || pkg.packageManager) return dir;
+					} catch { /* ignore */ }
+				}
+				const parent = dirname(dir);
+				if (parent === dir) break;
+				dir = parent;
+			}
+			return rawCwd;
+		}
+
+		const execPath = process.pm2_env?.pm_exec_path;
+		return (execPath ? resolveProjectRoot(execPath) : null) || '';
+	}
+
 	/**
 	 * Executes the full deploy pipeline for a given PM2 process.
 	 * Returns a DeployResult with per-step outcomes.
@@ -220,13 +277,7 @@ export class DeployService {
 			};
 		}
 
-		const pmCwd = process.pm2_env.pm_cwd;
-		const execPath = process.pm2_env.pm_exec_path;
-		const workingDir =
-			pmCwd ||
-			(execPath ? resolveProjectRoot(execPath) : null) ||
-			process.pm2_env.cwd ||
-			'';
+		const workingDir = await this.resolveWorkingDir(process);
 
 		if (!workingDir || !existsSync(workingDir)) {
 			return {

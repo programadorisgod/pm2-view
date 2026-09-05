@@ -24,6 +24,7 @@ const settingsSchema = z.object({
 		.min(1, 'Branch is required')
 		.max(200)
 		.regex(BRANCH_REGEX, 'Branch contains invalid characters'),
+	targetPath: z.string().trim().min(1, 'Target path cannot be empty').optional(),
 	pm2Names: z.array(z.string().trim().min(1)).min(1).optional(),
 });
 
@@ -114,6 +115,7 @@ export const PUT: RequestHandler = async ({ params, request }) => {
 		autoDeployEnabled: parsed.data.autoDeployEnabled,
 		githubRepo: githubRepo ?? null,
 		deployBranch: parsed.data.deployBranch,
+		...(parsed.data.targetPath ? { targetPath: parsed.data.targetPath } : {}),
 		pm2Names: parsed.data.pm2Names ? JSON.stringify(parsed.data.pm2Names) : project.pm2Names,
 		// Capture who configured auto-deploy so they receive deploy outcome emails
 		notifyEmail: session.user.email ?? null
@@ -123,6 +125,8 @@ export const PUT: RequestHandler = async ({ params, request }) => {
 		autoDeployEnabled: updated.autoDeployEnabled,
 		githubRepo: updated.githubRepo,
 		deployBranch: updated.deployBranch,
+		targetPath: updated.targetPath,
+		pm2Name: updated.pm2Name,
 		pm2Names: updated.pm2Names ? JSON.parse(updated.pm2Names) as string[] : [updated.pm2Name],
 		notifyEmail: updated.notifyEmail
 	});

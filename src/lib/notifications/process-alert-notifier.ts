@@ -137,10 +137,31 @@ function escapeHtml(value: string): string {
 export function createDefaultProcessAlertNotifier(): ProcessAlertNotifier {
 	return createProcessAlertNotifier({
 		async findProjectByPm2Name(pm2Name) {
-			const project = await db.query.projects.findFirst({
+			let project = await db.query.projects.findFirst({
 				where: eq(projects.pm2Name, pm2Name)
 			});
-			return project ?? null;
+			if (!project) {
+				const allProjects = await db.query.projects.findMany();
+				project = allProjects.find((p) => {
+					if (!p.pm2Names) return false;
+					try {
+						const names = JSON.parse(p.pm2Names) as string[];
+						return names.includes(pm2Name);
+					} catch {
+						return false;
+					}
+				});
+			}
+			return project
+				? {
+						id: project.id,
+						name: project.name,
+						pm2Name: project.pm2Name,
+						userId: project.userId,
+						notifyEmail: project.notifyEmail,
+						teamId: project.teamId
+				  }
+				: null;
 		},
 		collectRecipients: (projectId) => collectProjectNotificationEmails(projectId, null),
 		sendEmail: sendNotificationEmail

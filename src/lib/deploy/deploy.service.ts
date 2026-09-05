@@ -11,6 +11,7 @@ import type {
 	DeployStepResult,
 	PackageManager,
 } from './deploy.types';
+import { tokenizeCommand } from './process-runner';
 
 const LOCK_FILES: Record<string, PackageManager> = {
 	'pnpm-lock.yaml': 'pnpm',
@@ -337,12 +338,10 @@ export class DeployService {
 		if (options?.installCommand) {
 			// Custom install command
 			log('install', '─── Starting: install (custom) ───', false);
-			const tokens = options.installCommand.trim().split(/\s+/);
-			const bin = tokens[0];
-			const args = tokens.slice(1);
+			const { bin, args, env: inlineEnv } = tokenizeCommand(options.installCommand, workingDir);
 			const exitCode = await runCommand(workingDir, bin, args, (line, isError) =>
 				log('install', line, isError),
-			env.runEnv);
+			{ ...env.runEnv, ...inlineEnv });
 			const installSuccess = exitCode === 0;
 			log(
 				'install',
@@ -398,12 +397,10 @@ export class DeployService {
 		if (options?.buildCommand) {
 			// Custom build command — bypasses hasBuild check
 			log('build', '─── Starting: build (custom) ───', false);
-			const tokens = options.buildCommand.trim().split(/\s+/);
-			const bin = tokens[0];
-			const args = tokens.slice(1);
+			const { bin, args, env: inlineEnv } = tokenizeCommand(options.buildCommand, workingDir);
 			const exitCode = await runCommand(workingDir, bin, args, (line, isError) =>
 				log('build', line, isError),
-			env.runEnv);
+			{ ...env.runEnv, ...inlineEnv });
 			const buildSuccess = exitCode === 0;
 			log(
 				'build',
@@ -544,12 +541,10 @@ export class DeployService {
 		if (options?.installCommand) {
 			// Custom install command
 			log('install', '─── Starting: install (custom) ───', false);
-			const tokens = options.installCommand.trim().split(/\s+/);
-			const bin = tokens[0];
-			const args = tokens.slice(1);
+			const { bin, args, env: inlineEnv } = tokenizeCommand(options.installCommand, workingDir);
 			const exitCode = await runCommand(workingDir, bin, args, (line, isError) =>
 				log('install', line, isError),
-			env.runEnv);
+			{ ...env.runEnv, ...inlineEnv });
 			const installSuccess = exitCode === 0;
 			log(
 				'install',
@@ -581,12 +576,10 @@ export class DeployService {
 		if (options?.buildCommand) {
 			// Custom build command — bypasses hasBuild check
 			log('build', '─── Starting: build (custom) ───', false);
-			const tokens = options.buildCommand.trim().split(/\s+/);
-			const bin = tokens[0];
-			const args = tokens.slice(1);
+			const { bin, args, env: inlineEnv } = tokenizeCommand(options.buildCommand, workingDir);
 			const exitCode = await runCommand(workingDir, bin, args, (line, isError) =>
 				log('build', line, isError),
-			env.runEnv);
+			{ ...env.runEnv, ...inlineEnv });
 			const buildSuccess = exitCode === 0;
 			log(
 				'build',

@@ -132,6 +132,12 @@ export function detectPackageManagerOrDefault(dir: string): PackageManager {
 	return 'npm';
 }
 
+const KNOWN_BINARIES = new Set([
+	'pnpm', 'npm', 'yarn', 'bun', 'node', 'npx', 'dlx',
+	'git', 'sh', 'bash', 'zsh', 'cmd', 'powershell',
+	'docker', 'make', 'cargo', 'go', 'python', 'python3', 'ruby'
+]);
+
 /**
  * Splits a configured command string into binary + args tokens.
  * Commands come exclusively from internal configuration (deploy_commands),
@@ -140,9 +146,16 @@ export function detectPackageManagerOrDefault(dir: string): PackageManager {
  * Leading `KEY=VALUE` tokens are parsed as inline environment variables
  * (e.g. `ATLAS_DOCS_BASE=/atlas/docs pnpm build:docs`), so a post-deploy
  * command can carry its own env without shell interpolation.
+ *
+ * If a command refers to a script name (e.g. `build:backend`), it resolves to
+ * `${packageManager} run build:backend` when `bin` is not a known binary or path.
  */
-export function tokenizeCommand(command: string): { bin: string; args: string[]; env: Record<string, string> } {
-	const tokens = command.trim().split(/\s+/).filter(Boolean);
+export function tokenizeCommand(
+	command: string,
+	cwd?: string
+): { bin: string; args: string[]; env: Record<string, string> } {
+	const trimmed = command.trim();
+	const tokens = trimmed.split(/\s+/).filter(Boolean);
 	const env: Record<string, string> = {};
 
 	let i = 0;
@@ -152,6 +165,44 @@ export function tokenizeCommand(command: string): { bin: string; args: string[];
 		env[match[1]] = match[2];
 	}
 
-	const bin = tokens[i] ?? '';
-	return { bin, args: tokens.slice(i + 1), env };
+	const remainingTokens = tokens.slice(i);
+	if (remainingTokens.length === 0) {
+		return { bin: '', args: [], env };
+	}
+
+	const pm = cwd ? detectPackageManagerOrDefault(cwd) : 'pnpm';
+
+	// Handle shell operators like '&&', ';', '|'
+	if (trimmed.includes('&&') || trimmed.includes(';') || trimmed.includes('|')) {
+		const processedTokens = remainingTokens.map((t, idx) => {
+			const isOp = t === '&&' || t === ';' || t === '|' || t === '||';
+			const prevIsOp =
+				idx === 0 ||
+				remainingTokens[idx - 1] === '&&' ||
+				remainingTokens[idx - 1] === ';' ||
+				remainingTokens[idx - 1] === '|' ||
+				remainingTokens[idx - 1] === '||';
+			if (
+				!isOp &&
+				prevIsOp &&
+				!t.includes('/') &&
+				!t.includes('\\') &&
+				!KNOWN_BINARIES.has(t.toLowerCase())
+			) {
+				return `${pm} run ${t}`;
+			}
+			return t;
+		});
+		return { bin: processedTokens.join(' '), args: [], env };
+	}
+
+	let bin = remainingTokens[0];
+	let args = remainingTokens.slice(1);
+
+	if (bin && !bin.includes('/') && !bin.includes('\\') && !KNOWN_BINARIES.has(bin.toLowerCase())) {
+		args = ['run', bin, ...args];
+		bin = pm;
+	}
+
+	return { bin, args, env };
 }

@@ -23,6 +23,7 @@
 			autoDeployEnabled: boolean;
 			githubRepo: string | null;
 			deployBranch: string;
+			targetPath?: string;
 			pm2Names?: string[];
 		};
 	} = $props();
@@ -30,6 +31,7 @@
 	let enabled = $state(initialSettings.autoDeployEnabled);
 	let repoInput = $state(initialSettings.githubRepo ?? '');
 	let branchInput = $state(initialSettings.deployBranch);
+	let targetPathInput = $state(initialSettings.targetPath ?? '');
 	let pm2NamesInput = $state<string[]>(initialSettings.pm2Names ?? []);
 
 	let isSaving = $state(false);
@@ -73,6 +75,7 @@
 					autoDeployEnabled: enabled,
 					githubRepo: repoInput.trim() || null,
 					deployBranch: branchInput.trim(),
+					targetPath: targetPathInput.trim() || undefined,
 					pm2Names: pm2NamesInput.length > 0 ? pm2NamesInput.filter((n) => n.trim()) : undefined
 				})
 			});
@@ -84,6 +87,7 @@
 			enabled = data.autoDeployEnabled ?? enabled;
 			repoInput = data.githubRepo ?? '';
 			branchInput = data.deployBranch ?? branchInput;
+			targetPathInput = data.targetPath ?? targetPathInput;
 			pm2NamesInput = data.pm2Names ?? pm2NamesInput;
 			savedJustNow = true;
 			setTimeout(() => (savedJustNow = false), 3000);
@@ -162,6 +166,22 @@
 					class="input-base w-full h-10 px-md text-body-sm font-mono"
 				/>
 			</div>
+		</div>
+
+		<div>
+			<label class="text-caption block mb-2xs" for="autodeploy-targetpath" style="color: var(--text-muted);">
+				Project Root Directory (where .git and root lockfile are located)
+			</label>
+			<input
+				id="autodeploy-targetpath"
+				type="text"
+				bind:value={targetPathInput}
+				placeholder="e.g. /home/user/projects/ATLAS"
+				class="input-base w-full h-10 px-md text-body-sm font-mono"
+			/>
+			<p class="text-caption mt-2xs" style="color: var(--text-muted);">
+				For monorepos, set this to the repository root directory. If empty, pm2-view resolves working directory from PM2 process path or parent workspace root.
+			</p>
 		</div>
 
 		<!-- PM2 Process Names -->

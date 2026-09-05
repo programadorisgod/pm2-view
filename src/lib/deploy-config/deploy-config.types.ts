@@ -4,6 +4,7 @@ export interface DeployCommand {
 	id: string;
 	projectId: string;
 	commandType: CommandType;
+	targetProcess?: string | null;
 	label: string;
 	command: string;
 	sortOrder: number;

@@ -26,14 +26,19 @@ export function runCommand(
 	timeoutMs?: number
 ): Promise<number> {
 	return new Promise((resolve) => {
-		const proc = spawn(command, args, {
-			cwd,
-			// Use the shell so package-manager and PM2 shims (e.g. npm.cmd,
-			// pm2.cmd) resolve correctly on Windows. Commands come from the
-			// project's own deploy config (admin-controlled), not from payloads.
-			shell: true,
-			env: env ?? { ...process.env }
-		});
+		const useShell = args.length === 0 ? true : process.platform === 'win32';
+		const proc =
+			args.length > 0
+				? spawn(command, args, {
+						cwd,
+						shell: useShell,
+						env: env ?? { ...process.env }
+					})
+				: spawn(command, {
+						cwd,
+						shell: true,
+						env: env ?? { ...process.env }
+					});
 
 		const bufferOut: string[] = [];
 		const bufferErr: string[] = [];

@@ -103,12 +103,14 @@
 			const config = await res.json() as DeployConfig;
 			deployConfig = config;
 
-			// Store install/build commands if they exist
+			// Store install/build commands matching this process or shared
 			if (config.install && config.install.length > 0) {
-				installCommand = config.install[0].command;
+				const match = config.install.find((c) => c.targetProcess === processName) || config.install.find((c) => !c.targetProcess) || config.install[0];
+				installCommand = match.command;
 			}
 			if (config.build && config.build.length > 0) {
-				buildCommand = config.build[0].command;
+				const match = config.build.find((c) => c.targetProcess === processName) || config.build.find((c) => !c.targetProcess) || config.build[0];
+				buildCommand = match.command;
 			}
 
 			// Show the selection step only when there are restart commands to choose from.

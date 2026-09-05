@@ -3,8 +3,8 @@ import { DeployConfigService } from '../../../src/lib/deploy-config/deploy-confi
 import type { IDeployConfigRepository, DeployConfig, DeployCommand, CommandType } from '../../../src/lib/deploy-config/deploy-config.types';
 import type { IPM2Repository } from '../../../src/lib/pm2/pm2.types';
 
-// Mock the repository and PM2 repo
-const mockRepo: Partial<IDeployConfigRepository> = {
+// Mock the repository
+const mockRepo: any = {
 	getByProjectId: vi.fn(),
 	getByType: vi.fn(),
 	create: vi.fn(),
@@ -75,7 +75,7 @@ describe('DeployConfigService', () => {
 
 	beforeEach(() => {
 		vi.clearAllMocks();
-		service = new DeployConfigService(mockRepo as IDeployConfigRepository, mockPM2Repo as IPM2Repository);
+		service = new DeployConfigService(mockRepo as IDeployConfigRepository);
 	});
 
 	describe('getConfig', () => {
@@ -157,7 +157,7 @@ describe('DeployConfigService', () => {
 					project_id: 'project-1',
 					command_type: 'restart',
 					label: 'Bad Command',
-					command: 'echo "hello" && rm -rf /',
+					command: 'echo "hello" ; rm -rf /',
 				})
 			).rejects.toThrow('Command contains disallowed characters');
 		});
@@ -208,60 +208,95 @@ describe('DeployConfigService', () => {
 			).rejects.toThrow('Command must be 2000 characters or fewer');
 		});
 
-		it('should throw "Project not found" for nonexistent project', async () => {
-			mockPM2Repo.describe!.mockResolvedValue(null);
-
-			await expect(
-				service.saveCommand({
-					project_id: 'non-existent',
-					command_type: 'restart',
-					label: 'Restart',
-					command: 'pm2 restart api',
-				})
-			).rejects.toThrow('Project not found');
-		});
-	});
-
-	describe('saveCommand behavior', () => {
-		beforeEach(() => {
-			mockPM2Repo.describe!.mockResolvedValue({ name: 'Test Project' } as any);
-		});
-
-		it('should replace install command if one exists', async () => {
-			mockRepo.getByType!.mockResolvedValue([sampleCommands[0]]);
-			mockRepo.update!.mockResolvedValue({
-				...sampleCommands[0],
-				label: 'Updated Install',
-				command: 'npm install',
-			});
-
-			const result = await service.saveCommand({
-				project_id: 'project-1',
-				command_type: 'install',
-				label: 'Updated Install',
-				command: 'npm install',
-			});
-
-			expect(mockRepo.update).toHaveBeenCalledWith('cmd-1', expect.anything());
-			expect(result.label).toBe('Updated Install');
-		});
-
-		it('should replace build command if one exists', async () => {
-			mockRepo.getByType!.mockResolvedValue([sampleCommands[1]]);
-			mockRepo.update!.mockResolvedValue({
-				...sampleCommands[1],
-				label: 'Updated Build',
-				command: 'npm run build',
+		it('should allow command with safe && chaining', async () => {
+			mockRepo.getByType!.mockResolvedValue([]);
+			mockRepo.create!.mockResolvedValue({
+				id: 'cmd-chained',
+				projectId: 'project-1',
+				commandType: 'build',
+				targetProcess: 'atlas-backend',
+				label: 'Build Backend Chained',
+				command: 'NODE_ENV=production pnpm build:config && pnpm --filter @atlas/backend build',
+				sortOrder: 0,
+				createdAt: new Date(),
 			});
 
 			const result = await service.saveCommand({
 				project_id: 'project-1',
 				command_type: 'build',
-				label: 'Updated Build',
-				command: 'npm run build',
+				target_process: 'atlas-backend',
+				label: 'Build Backend Chained',
+				command: 'NODE_ENV=production pnpm build:config && pnpm --filter @atlas/backend build',
 			});
 
-			expect(mockRepo.update).toHaveBeenCalled();
+			expect(mockRepo.create).toHaveBeenCalledWith(
+				expect.objectContaining({
+					targetProcess: 'atlas-backend',
+					command: 'NODE_ENV=production pnpm build:config && pnpm --filter @atlas/backend build',
+				})
+			);
+			expect(result.id).toBe('cmd-chained');
+		});
+	});
+
+	describe('saveCommand behavior', () => {
+		it('should create build command with targetProcess', async () => {
+			mockRepo.getByType!.mockResolvedValue([]);
+			mockRepo.create!.mockResolvedValue({
+				id: 'cmd-build-1',
+				projectId: 'project-1',
+				commandType: 'build',
+				targetProcess: 'atlas-backend',
+				label: 'Build Backend',
+				command: 'pnpm --filter @atlas/backend build',
+				sortOrder: 0,
+				createdAt: new Date(),
+			});
+
+			const result = await service.saveCommand({
+				project_id: 'project-1',
+				command_type: 'build',
+				target_process: 'atlas-backend',
+				label: 'Build Backend',
+				command: 'pnpm --filter @atlas/backend build',
+			});
+
+			expect(mockRepo.create).toHaveBeenCalledWith(
+				expect.objectContaining({
+					targetProcess: 'atlas-backend',
+				})
+			);
+			expect(result.targetProcess).toBe('atlas-backend');
+		});
+
+		it('should append build command with auto-assigned sort_order when existing commands exist', async () => {
+			mockRepo.getByType!.mockResolvedValue([sampleCommands[1]]);
+			mockRepo.create!.mockResolvedValue({
+				id: 'cmd-build-2',
+				projectId: 'project-1',
+				commandType: 'build',
+				targetProcess: 'atlas-frontend',
+				label: 'Build Frontend',
+				command: 'pnpm --filter @atlas/frontend build',
+				sortOrder: 1,
+				createdAt: new Date(),
+			});
+
+			const result = await service.saveCommand({
+				project_id: 'project-1',
+				command_type: 'build',
+				target_process: 'atlas-frontend',
+				label: 'Build Frontend',
+				command: 'pnpm --filter @atlas/frontend build',
+			});
+
+			expect(mockRepo.create).toHaveBeenCalledWith(
+				expect.objectContaining({
+					sortOrder: 1,
+					targetProcess: 'atlas-frontend',
+				})
+			);
+			expect(result.sortOrder).toBe(1);
 		});
 
 		it('should append restart command with auto-assigned sort_order', async () => {

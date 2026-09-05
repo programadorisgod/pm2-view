@@ -6,15 +6,19 @@
 	let {
 		projectId,
 		initialConfig,
+		availableProcesses = [],
+		activeProcess = '',
 	}: {
 		projectId: string;
 		initialConfig: DeployConfig;
+		availableProcesses?: string[];
+		activeProcess?: string;
 	} = $props();
 
 	// Check if project is registered in the database
 	let isProjectRegistered = $derived(projectId !== '');
 
-	// Local state mirroring initialConfig - use $effect to sync with prop changes
+	// Local state mirroring initialConfig
 	let config = $state<DeployConfig>({
 		install: [],
 		build: [],
@@ -31,9 +35,12 @@
 		};
 	});
 
+	// Process Filter State
+	let selectedProcessFilter = $state<string>('all');
+
 	// UI state per section
-	let installEditing = $state(false);
-	let buildEditing = $state(false);
+	let installAdding = $state(false);
+	let buildAdding = $state(false);
 	let restartAdding = $state(false);
 	let postDeployAdding = $state(false);
 	let editingCommand = $state<DeployCommand | null>(null);
@@ -41,6 +48,7 @@
 	// Form fields
 	let labelInput = $state('');
 	let commandInput = $state('');
+	let targetProcessInput = $state('');
 	let serverError = $state<string | null>(null);
 	let isSaving = $state(false);
 
@@ -58,18 +66,34 @@
 	function validateCommand(value: string): string | null {
 		if (!value.trim()) return 'Command is required';
 		if (value.length > 2000) return 'Command must be 2000 characters or fewer';
-		// Check for disallowed shell characters
-		const disallowed = /[;&|$`()<>]|(?:\s&&\s)|(?:\s\|\|\s)/;
+		// Check for disallowed shell characters (allow &&)
+		const disallowed = /(?:^|[^&])&(?!&)|[;|$()`<>|]/;
 		if (disallowed.test(value)) return 'Command contains disallowed characters';
 		return null;
 	}
 
-	async function saveCommand(commandType: 'install' | 'build' | 'restart' | 'post-deploy', existingId?: string) {
+	function filterCommands(list: DeployCommand[]): DeployCommand[] {
+		if (selectedProcessFilter === 'all') return list;
+		return list.filter(
+			(c) => !c.targetProcess || c.targetProcess === selectedProcessFilter
+		);
+	}
+
+	async function saveCommand(
+		commandType: 'install' | 'build' | 'restart' | 'post-deploy',
+		existingId?: string
+	) {
 		serverError = null;
 		const labelError = validateLabel(labelInput);
 		const commandError = validateCommand(commandInput);
-		if (labelError) { serverError = labelError; return; }
-		if (commandError) { serverError = commandError; return; }
+		if (labelError) {
+			serverError = labelError;
+			return;
+		}
+		if (commandError) {
+			serverError = commandError;
+			return;
+		}
 
 		isSaving = true;
 		try {
@@ -82,6 +106,7 @@
 					...(existingId && { id: existingId }),
 					project_id: projectId,
 					command_type: commandType,
+					target_process: targetProcessInput.trim() || null,
 					label: labelInput.trim(),
 					command: commandInput.trim(),
 				}),
@@ -94,24 +119,24 @@
 			}
 
 			const result = await res.json();
-			const savedCommand = result.data || result;
+			const savedCommand = (result.data || result) as DeployCommand;
 
 			// Update local state
 			if (existingId) {
 				if (commandType === 'install') {
-					config.install = config.install.map((c) => c.id === existingId ? savedCommand : c);
+					config.install = config.install.map((c) => (c.id === existingId ? savedCommand : c));
 				} else if (commandType === 'build') {
-					config.build = config.build.map((c) => c.id === existingId ? savedCommand : c);
+					config.build = config.build.map((c) => (c.id === existingId ? savedCommand : c));
 				} else if (commandType === 'restart') {
-					config.restart = config.restart.map((c) => c.id === existingId ? savedCommand : c);
+					config.restart = config.restart.map((c) => (c.id === existingId ? savedCommand : c));
 				} else {
-					config.postDeploy = config.postDeploy.map((c) => c.id === existingId ? savedCommand : c);
+					config.postDeploy = config.postDeploy.map((c) => (c.id === existingId ? savedCommand : c));
 				}
 			} else {
 				if (commandType === 'install') {
-					config.install = [savedCommand];
+					config.install = [...config.install, savedCommand];
 				} else if (commandType === 'build') {
-					config.build = [savedCommand];
+					config.build = [...config.build, savedCommand];
 				} else if (commandType === 'restart') {
 					config.restart = [...config.restart, savedCommand];
 				} else {
@@ -157,8 +182,17 @@
 		}
 	}
 
-	async function reorderCommand(cmd: DeployCommand, direction: 'up' | 'down') {
-		const list = config.restart;
+	async function reorderCommand(
+		commandType: 'install' | 'build' | 'restart' | 'post-deploy',
+		cmd: DeployCommand,
+		direction: 'up' | 'down'
+	) {
+		let list: DeployCommand[];
+		if (commandType === 'install') list = config.install;
+		else if (commandType === 'build') list = config.build;
+		else if (commandType === 'restart') list = config.restart;
+		else list = config.postDeploy;
+
 		const idx = list.findIndex((c) => c.id === cmd.id);
 		if (idx === -1) return;
 		if (direction === 'up' && idx === 0) return;
@@ -171,11 +205,13 @@
 		newList[targetIdx] = temp;
 
 		// Optimistic update
-		const oldList = config.restart;
-		config.restart = newList;
+		const oldList = list;
+		if (commandType === 'install') config.install = newList;
+		else if (commandType === 'build') config.build = newList;
+		else if (commandType === 'restart') config.restart = newList;
+		else config.postDeploy = newList;
 
 		try {
-			// Swap sort_order values via PUT
 			const cmd1 = newList[idx];
 			const cmd2 = newList[targetIdx];
 			const res1 = await fetch(`${base}/api/deploy-config`, {
@@ -191,96 +227,61 @@
 			if (!res1.ok || !res2.ok) throw new Error('Reorder failed');
 		} catch {
 			// Rollback
-			config.restart = oldList;
+			if (commandType === 'install') config.install = oldList;
+			else if (commandType === 'build') config.build = oldList;
+			else if (commandType === 'restart') config.restart = oldList;
+			else config.postDeploy = oldList;
 			serverError = 'Failed to reorder commands';
 		}
 	}
 
-	async function reorderPostDeployCommand(cmd: DeployCommand, direction: 'up' | 'down') {
-		const list = config.postDeploy;
-		const idx = list.findIndex((c) => c.id === cmd.id);
-		if (idx === -1) return;
-		if (direction === 'up' && idx === 0) return;
-		if (direction === 'down' && idx === list.length - 1) return;
-
-		const targetIdx = direction === 'up' ? idx - 1 : idx + 1;
-		const newList = [...list];
-		const temp = newList[idx];
-		newList[idx] = newList[targetIdx];
-		newList[targetIdx] = temp;
-
-		// Optimistic update
-		const oldList = config.postDeploy;
-		config.postDeploy = newList;
-
-		try {
-			// Swap sort_order values via PUT
-			const cmd1 = newList[idx];
-			const cmd2 = newList[targetIdx];
-			const res1 = await fetch(`${base}/api/deploy-config`, {
-				method: 'PUT',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ id: cmd1.id, sort_order: cmd1.sortOrder }),
-			});
-			const res2 = await fetch(`${base}/api/deploy-config`, {
-				method: 'PUT',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ id: cmd2.id, sort_order: cmd2.sortOrder }),
-			});
-			if (!res1.ok || !res2.ok) throw new Error('Reorder failed');
-		} catch {
-			// Rollback
-			config.postDeploy = oldList;
-			serverError = 'Failed to reorder commands';
-		}
+	function resetInputs(defaultProcess = '') {
+		labelInput = '';
+		commandInput = '';
+		targetProcessInput = defaultProcess;
+		editingCommand = null;
 	}
 
 	function startAddInstall() {
-		labelInput = '';
-		commandInput = '';
-		installEditing = true;
-		editingCommand = null;
+		resetInputs(activeProcess);
+		installAdding = true;
 	}
 
 	function startAddBuild() {
-		labelInput = '';
-		commandInput = '';
-		buildEditing = true;
-		editingCommand = null;
+		resetInputs(activeProcess);
+		buildAdding = true;
 	}
 
 	function startAddRestart() {
-		labelInput = '';
-		commandInput = '';
+		resetInputs(activeProcess);
 		restartAdding = true;
-		editingCommand = null;
 	}
 
 	function startAddPostDeploy() {
-		labelInput = '';
-		commandInput = '';
+		resetInputs(activeProcess);
 		postDeployAdding = true;
-		editingCommand = null;
 	}
 
 	function startEdit(cmd: DeployCommand) {
 		labelInput = cmd.label;
 		commandInput = cmd.command;
+		targetProcessInput = cmd.targetProcess ?? '';
 		editingCommand = cmd;
-		if (cmd.commandType === 'install') installEditing = true;
-		else if (cmd.commandType === 'build') buildEditing = true;
+		if (cmd.commandType === 'install') installAdding = true;
+		else if (cmd.commandType === 'build') buildAdding = true;
 		else if (cmd.commandType === 'restart') restartAdding = true;
 		else postDeployAdding = true;
 	}
 
 	function closeForms() {
-		installEditing = false;
-		buildEditing = false;
+		installAdding = false;
+		buildAdding = false;
 		restartAdding = false;
 		postDeployAdding = false;
 		editingCommand = null;
 		labelInput = '';
 		commandInput = '';
+		targetProcessInput = '';
 	}
 
 	function confirmDelete(cmd: DeployCommand) {
@@ -291,11 +292,6 @@
 	function cancelDelete() {
 		deleteTarget = null;
 		deleteConfirmName = '';
-	}
-
-	function truncateCommand(cmd: string, maxLen = 80): string {
-		if (cmd.length <= maxLen) return cmd;
-		return cmd.slice(0, maxLen) + '...';
 	}
 </script>
 
@@ -335,21 +331,51 @@
 		</div>
 	{/if}
 
+	<!-- Process Filter Bar (for multi-process projects) -->
+	{#if availableProcesses.length > 1}
+		<div
+			class="flex items-center gap-xs p-2 rounded-lg"
+			style="background: var(--bg-surface); border: 1px solid var(--border-color);"
+		>
+			<span class="text-caption font-medium px-2" style="color: var(--text-muted);">
+				Filter by process:
+			</span>
+			<button
+				type="button"
+				class="px-3 py-1 text-caption font-medium rounded-md transition-colors"
+				style="background: {selectedProcessFilter === 'all' ? 'rgba(0, 112, 243, 0.15)' : 'transparent'}; color: {selectedProcessFilter === 'all' ? '#0070F3' : 'var(--text-muted)'};"
+				onclick={() => { selectedProcessFilter = 'all'; }}
+			>
+				All Commands
+			</button>
+			{#each availableProcesses as proc}
+				<button
+					type="button"
+					class="px-3 py-1 text-caption font-medium rounded-md transition-colors"
+					style="background: {selectedProcessFilter === proc ? 'rgba(0, 112, 243, 0.15)' : 'transparent'}; color: {selectedProcessFilter === proc ? '#0070F3' : 'var(--text-muted)'};"
+					onclick={() => { selectedProcessFilter = proc; }}
+				>
+					{proc}
+				</button>
+			{/each}
+		</div>
+	{/if}
+
 	<!-- Install Command Section -->
 	<Card padding>
 		<div class="mb-md flex items-center justify-between">
-			<h3 class="text-h3 font-semibold" style="color: var(--text-primary);">Install Command</h3>
+			<h3 class="text-h3 font-semibold" style="color: var(--text-primary);">Install Commands</h3>
 		</div>
 		<p class="text-caption mb-md" style="color: var(--text-muted);">
-			Custom installation command to run instead of auto-detected package manager install.
+			Custom installation commands to run instead of auto-detected package manager install.
 		</p>
 
-		{#if installEditing}
-			<div class="space-y-sm">
+		{#if installAdding}
+			<div class="space-y-sm mb-md p-md rounded-lg" style="background: var(--bg-surface); border: 1px solid var(--border-color);">
 				<input
 					type="text"
 					bind:value={labelInput}
-					placeholder="Label (e.g., Install dependencies)"
+					placeholder="Label (e.g., Install root dependencies or Install backend)"
 					class="input-base w-full h-10 px-md text-body-sm"
 					maxlength="100"
 				/>
@@ -360,7 +386,21 @@
 					class="input-base w-full h-10 px-md text-body-sm font-mono"
 					maxlength="2000"
 				/>
-				<div class="flex gap-xs">
+				{#if availableProcesses.length > 0}
+					<div>
+						<label class="text-caption block mb-2xs" style="color: var(--text-muted);">Target Process</label>
+						<select
+							bind:value={targetProcessInput}
+							class="input-base w-full h-10 px-md text-body-sm font-mono"
+						>
+							<option value="">All Processes (Shared)</option>
+							{#each availableProcesses as proc}
+								<option value={proc}>{proc}</option>
+							{/each}
+						</select>
+					</div>
+				{/if}
+				<div class="flex gap-xs pt-xs">
 					<button
 						type="button"
 						class="btn-primary px-3 py-1.5 text-caption"
@@ -378,36 +418,84 @@
 					</button>
 				</div>
 			</div>
-		{:else if config.install.length > 0}
-			{@const cmd = config.install[0]}
-			<div
-				class="flex items-center justify-between p-sm rounded-md"
-				style="background: var(--bg-surface); border: 1px solid var(--border-color);"
-			>
-				<div class="flex-1 min-w-0">
-					<p class="text-body-sm font-medium" style="color: var(--text-primary);">{cmd.label}</p>
-					<p class="text-caption font-mono truncate" style="color: var(--text-muted);" title={cmd.command}>
-						{cmd.command}
-					</p>
-				</div>
-				<div class="flex gap-xs ml-md">
-					<button
-						type="button"
-						class="btn-secondary px-2 py-1 text-caption"
-						onclick={() => startEdit(cmd)}
+		{/if}
+
+		{@const filteredInstall = filterCommands(config.install)}
+		{#if filteredInstall.length > 0}
+			<div class="space-y-xs mb-md">
+				{#each filteredInstall as cmd, i (cmd.id)}
+					<div
+						class="flex items-center gap-sm p-sm rounded-md"
+						style="background: var(--bg-surface); border: 1px solid var(--border-color);"
 					>
-						Edit
-					</button>
-					<button
-						type="button"
-						class="btn-danger px-2 py-1 text-caption"
-						onclick={() => confirmDelete(cmd)}
-					>
-						Delete
-					</button>
-				</div>
+						<!-- Reorder arrows -->
+						<div class="flex flex-col gap-2xs">
+							<button
+								type="button"
+								class="p-2xs text-caption"
+								disabled={i === 0}
+								style="color: {i === 0 ? 'var(--text-muted)' : 'var(--text-secondary)'}; opacity: {i === 0 ? 0.3 : 1};"
+								onclick={() => reorderCommand('install', cmd, 'up')}
+								title="Move up"
+							>
+								<svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+									<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7"/>
+								</svg>
+							</button>
+							<button
+								type="button"
+								class="p-2xs text-caption"
+								disabled={i === filteredInstall.length - 1}
+								style="color: {i === filteredInstall.length - 1 ? 'var(--text-muted)' : 'var(--text-secondary)'}; opacity: {i === filteredInstall.length - 1 ? 0.3 : 1};"
+								onclick={() => reorderCommand('install', cmd, 'down')}
+								title="Move down"
+							>
+								<svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+									<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+								</svg>
+							</button>
+						</div>
+
+						<div class="flex-1 min-w-0">
+							<div class="flex items-center gap-xs mb-2xs">
+								<span class="text-body-sm font-medium" style="color: var(--text-primary);">{cmd.label}</span>
+								{#if cmd.targetProcess}
+									<span class="text-caption px-2 py-0.5 rounded font-mono" style="background: rgba(0, 112, 243, 0.15); color: #0070F3; border: 1px solid rgba(0, 112, 243, 0.3);">
+										{cmd.targetProcess}
+									</span>
+								{:else}
+									<span class="text-caption px-2 py-0.5 rounded font-mono" style="background: var(--bg-surface); color: var(--text-muted); border: 1px solid var(--border-color);">
+										All Processes
+									</span>
+								{/if}
+							</div>
+							<p class="text-caption font-mono truncate" style="color: var(--text-muted);" title={cmd.command}>
+								{cmd.command}
+							</p>
+						</div>
+
+						<div class="flex gap-xs">
+							<button
+								type="button"
+								class="btn-secondary px-2 py-1 text-caption"
+								onclick={() => startEdit(cmd)}
+							>
+								Edit
+							</button>
+							<button
+								type="button"
+								class="btn-danger px-2 py-1 text-caption"
+								onclick={() => confirmDelete(cmd)}
+							>
+								Delete
+							</button>
+						</div>
+					</div>
+				{/each}
 			</div>
-		{:else}
+		{/if}
+
+		{#if !installAdding}
 			<button
 				type="button"
 				class="btn-secondary px-3 py-1.5 text-caption"
@@ -421,29 +509,43 @@
 	<!-- Build Command Section -->
 	<Card padding>
 		<div class="mb-md flex items-center justify-between">
-			<h3 class="text-h3 font-semibold" style="color: var(--text-primary);">Build Command</h3>
+			<h3 class="text-h3 font-semibold" style="color: var(--text-primary);">Build Commands</h3>
 		</div>
 		<p class="text-caption mb-md" style="color: var(--text-muted);">
-			Custom build command to run instead of detecting package.json build script.
+			Custom build commands to run instead of detecting package.json build script. Multiple build commands run in sequence.
 		</p>
 
-		{#if buildEditing}
-			<div class="space-y-sm">
+		{#if buildAdding}
+			<div class="space-y-sm mb-md p-md rounded-lg" style="background: var(--bg-surface); border: 1px solid var(--border-color);">
 				<input
 					type="text"
 					bind:value={labelInput}
-					placeholder="Label (e.g., Build production)"
+					placeholder="Label (e.g., Build backend or Build frontend)"
 					class="input-base w-full h-10 px-md text-body-sm"
 					maxlength="100"
 				/>
 				<input
 					type="text"
 					bind:value={commandInput}
-					placeholder="Command (e.g., pnpm run build)"
+					placeholder="Command (e.g., pnpm --filter @atlas/backend build)"
 					class="input-base w-full h-10 px-md text-body-sm font-mono"
 					maxlength="2000"
 				/>
-				<div class="flex gap-xs">
+				{#if availableProcesses.length > 0}
+					<div>
+						<label class="text-caption block mb-2xs" style="color: var(--text-muted);">Target Process</label>
+						<select
+							bind:value={targetProcessInput}
+							class="input-base w-full h-10 px-md text-body-sm font-mono"
+						>
+							<option value="">All Processes (Shared)</option>
+							{#each availableProcesses as proc}
+								<option value={proc}>{proc}</option>
+							{/each}
+						</select>
+					</div>
+				{/if}
+				<div class="flex gap-xs pt-xs">
 					<button
 						type="button"
 						class="btn-primary px-3 py-1.5 text-caption"
@@ -461,36 +563,84 @@
 					</button>
 				</div>
 			</div>
-		{:else if config.build.length > 0}
-			{@const cmd = config.build[0]}
-			<div
-				class="flex items-center justify-between p-sm rounded-md"
-				style="background: var(--bg-surface); border: 1px solid var(--border-color);"
-			>
-				<div class="flex-1 min-w-0">
-					<p class="text-body-sm font-medium" style="color: var(--text-primary);">{cmd.label}</p>
-					<p class="text-caption font-mono truncate" style="color: var(--text-muted);" title={cmd.command}>
-						{cmd.command}
-					</p>
-				</div>
-				<div class="flex gap-xs ml-md">
-					<button
-						type="button"
-						class="btn-secondary px-2 py-1 text-caption"
-						onclick={() => startEdit(cmd)}
+		{/if}
+
+		{@const filteredBuild = filterCommands(config.build)}
+		{#if filteredBuild.length > 0}
+			<div class="space-y-xs mb-md">
+				{#each filteredBuild as cmd, i (cmd.id)}
+					<div
+						class="flex items-center gap-sm p-sm rounded-md"
+						style="background: var(--bg-surface); border: 1px solid var(--border-color);"
 					>
-						Edit
-					</button>
-					<button
-						type="button"
-						class="btn-danger px-2 py-1 text-caption"
-						onclick={() => confirmDelete(cmd)}
-					>
-						Delete
-					</button>
-				</div>
+						<!-- Reorder arrows -->
+						<div class="flex flex-col gap-2xs">
+							<button
+								type="button"
+								class="p-2xs text-caption"
+								disabled={i === 0}
+								style="color: {i === 0 ? 'var(--text-muted)' : 'var(--text-secondary)'}; opacity: {i === 0 ? 0.3 : 1};"
+								onclick={() => reorderCommand('build', cmd, 'up')}
+								title="Move up"
+							>
+								<svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+									<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7"/>
+								</svg>
+							</button>
+							<button
+								type="button"
+								class="p-2xs text-caption"
+								disabled={i === filteredBuild.length - 1}
+								style="color: {i === filteredBuild.length - 1 ? 'var(--text-muted)' : 'var(--text-secondary)'}; opacity: {i === filteredBuild.length - 1 ? 0.3 : 1};"
+								onclick={() => reorderCommand('build', cmd, 'down')}
+								title="Move down"
+							>
+								<svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+									<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+								</svg>
+							</button>
+						</div>
+
+						<div class="flex-1 min-w-0">
+							<div class="flex items-center gap-xs mb-2xs">
+								<span class="text-body-sm font-medium" style="color: var(--text-primary);">{cmd.label}</span>
+								{#if cmd.targetProcess}
+									<span class="text-caption px-2 py-0.5 rounded font-mono" style="background: rgba(0, 112, 243, 0.15); color: #0070F3; border: 1px solid rgba(0, 112, 243, 0.3);">
+										{cmd.targetProcess}
+									</span>
+								{:else}
+									<span class="text-caption px-2 py-0.5 rounded font-mono" style="background: var(--bg-surface); color: var(--text-muted); border: 1px solid var(--border-color);">
+										All Processes
+									</span>
+								{/if}
+							</div>
+							<p class="text-caption font-mono truncate" style="color: var(--text-muted);" title={cmd.command}>
+								{cmd.command}
+							</p>
+						</div>
+
+						<div class="flex gap-xs">
+							<button
+								type="button"
+								class="btn-secondary px-2 py-1 text-caption"
+								onclick={() => startEdit(cmd)}
+							>
+								Edit
+							</button>
+							<button
+								type="button"
+								class="btn-danger px-2 py-1 text-caption"
+								onclick={() => confirmDelete(cmd)}
+							>
+								Delete
+							</button>
+						</div>
+					</div>
+				{/each}
 			</div>
-		{:else}
+		{/if}
+
+		{#if !buildAdding}
 			<button
 				type="button"
 				class="btn-secondary px-3 py-1.5 text-caption"
@@ -511,7 +661,7 @@
 		</p>
 
 		{#if restartAdding}
-			<div class="space-y-sm mb-md">
+			<div class="space-y-sm mb-md p-md rounded-lg" style="background: var(--bg-surface); border: 1px solid var(--border-color);">
 				<input
 					type="text"
 					bind:value={labelInput}
@@ -522,11 +672,25 @@
 				<input
 					type="text"
 					bind:value={commandInput}
-					placeholder="Command (e.g., pm2 restart api --update-env)"
+					placeholder="Command (e.g., pm2 restart atlas-backend --update-env)"
 					class="input-base w-full h-10 px-md text-body-sm font-mono"
 					maxlength="2000"
 				/>
-				<div class="flex gap-xs">
+				{#if availableProcesses.length > 0}
+					<div>
+						<label class="text-caption block mb-2xs" style="color: var(--text-muted);">Target Process</label>
+						<select
+							bind:value={targetProcessInput}
+							class="input-base w-full h-10 px-md text-body-sm font-mono"
+						>
+							<option value="">All Processes (Shared)</option>
+							{#each availableProcesses as proc}
+								<option value={proc}>{proc}</option>
+							{/each}
+						</select>
+					</div>
+				{/if}
+				<div class="flex gap-xs pt-xs">
 					<button
 						type="button"
 						class="btn-primary px-3 py-1.5 text-caption"
@@ -546,9 +710,10 @@
 			</div>
 		{/if}
 
-		{#if config.restart.length > 0}
+		{@const filteredRestart = filterCommands(config.restart)}
+		{#if filteredRestart.length > 0}
 			<div class="space-y-xs mb-md">
-				{#each config.restart as cmd, i (cmd.id)}
+				{#each filteredRestart as cmd, i (cmd.id)}
 					<div
 						class="flex items-center gap-sm p-sm rounded-md"
 						style="background: var(--bg-surface); border: 1px solid var(--border-color);"
@@ -560,7 +725,7 @@
 								class="p-2xs text-caption"
 								disabled={i === 0}
 								style="color: {i === 0 ? 'var(--text-muted)' : 'var(--text-secondary)'}; opacity: {i === 0 ? 0.3 : 1};"
-								onclick={() => reorderCommand(cmd, 'up')}
+								onclick={() => reorderCommand('restart', cmd, 'up')}
 								title="Move up"
 							>
 								<svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -570,9 +735,9 @@
 							<button
 								type="button"
 								class="p-2xs text-caption"
-								disabled={i === config.restart.length - 1}
-								style="color: {i === config.restart.length - 1 ? 'var(--text-muted)' : 'var(--text-secondary)'}; opacity: {i === config.restart.length - 1 ? 0.3 : 1};"
-								onclick={() => reorderCommand(cmd, 'down')}
+								disabled={i === filteredRestart.length - 1}
+								style="color: {i === filteredRestart.length - 1 ? 'var(--text-muted)' : 'var(--text-secondary)'}; opacity: {i === filteredRestart.length - 1 ? 0.3 : 1};"
+								onclick={() => reorderCommand('restart', cmd, 'down')}
 								title="Move down"
 							>
 								<svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -581,15 +746,24 @@
 							</button>
 						</div>
 
-						<!-- Command info -->
 						<div class="flex-1 min-w-0">
-							<p class="text-body-sm font-medium" style="color: var(--text-primary);">{cmd.label}</p>
+							<div class="flex items-center gap-xs mb-2xs">
+								<span class="text-body-sm font-medium" style="color: var(--text-primary);">{cmd.label}</span>
+								{#if cmd.targetProcess}
+									<span class="text-caption px-2 py-0.5 rounded font-mono" style="background: rgba(0, 112, 243, 0.15); color: #0070F3; border: 1px solid rgba(0, 112, 243, 0.3);">
+										{cmd.targetProcess}
+									</span>
+								{:else}
+									<span class="text-caption px-2 py-0.5 rounded font-mono" style="background: var(--bg-surface); color: var(--text-muted); border: 1px solid var(--border-color);">
+										All Processes
+									</span>
+								{/if}
+							</div>
 							<p class="text-caption font-mono truncate" style="color: var(--text-muted);" title={cmd.command}>
 								{cmd.command}
 							</p>
 						</div>
 
-						<!-- Actions -->
 						<div class="flex gap-xs">
 							<button
 								type="button"
@@ -632,7 +806,7 @@
 		</p>
 
 		{#if postDeployAdding}
-			<div class="space-y-sm mb-md">
+			<div class="space-y-sm mb-md p-md rounded-lg" style="background: var(--bg-surface); border: 1px solid var(--border-color);">
 				<input
 					type="text"
 					bind:value={labelInput}
@@ -647,7 +821,21 @@
 					class="input-base w-full h-10 px-md text-body-sm font-mono"
 					maxlength="2000"
 				/>
-				<div class="flex gap-xs">
+				{#if availableProcesses.length > 0}
+					<div>
+						<label class="text-caption block mb-2xs" style="color: var(--text-muted);">Target Process</label>
+						<select
+							bind:value={targetProcessInput}
+							class="input-base w-full h-10 px-md text-body-sm font-mono"
+						>
+							<option value="">All Processes (Shared)</option>
+							{#each availableProcesses as proc}
+								<option value={proc}>{proc}</option>
+							{/each}
+						</select>
+					</div>
+				{/if}
+				<div class="flex gap-xs pt-xs">
 					<button
 						type="button"
 						class="btn-primary px-3 py-1.5 text-caption"
@@ -667,9 +855,10 @@
 			</div>
 		{/if}
 
-		{#if config.postDeploy.length > 0}
+		{@const filteredPostDeploy = filterCommands(config.postDeploy)}
+		{#if filteredPostDeploy.length > 0}
 			<div class="space-y-xs mb-md">
-				{#each config.postDeploy as cmd, i (cmd.id)}
+				{#each filteredPostDeploy as cmd, i (cmd.id)}
 					<div
 						class="flex items-center gap-sm p-sm rounded-md"
 						style="background: var(--bg-surface); border: 1px solid var(--border-color);"
@@ -681,7 +870,7 @@
 								class="p-2xs text-caption"
 								disabled={i === 0}
 								style="color: {i === 0 ? 'var(--text-muted)' : 'var(--text-secondary)'}; opacity: {i === 0 ? 0.3 : 1};"
-								onclick={() => reorderPostDeployCommand(cmd, 'up')}
+								onclick={() => reorderCommand('post-deploy', cmd, 'up')}
 								title="Move up"
 							>
 								<svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -691,9 +880,9 @@
 							<button
 								type="button"
 								class="p-2xs text-caption"
-								disabled={i === config.postDeploy.length - 1}
-								style="color: {i === config.postDeploy.length - 1 ? 'var(--text-muted)' : 'var(--text-secondary)'}; opacity: {i === config.postDeploy.length - 1 ? 0.3 : 1};"
-								onclick={() => reorderPostDeployCommand(cmd, 'down')}
+								disabled={i === filteredPostDeploy.length - 1}
+								style="color: {i === filteredPostDeploy.length - 1 ? 'var(--text-muted)' : 'var(--text-secondary)'}; opacity: {i === filteredPostDeploy.length - 1 ? 0.3 : 1};"
+								onclick={() => reorderCommand('post-deploy', cmd, 'down')}
 								title="Move down"
 							>
 								<svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -702,15 +891,24 @@
 							</button>
 						</div>
 
-						<!-- Command info -->
 						<div class="flex-1 min-w-0">
-							<p class="text-body-sm font-medium" style="color: var(--text-primary);">{cmd.label}</p>
+							<div class="flex items-center gap-xs mb-2xs">
+								<span class="text-body-sm font-medium" style="color: var(--text-primary);">{cmd.label}</span>
+								{#if cmd.targetProcess}
+									<span class="text-caption px-2 py-0.5 rounded font-mono" style="background: rgba(0, 112, 243, 0.15); color: #0070F3; border: 1px solid rgba(0, 112, 243, 0.3);">
+										{cmd.targetProcess}
+									</span>
+								{:else}
+									<span class="text-caption px-2 py-0.5 rounded font-mono" style="background: var(--bg-surface); color: var(--text-muted); border: 1px solid var(--border-color);">
+										All Processes
+									</span>
+								{/if}
+							</div>
 							<p class="text-caption font-mono truncate" style="color: var(--text-muted);" title={cmd.command}>
 								{cmd.command}
 							</p>
 						</div>
 
-						<!-- Actions -->
 						<div class="flex gap-xs">
 							<button
 								type="button"
@@ -746,9 +944,9 @@
 
 <!-- Delete Confirmation Modal -->
 {#if deleteTarget}
-	{@const id = `delete-modal-${crypto.randomUUID()}`}
+	{@const modalId = `delete-modal-${crypto.randomUUID()}`}
 	<dialog
-		id={id}
+		id={modalId}
 		class="fixed inset-0 z-50 flex items-center justify-center p-4"
 		style="background: transparent; border: none;"
 		onclose={cancelDelete}

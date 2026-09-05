@@ -859,6 +859,8 @@
           <DeployConfigForm
             projectId={data.projectInternalId ?? ''}
             initialConfig={data.deployConfig}
+            availableProcesses={data.autoDeploySettings.pm2Names && data.autoDeploySettings.pm2Names.length > 0 ? data.autoDeploySettings.pm2Names : groupProcesses.map(p => p.name)}
+            activeProcess={activeProcessName}
           />
           <DeploymentHistory projectId={data.projectInternalId ?? ''} />
         </div>

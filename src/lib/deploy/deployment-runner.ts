@@ -145,21 +145,23 @@ export class DeploymentRunner {
 			const runEnv: EnvMap = { ...process.env };
 			const packageManager = detectPackageManagerOrDefault(workingDir);
 
-			const [installCmd] = await this.deps.deployConfigRepo.getByType(project.id, 'install');
-			if (installCmd) {
-				log(`Installing dependencies (configured): ${installCmd.command}`);
-				const { bin, args, env: inlineEnv } = tokenizeCommand(installCmd.command);
-				const code = await runCommand(
-					workingDir,
-					bin,
-					args,
-					(line, isError) => log(line, isError),
-					{ ...runEnv, ...inlineEnv },
-					INSTALL_BUILD_TIMEOUT_MS
-				);
-				if (code !== 0) {
-					await fail(`Install failed with exit code ${code}`);
-					return;
+			const installCmds = await this.deps.deployConfigRepo.getByType(project.id, 'install');
+			if (installCmds.length > 0) {
+				for (const installCmd of installCmds) {
+					log(`Installing dependencies (configured): ${installCmd.command}`);
+					const { bin, args, env: inlineEnv } = tokenizeCommand(installCmd.command);
+					const code = await runCommand(
+						workingDir,
+						bin,
+						args,
+						(line, isError) => log(line, isError),
+						{ ...runEnv, ...inlineEnv },
+						INSTALL_BUILD_TIMEOUT_MS
+					);
+					if (code !== 0) {
+						await fail(`Install failed with exit code ${code}`);
+						return;
+					}
 				}
 			} else {
 				log(`Installing dependencies (${packageManager})`);
@@ -181,23 +183,25 @@ export class DeploymentRunner {
 
 			// ── Stage: build ────────────────────────────────────────────
 			currentStage = 'build';
-			const [buildCmd] = await this.deps.deployConfigRepo.getByType(project.id, 'build');
+			const buildCmds = await this.deps.deployConfigRepo.getByType(project.id, 'build');
 			const scripts = readPackageScripts(workingDir);
 
-			if (buildCmd) {
-				log(`Building (configured): ${buildCmd.command}`);
-				const { bin, args, env: inlineEnv } = tokenizeCommand(buildCmd.command);
-				const code = await runCommand(
-					workingDir,
-					bin,
-					args,
-					(line, isError) => log(line, isError),
-					{ ...runEnv, ...inlineEnv },
-					INSTALL_BUILD_TIMEOUT_MS
-				);
-				if (code !== 0) {
-					await fail(`Build failed with exit code ${code}. Process NOT restarted.`);
-					return;
+			if (buildCmds.length > 0) {
+				for (const buildCmd of buildCmds) {
+					log(`Building (configured): ${buildCmd.command}`);
+					const { bin, args, env: inlineEnv } = tokenizeCommand(buildCmd.command);
+					const code = await runCommand(
+						workingDir,
+						bin,
+						args,
+						(line, isError) => log(line, isError),
+						{ ...runEnv, ...inlineEnv },
+						INSTALL_BUILD_TIMEOUT_MS
+					);
+					if (code !== 0) {
+						await fail(`Build failed with exit code ${code}. Process NOT restarted.`);
+						return;
+					}
 				}
 			} else if (scripts?.build) {
 				log(`Building (${packageManager} run build)`);

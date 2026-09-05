@@ -5,7 +5,8 @@ import type {
 	CommandType
 } from './deploy-config.types';
 
-const SHELL_METACHAR_REGEX = /[;|&$()`<>]|^&|>>?|<<?|\|\|/;
+// Disallow ;, |, ||, `, $(), <, >, and single & (allowing &&)
+const SHELL_METACHAR_REGEX = /(?:^|[^&])&(?!&)|[;|$()`<>|]/;
 
 export class DeployConfigService {
 	constructor(
@@ -39,6 +40,7 @@ export class DeployConfigService {
 	async saveCommand(payload: {
 		project_id: string;
 		command_type: CommandType;
+		target_process?: string | null;
 		label: string;
 		command: string;
 	}): Promise<DeployCommand> {
@@ -65,39 +67,18 @@ export class DeployConfigService {
 			throw new Error('Command contains disallowed characters');
 		}
 
-		const { project_id, command_type } = payload;
+		const { project_id, command_type, target_process } = payload;
+		const targetProcess = target_process?.trim() || null;
 
-		// Singleton enforcement for install/build
-		if (command_type === 'install' || command_type === 'build') {
-			const existing = await this.repo.getByType(project_id, command_type);
-			if (existing.length > 0) {
-				// Update in place
-				const updated = await this.repo.update(existing[0].id, { label, command });
-				return updated;
-			}
-		}
+		// Auto-assign sort_order = max + 1 for all command types
+		const existing = await this.repo.getByType(project_id, command_type);
+		const maxSortOrder = existing.reduce((max, cmd) => Math.max(max, cmd.sortOrder), -1);
+		const sortOrder = maxSortOrder + 1;
 
-		// For restart/post-deploy (multi-command), auto-assign sort_order = max + 1
-		if (command_type === 'restart' || command_type === 'post-deploy') {
-			const existing = await this.repo.getByType(project_id, command_type);
-			const maxSortOrder = existing.reduce((max, cmd) => Math.max(max, cmd.sortOrder), -1);
-			const sortOrder = maxSortOrder + 1;
-
-			const created = await this.repo.create({
-				projectId: project_id,
-				commandType: command_type,
-				label,
-				command,
-				sortOrder
-			});
-			return created;
-		}
-
-		// Default: regular insert for install/build when no existing
-		const sortOrder = 0;
 		const created = await this.repo.create({
 			projectId: project_id,
 			commandType: command_type,
+			targetProcess,
 			label,
 			command,
 			sortOrder

@@ -29,4 +29,20 @@ describe('tokenizeCommand', () => {
 	it('leaves env empty when the command has no assignments', () => {
 		expect(tokenizeCommand('node -e process.exit(0)').env).toEqual({});
 	});
+
+	it('auto-resolves bare script names to package manager run command', () => {
+		expect(tokenizeCommand('build:backend')).toEqual({
+			bin: 'pnpm',
+			args: ['run', 'build:backend'],
+			env: {}
+		});
+	});
+
+	it('handles shell operators with script names', () => {
+		expect(tokenizeCommand('build:deps && build:backend')).toEqual({
+			bin: 'pnpm run build:deps && pnpm run build:backend',
+			args: [],
+			env: {}
+		});
+	});
 });

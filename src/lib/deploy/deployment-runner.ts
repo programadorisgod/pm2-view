@@ -149,7 +149,7 @@ export class DeploymentRunner {
 			if (installCmds.length > 0) {
 				for (const installCmd of installCmds) {
 					log(`Installing dependencies (configured): ${installCmd.command}`);
-					const { bin, args, env: inlineEnv } = tokenizeCommand(installCmd.command);
+					const { bin, args, env: inlineEnv } = tokenizeCommand(installCmd.command, workingDir);
 					const code = await runCommand(
 						workingDir,
 						bin,
@@ -189,7 +189,7 @@ export class DeploymentRunner {
 			if (buildCmds.length > 0) {
 				for (const buildCmd of buildCmds) {
 					log(`Building (configured): ${buildCmd.command}`);
-					const { bin, args, env: inlineEnv } = tokenizeCommand(buildCmd.command);
+					const { bin, args, env: inlineEnv } = tokenizeCommand(buildCmd.command, workingDir);
 					const code = await runCommand(
 						workingDir,
 						bin,
@@ -286,7 +286,7 @@ export class DeploymentRunner {
 			const postDeployCmds = await this.deps.deployConfigRepo.getByType(project.id, 'post-deploy');
 			for (const cmd of postDeployCmds) {
 				log(`Running post-deploy command: ${cmd.command}`);
-				const { bin, args, env: inlineEnv } = tokenizeCommand(cmd.command);
+				const { bin, args, env: inlineEnv } = tokenizeCommand(cmd.command, workingDir);
 				const code = await runCommand(
 					workingDir,
 					bin,

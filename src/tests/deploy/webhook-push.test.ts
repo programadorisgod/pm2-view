@@ -11,7 +11,8 @@ vi.mock('$lib/db/env', () => ({
 }));
 
 const mockProjectRepo = {
-	getByGithubRepo: vi.fn()
+	getByGithubRepo: vi.fn(),
+	getAll: vi.fn()
 };
 
 const mockDeploymentRepo = {
@@ -22,6 +23,7 @@ const mockDeploymentRepo = {
 vi.mock('$lib/db/repositories/project-repository.impl', () => ({
 	ProjectRepository: class {
 		getByGithubRepo = mockProjectRepo.getByGithubRepo;
+		getAll = mockProjectRepo.getAll;
 	}
 }));
 
@@ -95,6 +97,7 @@ beforeEach(() => {
 	mockDeploymentRepo.create.mockImplementation(async (input) =>
 		makeDeployment('dep-' + Math.random().toString(36).slice(2, 8))
 	);
+	mockProjectRepo.getAll.mockResolvedValue([]);
 	mockProjectRepo.getByGithubRepo.mockResolvedValue([
 		{
 			id: 'project-1',

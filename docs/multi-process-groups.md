@@ -69,7 +69,10 @@ The import wizard (`src/lib/ui/components/github-import-modal.svelte`) detects e
 
 ### Auto-deploy
 
-See [docs/auto-deploy.md](./auto-deploy.md): the deployment runner restarts **every** name in `pm2_names`, and the webhook resolves a group member to its parent project.
+See [docs/auto-deploy.md](./auto-deploy.md):
+- The deployment runner restarts **every** name in `pm2_names`, and the webhook resolves a group member to its parent project.
+- **Per-process Deploy Commands**: In group projects, build and install commands can be filtered per process via the `target_process` column (e.g. separate build commands for `atlas-backend` vs `atlas-frontend`, or shared commands targeting `All`).
+- **Working Directory (`target_path`)**: Resolves workspace root automatically by checking `target_path` or walking up to find `pnpm-lock.yaml`, `pnpm-workspace.yaml`, or `.git` to prevent executing root tasks in app subdirectories.
 
 ## Step-by-step: register a monorepo as a group
 

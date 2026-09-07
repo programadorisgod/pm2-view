@@ -5,7 +5,7 @@ import { projects } from './projects';
 export const deployCommands = sqliteTable('deploy_commands', {
 	id: text('id').primaryKey(),
 	projectId: text('project_id').notNull().references(() => projects.id, { onDelete: 'cascade' }),
-	commandType: text('command_type', { enum: ['install', 'build', 'restart', 'post-deploy'] }).notNull(),
+	commandType: text('command_type', { enum: ['install', 'build', 'restart', 'start', 'post-deploy'] }).notNull(),
 	targetProcess: text('target_process'),
 	label: text('label').notNull(),
 	command: text('command').notNull(),

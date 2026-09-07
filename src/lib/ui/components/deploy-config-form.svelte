@@ -23,6 +23,7 @@
 		install: [],
 		build: [],
 		restart: [],
+		start: [],
 		postDeploy: [],
 	});
 
@@ -31,6 +32,7 @@
 			install: initialConfig.install ? [...initialConfig.install] : [],
 			build: initialConfig.build ? [...initialConfig.build] : [],
 			restart: initialConfig.restart ? [...initialConfig.restart] : [],
+			start: initialConfig.start ? [...initialConfig.start] : [],
 			postDeploy: initialConfig.postDeploy ? [...initialConfig.postDeploy] : [],
 		};
 	});
@@ -42,6 +44,7 @@
 	let installAdding = $state(false);
 	let buildAdding = $state(false);
 	let restartAdding = $state(false);
+	let startAdding = $state(false);
 	let postDeployAdding = $state(false);
 	let editingCommand = $state<DeployCommand | null>(null);
 
@@ -80,7 +83,7 @@
 	}
 
 	async function saveCommand(
-		commandType: 'install' | 'build' | 'restart' | 'post-deploy',
+		commandType: 'install' | 'build' | 'restart' | 'start' | 'post-deploy',
 		existingId?: string
 	) {
 		serverError = null;
@@ -129,6 +132,8 @@
 					config.build = config.build.map((c) => (c.id === existingId ? savedCommand : c));
 				} else if (commandType === 'restart') {
 					config.restart = config.restart.map((c) => (c.id === existingId ? savedCommand : c));
+				} else if (commandType === 'start') {
+					config.start = config.start.map((c) => (c.id === existingId ? savedCommand : c));
 				} else {
 					config.postDeploy = config.postDeploy.map((c) => (c.id === existingId ? savedCommand : c));
 				}
@@ -139,6 +144,8 @@
 					config.build = [...config.build, savedCommand];
 				} else if (commandType === 'restart') {
 					config.restart = [...config.restart, savedCommand];
+				} else if (commandType === 'start') {
+					config.start = [...config.start, savedCommand];
 				} else {
 					config.postDeploy = [...config.postDeploy, savedCommand];
 				}
@@ -172,6 +179,8 @@
 				config.build = config.build.filter((c) => c.id !== cmd.id);
 			} else if (cmd.commandType === 'restart') {
 				config.restart = config.restart.filter((c) => c.id !== cmd.id);
+			} else if (cmd.commandType === 'start') {
+				config.start = config.start.filter((c) => c.id !== cmd.id);
 			} else {
 				config.postDeploy = config.postDeploy.filter((c) => c.id !== cmd.id);
 			}
@@ -183,7 +192,7 @@
 	}
 
 	async function reorderCommand(
-		commandType: 'install' | 'build' | 'restart' | 'post-deploy',
+		commandType: 'install' | 'build' | 'restart' | 'start' | 'post-deploy',
 		cmd: DeployCommand,
 		direction: 'up' | 'down'
 	) {
@@ -191,6 +200,7 @@
 		if (commandType === 'install') list = config.install;
 		else if (commandType === 'build') list = config.build;
 		else if (commandType === 'restart') list = config.restart;
+		else if (commandType === 'start') list = config.start;
 		else list = config.postDeploy;
 
 		const idx = list.findIndex((c) => c.id === cmd.id);
@@ -209,6 +219,7 @@
 		if (commandType === 'install') config.install = newList;
 		else if (commandType === 'build') config.build = newList;
 		else if (commandType === 'restart') config.restart = newList;
+		else if (commandType === 'start') config.start = newList;
 		else config.postDeploy = newList;
 
 		try {
@@ -230,6 +241,7 @@
 			if (commandType === 'install') config.install = oldList;
 			else if (commandType === 'build') config.build = oldList;
 			else if (commandType === 'restart') config.restart = oldList;
+			else if (commandType === 'start') config.start = oldList;
 			else config.postDeploy = oldList;
 			serverError = 'Failed to reorder commands';
 		}
@@ -257,6 +269,11 @@
 		restartAdding = true;
 	}
 
+	function startAddStart() {
+		resetInputs(activeProcess);
+		startAdding = true;
+	}
+
 	function startAddPostDeploy() {
 		resetInputs(activeProcess);
 		postDeployAdding = true;
@@ -270,6 +287,7 @@
 		if (cmd.commandType === 'install') installAdding = true;
 		else if (cmd.commandType === 'build') buildAdding = true;
 		else if (cmd.commandType === 'restart') restartAdding = true;
+		else if (cmd.commandType === 'start') startAdding = true;
 		else postDeployAdding = true;
 	}
 
@@ -277,6 +295,7 @@
 		installAdding = false;
 		buildAdding = false;
 		restartAdding = false;
+		startAdding = false;
 		postDeployAdding = false;
 		editingCommand = null;
 		labelInput = '';
@@ -792,6 +811,151 @@
 				onclick={startAddRestart}
 			>
 				+ Add restart command
+			</button>
+		{/if}
+	</Card>
+
+	<!-- Start Commands Section -->
+	<Card padding>
+		<div class="mb-md flex items-center justify-between">
+			<h3 class="text-h3 font-semibold" style="color: var(--text-primary);">Start Commands</h3>
+		</div>
+		<p class="text-caption mb-md" style="color: var(--text-muted);">
+			Custom startup commands for ecosystem files or process groups (e.g. pm2 start ecosystem.config.cjs --only process-name).
+		</p>
+
+		{#if startAdding}
+			<div class="space-y-sm mb-md p-md rounded-lg" style="background: var(--bg-surface); border: 1px solid var(--border-color);">
+				<input
+					type="text"
+					bind:value={labelInput}
+					placeholder="Label (e.g., Start batch service)"
+					class="input-base w-full h-10 px-md text-body-sm"
+					maxlength="100"
+				/>
+				<input
+					type="text"
+					bind:value={commandInput}
+					placeholder="Command (e.g., pm2 start ecosystem.config.cjs --only repositori-patologia-batch)"
+					class="input-base w-full h-10 px-md text-body-sm font-mono"
+					maxlength="2000"
+				/>
+				{#if availableProcesses.length > 0}
+					<div>
+						<label class="text-caption block mb-2xs" style="color: var(--text-muted);">Target Process</label>
+						<select
+							bind:value={targetProcessInput}
+							class="input-base w-full h-10 px-md text-body-sm font-mono"
+						>
+							<option value="">All Processes (Shared)</option>
+							{#each availableProcesses as proc}
+								<option value={proc}>{proc}</option>
+							{/each}
+						</select>
+					</div>
+				{/if}
+				<div class="flex gap-xs pt-xs">
+					<button
+						type="button"
+						class="btn-primary px-3 py-1.5 text-caption"
+						disabled={isSaving}
+						onclick={() => saveCommand('start', editingCommand?.id)}
+					>
+						{isSaving ? 'Saving...' : 'Save'}
+					</button>
+					<button
+						type="button"
+						class="btn-secondary px-3 py-1.5 text-caption"
+						onclick={closeForms}
+					>
+						Cancel
+					</button>
+				</div>
+			</div>
+		{/if}
+
+		{@const filteredStart = filterCommands(config.start)}
+		{#if filteredStart.length > 0}
+			<div class="space-y-xs mb-md">
+				{#each filteredStart as cmd, i (cmd.id)}
+					<div
+						class="flex items-center gap-sm p-sm rounded-md"
+						style="background: var(--bg-surface); border: 1px solid var(--border-color);"
+					>
+						<!-- Reorder arrows -->
+						<div class="flex flex-col gap-2xs">
+							<button
+								type="button"
+								class="p-2xs text-caption"
+								disabled={i === 0}
+								style="color: {i === 0 ? 'var(--text-muted)' : 'var(--text-secondary)'}; opacity: {i === 0 ? 0.3 : 1};"
+								onclick={() => reorderCommand('start', cmd, 'up')}
+								title="Move up"
+							>
+								<svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+									<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7"/>
+								</svg>
+							</button>
+							<button
+								type="button"
+								class="p-2xs text-caption"
+								disabled={i === filteredStart.length - 1}
+								style="color: {i === filteredStart.length - 1 ? 'var(--text-muted)' : 'var(--text-secondary)'}; opacity: {i === filteredStart.length - 1 ? 0.3 : 1};"
+								onclick={() => reorderCommand('start', cmd, 'down')}
+								title="Move down"
+							>
+								<svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+									<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+								</svg>
+							</button>
+						</div>
+
+						<div class="flex-1 min-w-0">
+							<div class="flex items-center gap-xs mb-2xs">
+								<span class="text-body-sm font-medium" style="color: var(--text-primary);">{cmd.label}</span>
+								{#if cmd.targetProcess}
+									<span class="text-caption px-2 py-0.5 rounded font-mono" style="background: rgba(0, 112, 243, 0.15); color: #0070F3; border: 1px solid rgba(0, 112, 243, 0.3);">
+										{cmd.targetProcess}
+									</span>
+								{:else}
+									<span class="text-caption px-2 py-0.5 rounded font-mono" style="background: var(--bg-surface); color: var(--text-muted); border: 1px solid var(--border-color);">
+										All Processes
+									</span>
+								{/if}
+							</div>
+							<p class="text-caption font-mono truncate" style="color: var(--text-muted);" title={cmd.command}>
+								{cmd.command}
+							</p>
+						</div>
+
+						<div class="flex gap-xs">
+							<button
+								type="button"
+								class="btn-secondary px-2 py-1 text-caption"
+								onclick={() => startEdit(cmd)}
+							>
+								Edit
+							</button>
+							<button
+								type="button"
+								class="btn-danger px-2 py-1 text-caption"
+								onclick={() => confirmDelete(cmd)}
+							>
+								Delete
+							</button>
+						</div>
+					</div>
+				{/each}
+			</div>
+		{/if}
+
+		{#if !startAdding}
+			<button
+				type="button"
+				class="btn-secondary px-3 py-1.5 text-caption"
+				onclick={startAddStart}
+			>
+				+ Add start command
 			</button>
 		{/if}
 	</Card>

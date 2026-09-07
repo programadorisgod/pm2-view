@@ -1,4 +1,4 @@
-export type CommandType = 'install' | 'build' | 'restart' | 'post-deploy';
+export type CommandType = 'install' | 'build' | 'restart' | 'start' | 'post-deploy';
 
 export interface DeployCommand {
 	id: string;
@@ -15,6 +15,7 @@ export interface DeployConfig {
 	install: DeployCommand[];
 	build: DeployCommand[];
 	restart: DeployCommand[];
+	start: DeployCommand[];
 	postDeploy: DeployCommand[];
 }
 

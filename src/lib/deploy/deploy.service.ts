@@ -426,8 +426,26 @@ export class DeployService {
 			steps.push({ step: 'build', success: true, exitCode: 0 });
 		}
 
-		// Step 4: pm2 restart --update-env (or custom restart commands)
-		if (options?.restartCommands !== undefined && options.restartCommands.length === 0) {
+		// Step 4: pm2 restart/start (or custom restart/start commands)
+		if (options?.startCommands && options.startCommands.length > 0) {
+			let startFailed = false;
+			for (const cmd of options.startCommands) {
+				log('restart', `─── Start command: ${cmd} ───`, false);
+				const { bin, args, env: inlineEnv } = tokenizeCommand(cmd, workingDir);
+				const stepResult = await this.runStep('restart', workingDir, log, () =>
+					runCommand(workingDir, bin, args, (line, isError) => log('restart', line, isError), { ...env.restartEnv, ...inlineEnv }),
+				);
+				stepResult.step = 'restart';
+				steps.push(stepResult);
+				if (!stepResult.success) {
+					startFailed = true;
+					break;
+				}
+			}
+			if (startFailed) {
+				return this.buildResult(process.name, pmId, workingDir, packageManager, steps);
+			}
+		} else if (options?.restartCommands !== undefined && options.restartCommands.length === 0) {
 			// Empty array = skip restart step entirely
 			log('restart', '─── Skipped: no restart commands selected ───', false);
 			steps.push({ step: 'restart', success: true, exitCode: 0 });
@@ -436,11 +454,11 @@ export class DeployService {
 			let restartFailed = false;
 			for (const cmd of options.restartCommands) {
 				log('restart', `─── Restart command: ${cmd} ───`, false);
+				const { bin, args, env: inlineEnv } = tokenizeCommand(cmd, workingDir);
 				const stepResult = await this.runStep('restart', workingDir, log, () =>
-					runCommand(workingDir, 'pm2', ['restart', process.name, '--update-env'], (line, isError) => log('restart', line, isError), env.restartEnv),
+					runCommand(workingDir, bin, args, (line, isError) => log('restart', line, isError), { ...env.restartEnv, ...inlineEnv }),
 				);
-				// For custom commands, we still use pm2 restart but log the custom command name
-				stepResult.step = 'restart'; // ensure step is marked correctly
+				stepResult.step = 'restart';
 				steps.push(stepResult);
 				if (!stepResult.success) {
 					restartFailed = true;
@@ -605,8 +623,26 @@ export class DeployService {
 			steps.push({ step: 'build', success: true, exitCode: 0 });
 		}
 
-		// Step 4: pm2 restart --update-env (or custom restart commands)
-		if (options?.restartCommands !== undefined && options.restartCommands.length === 0) {
+		// Step 4: pm2 restart/start (or custom restart/start commands)
+		if (options?.startCommands && options.startCommands.length > 0) {
+			let startFailed = false;
+			for (const cmd of options.startCommands) {
+				log('restart', `─── Start command: ${cmd} ───`, false);
+				const { bin, args, env: inlineEnv } = tokenizeCommand(cmd, workingDir);
+				const stepResult = await this.runStep('restart', workingDir, log, () =>
+					runCommand(workingDir, bin, args, (line, isError) => log('restart', line, isError), { ...env.restartEnv, ...inlineEnv }),
+				);
+				stepResult.step = 'restart';
+				steps.push(stepResult);
+				if (!stepResult.success) {
+					startFailed = true;
+					break;
+				}
+			}
+			if (startFailed) {
+				return this.buildResult(process.name, pmId, workingDir, packageManager, steps);
+			}
+		} else if (options?.restartCommands !== undefined && options.restartCommands.length === 0) {
 			// Empty array = skip restart step entirely
 			log('restart', '─── Skipped: no restart commands selected ───', false);
 			steps.push({ step: 'restart', success: true, exitCode: 0 });
@@ -615,8 +651,9 @@ export class DeployService {
 			let restartFailed = false;
 			for (const cmd of options.restartCommands) {
 				log('restart', `─── Restart command: ${cmd} ───`, false);
+				const { bin, args, env: inlineEnv } = tokenizeCommand(cmd, workingDir);
 				const stepResult = await this.runStep('restart', workingDir, log, () =>
-					runCommand(workingDir, 'pm2', ['restart', process.name, '--update-env'], (line, isError) => log('restart', line, isError), env.restartEnv),
+					runCommand(workingDir, bin, args, (line, isError) => log('restart', line, isError), { ...env.restartEnv, ...inlineEnv }),
 				);
 				stepResult.step = 'restart';
 				steps.push(stepResult);

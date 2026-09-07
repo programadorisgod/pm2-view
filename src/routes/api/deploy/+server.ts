@@ -12,6 +12,7 @@ const deploySchema = z.object({
 	pm_id: z.string().min(1, 'Process ID is required'),
 	projectId: z.string().optional(),
 	restartCommandIds: z.array(z.string()).optional(),
+	startCommandIds: z.array(z.string()).optional(),
 	installCommand: z.string().optional(),
 	buildCommand: z.string().optional(),
 });
@@ -43,7 +44,7 @@ export const POST: RequestHandler = async ({ request, getClientAddress }) => {
 		return json({ error: getZodErrorMessage(validationResult) }, { status: 400 });
 	}
 
-	const { pm_id, projectId, restartCommandIds, installCommand, buildCommand } = validationResult.data;
+	const { pm_id, projectId, restartCommandIds, startCommandIds, installCommand, buildCommand } = validationResult.data;
 
 	// Resolve restart command IDs to actual commands
 	let resolvedRestartCommands: string[] | undefined;
@@ -60,9 +61,24 @@ export const POST: RequestHandler = async ({ request, getClientAddress }) => {
 			.map((c) => c.command);
 	}
 
+	// Resolve start command IDs to actual commands
+	let resolvedStartCommands: string[] | undefined;
+	if (startCommandIds && startCommandIds.length > 0 && projectId) {
+		const deployConfigRepo = new DeployConfigRepository();
+		const commands = await deployConfigRepo.getByProjectId(projectId);
+		const selectedCommands = commands.filter((c) => startCommandIds.includes(c.id));
+		if (selectedCommands.length !== startCommandIds.length) {
+			activeDeploys.delete(pm_id);
+			return json({ error: 'One or more start command IDs are invalid' }, { status: 400 });
+		}
+		resolvedStartCommands = selectedCommands
+			.sort((a, b) => a.sortOrder - b.sortOrder)
+			.map((c) => c.command);
+	}
+
 	let deployOptions: DeployOptions | undefined =
-		installCommand || buildCommand || resolvedRestartCommands
-			? { installCommand, buildCommand, restartCommands: resolvedRestartCommands }
+		installCommand || buildCommand || resolvedRestartCommands || resolvedStartCommands
+			? { installCommand, buildCommand, restartCommands: resolvedRestartCommands, startCommands: resolvedStartCommands }
 			: undefined;
 
 	// Load DB-managed env vars for the project (fail open — non-critical)

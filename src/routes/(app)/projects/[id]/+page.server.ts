@@ -1,6 +1,7 @@
 import { PM2Repository } from '$lib/pm2/pm2-repository.impl';
 import { PM2Service } from '$lib/pm2/pm2.service';
 import { DeployConfigRepository } from '$lib/db/repositories/deploy-config-repository.impl';
+import { DeployConfigService } from '$lib/deploy-config/deploy-config.service';
 import type { DeployConfig } from '$lib/deploy-config/deploy-config.types';
 import { createServices } from '$lib/services/factory';
 import { auth } from '$lib/auth';
@@ -41,7 +42,7 @@ export const load: PageServerLoad = async ({ params, request }) => {
 	}
 
 	// Get deploy configuration (auto-provisions project if not registered)
-	let deployConfig: DeployConfig = { install: [], build: [], restart: [], postDeploy: [] };
+	let deployConfig: DeployConfig = { install: [], build: [], restart: [], start: [], postDeploy: [] };
 	let projectInternalId: string | null = null;
 	let autoDeploySettings = { autoDeployEnabled: false, githubRepo: null as string | null, deployBranch: 'main', targetPath: undefined as string | undefined, pm2Names: [] as string[], pm2Name: '' as string };
 	let groupProcesses: typeof process[] = [];
@@ -171,14 +172,8 @@ export const load: PageServerLoad = async ({ params, request }) => {
 			}
 
 			const deployConfigRepo = new DeployConfigRepository();
-			const commands = await deployConfigRepo.getByProjectId(project.id);
-			// Group by command type
-			deployConfig = {
-				install: commands.filter((c) => c.commandType === 'install'),
-				build: commands.filter((c) => c.commandType === 'build'),
-				restart: commands.filter((c) => c.commandType === 'restart'),
-				postDeploy: commands.filter((c) => c.commandType === 'post-deploy'),
-			};
+			const deployConfigService = new DeployConfigService(deployConfigRepo);
+			deployConfig = await deployConfigService.getConfig(project.id);
 		}
 	} catch {
 		// Non-critical: deploy config fetch failure

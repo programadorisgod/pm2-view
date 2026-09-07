@@ -317,28 +317,56 @@
     if (container) container.scrollTop = container.scrollHeight;
   }
 
-  // Auto-scroll: check scroll position via rAF only when filteredLogs changes,
-  // but debounce to avoid hammering layout on rapid updates
+  function getActiveContainers(): HTMLDivElement[] {
+    if (viewMode === 'unified') {
+      return unifiedContainer ? [unifiedContainer] : [];
+    }
+    const list: HTMLDivElement[] = [];
+    if (outContainer) list.push(outContainer);
+    if (errContainer) list.push(errContainer);
+    return list;
+  }
+
+  // Auto-scroll: check scroll position via rAF when filteredLogs changes
   let lastAutoScrollCheck = 0;
   $effect(() => {
-    // Read filteredLogs.length to subscribe, but we only care about increases
+    // Read filteredLogs.length to subscribe
     const len = filteredLogs.length;
     const now = performance.now();
     if (len > 0 && now - lastAutoScrollCheck > 100) {
       lastAutoScrollCheck = now;
       requestAnimationFrame(() => {
-        const container = viewMode === 'unified' ? unifiedContainer : outContainer;
-        if (container) {
+        for (const container of getActiveContainers()) {
           if (sortOrder === 'newest') {
             const atTop = container.scrollTop < 20;
             if (atTop) container.scrollTop = 0;
           } else {
             const atBottom = container.scrollTop + container.clientHeight >= container.scrollHeight - 20;
-            if (atBottom) container.scrollTop = container.scrollHeight;
+            if (atBottom || container.scrollTop === 0) {
+              container.scrollTop = container.scrollHeight;
+            }
           }
         }
       });
     }
+  });
+
+  // Re-sync scroll position when viewMode or sortOrder changes
+  $effect(() => {
+    const mode = viewMode;
+    const order = sortOrder;
+    unifiedScrolledUp = false;
+    outScrolledUp = false;
+    errScrolledUp = false;
+    requestAnimationFrame(() => {
+      for (const container of getActiveContainers()) {
+        if (order === 'newest') {
+          container.scrollTop = 0;
+        } else {
+          container.scrollTop = container.scrollHeight;
+        }
+      }
+    });
   });
 
   function clearFilters() {

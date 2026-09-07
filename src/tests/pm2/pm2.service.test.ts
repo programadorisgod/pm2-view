@@ -2,6 +2,27 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { PM2Service } from '../../lib/pm2/pm2.service';
 import type { IPM2Repository, PM2Process } from '../../lib/pm2/pm2.types';
 
+vi.mock('$lib/db', () => ({
+	db: {
+		select: vi.fn().mockReturnValue({
+			from: vi.fn().mockReturnValue({
+				where: vi.fn().mockReturnValue({
+					get: vi.fn().mockResolvedValue(null),
+					all: vi.fn().mockResolvedValue([])
+				})
+			})
+		}),
+		delete: vi.fn().mockReturnValue({
+			where: vi.fn().mockResolvedValue(undefined)
+		}),
+		update: vi.fn().mockReturnValue({
+			set: vi.fn().mockReturnValue({
+				where: vi.fn().mockResolvedValue(undefined)
+			})
+		})
+	}
+}));
+
 // Mock repository
 function createMockRepo(overrides: Partial<IPM2Repository> = {}): IPM2Repository {
 	return {

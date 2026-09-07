@@ -48,6 +48,7 @@ export interface DeployOptions {
 	installCommand?: string;
 	buildCommand?: string;
 	restartCommands?: string[];
+	startCommands?: string[];
 	/** Extra environment variables (managed in pm2-view) to apply during the deploy */
 	env?: Record<string, string>;
 }

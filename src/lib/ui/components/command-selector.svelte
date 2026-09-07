@@ -7,21 +7,30 @@
 		onCancel,
 	}: {
 		config: DeployConfig;
-		onSelect: (selectedRestartId: string) => void;
+		onSelect: (selectedId: string, isStart?: boolean) => void;
 		onCancel: () => void;
 	} = $props();
 
-	// Single restart command selected - use $effect to sync with prop changes
-	let selectedRestartId = $state<string>('');
+	// Selected command ID and whether it's a start command
+	let selectedCommandId = $state<string>('');
+	let isStartCommand = $state<boolean>(false);
 
 	$effect(() => {
-		// Default to first restart command if available
-		selectedRestartId = config.restart.length > 0 ? config.restart[0].id : '';
+		if (config.start && config.start.length > 0) {
+			selectedCommandId = config.start[0].id;
+			isStartCommand = true;
+		} else if (config.restart && config.restart.length > 0) {
+			selectedCommandId = config.restart[0].id;
+			isStartCommand = false;
+		} else {
+			selectedCommandId = '';
+			isStartCommand = false;
+		}
 	});
 
 	function handleDeploy() {
-		if (selectedRestartId) {
-			onSelect(selectedRestartId);
+		if (selectedCommandId) {
+			onSelect(selectedCommandId, isStartCommand);
 		}
 	}
 
@@ -42,7 +51,7 @@
 	</div>
 
 	<!-- Install Command -->
-	{#if config.install.length > 0}
+	{#if config.install && config.install.length > 0}
 		{@const cmd = config.install[0]}
 		<div class="space-y-xs">
 			<h4 class="text-body-sm font-semibold" style="color: var(--text-primary);">
@@ -67,7 +76,7 @@
 	{/if}
 
 	<!-- Build Command -->
-	{#if config.build.length > 0}
+	{#if config.build && config.build.length > 0}
 		{@const cmd = config.build[0]}
 		<div class="space-y-xs">
 			<h4 class="text-body-sm font-semibold" style="color: var(--text-primary);">
@@ -91,8 +100,54 @@
 		</div>
 	{/if}
 
+	<!-- Start Commands -->
+	{#if config.start && config.start.length > 0}
+		<div class="space-y-xs">
+			<h4 class="text-body-sm font-semibold" style="color: var(--text-primary);">
+				Start Command
+			</h4>
+			<p class="text-caption" style="color: var(--text-muted);">
+				Choose which start command to run during this deploy
+			</p>
+
+			<div class="space-y-xs">
+				{#each config.start as cmd (cmd.id)}
+					<div
+						class="flex items-center gap-sm p-sm rounded-md"
+						style="background: var(--bg-surface); border: 1px solid var(--border-color);"
+					>
+						<input
+							type="radio"
+							id="start-{cmd.id}"
+							name="deploy-cmd"
+							value={cmd.id}
+							checked={selectedCommandId === cmd.id}
+							onchange={() => { selectedCommandId = cmd.id; isStartCommand = true; }}
+							class="w-4 h-4"
+							style="accent-color: #0070F3;"
+						/>
+						<label for="start-{cmd.id}" class="flex-1 min-w-0 cursor-pointer">
+							<div>
+								<p class="text-body-sm font-medium" style="color: var(--text-primary);">
+									{cmd.label}
+								</p>
+								<p
+									class="text-caption font-mono truncate"
+									style="color: var(--text-muted);"
+									title={cmd.command}
+								>
+									{truncateCommand(cmd.command)}
+								</p>
+							</div>
+						</label>
+					</div>
+				{/each}
+			</div>
+		</div>
+	{/if}
+
 	<!-- Restart Commands -->
-	{#if config.restart.length > 0}
+	{#if config.restart && config.restart.length > 0}
 		<div class="space-y-xs">
 			<h4 class="text-body-sm font-semibold" style="color: var(--text-primary);">
 				Restart Command
@@ -102,7 +157,6 @@
 			</p>
 
 			<div class="space-y-xs">
-				<!-- Individual command radio buttons -->
 				{#each config.restart as cmd (cmd.id)}
 					<div
 						class="flex items-center gap-sm p-sm rounded-md"
@@ -111,9 +165,10 @@
 						<input
 							type="radio"
 							id="restart-{cmd.id}"
-							name="restart-command"
+							name="deploy-cmd"
 							value={cmd.id}
-							bind:group={selectedRestartId}
+							checked={selectedCommandId === cmd.id}
+							onchange={() => { selectedCommandId = cmd.id; isStartCommand = false; }}
 							class="w-4 h-4"
 							style="accent-color: #0070F3;"
 						/>

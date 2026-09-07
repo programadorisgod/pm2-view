@@ -38,6 +38,7 @@
 	let view = $state<'loading' | 'selecting' | 'deploying'>('deploying');
 	let deployConfig = $state<DeployConfig | null>(null);
 	let selectedCommandIds = $state<string[]>([]);
+	let isStartCommandSelected = $state(false);
 	let installCommand = $state<string | undefined>(undefined);
 	let buildCommand = $state<string | undefined>(undefined);
 
@@ -56,6 +57,7 @@
 			deploySuccess = null;
 			approvalPending = false;
 			approvalPackages = [];
+			isStartCommandSelected = false;
 			view = 'loading';
 			dialogRef?.showModal();
 			onDeploying?.(true);
@@ -66,6 +68,7 @@
 			view = 'deploying';
 			deployConfig = null;
 			selectedCommandIds = [];
+			isStartCommandSelected = false;
 			installCommand = undefined;
 			buildCommand = undefined;
 		}
@@ -113,20 +116,24 @@
 				buildCommand = match.command;
 			}
 
-			// Show the selection step only when there are restart commands to choose from.
-			// Install/build commands are passed through automatically, so projects with
-			// install/build configured but no restart commands go straight to deploying
-			// (the default `pm2 restart` step is used).
+			const hasStartCommands = config.start && config.start.length > 0;
 			const hasRestartCommands = config.restart && config.restart.length > 0;
 
-			if (hasRestartCommands) {
-				// Pre-select all restart commands by default
-				selectedCommandIds = config.restart.map((cmd) => cmd.id);
+			if (hasStartCommands || hasRestartCommands) {
+				if (hasStartCommands) {
+					const match = config.start.find((c) => c.targetProcess === processName) || config.start[0];
+					selectedCommandIds = [match.id];
+					isStartCommandSelected = true;
+				} else if (hasRestartCommands) {
+					const match = config.restart.find((c) => c.targetProcess === processName) || config.restart[0];
+					selectedCommandIds = [match.id];
+					isStartCommandSelected = false;
+				}
 				view = 'selecting';
 				isDeploying = false;
 				onDeploying?.(false);
 			} else {
-				// No restart commands to choose: deploy immediately with defaults
+				// No restart/start commands to choose: deploy immediately with defaults
 				view = 'deploying';
 				startDeploy();
 			}
@@ -137,8 +144,9 @@
 		}
 	}
 
-	async function handleCommandSelect(id: string) {
+	async function handleCommandSelect(id: string, isStart?: boolean) {
 		selectedCommandIds = [id];
+		isStartCommandSelected = !!isStart;
 		view = 'deploying';
 		isDeploying = true;
 		onDeploying?.(true);
@@ -157,7 +165,13 @@
 		if (projectId) body.projectId = projectId;
 		if (installCommand) body.installCommand = installCommand;
 		if (buildCommand) body.buildCommand = buildCommand;
-		if (selectedCommandIds.length > 0) body.restartCommandIds = selectedCommandIds;
+		if (selectedCommandIds.length > 0) {
+			if (isStartCommandSelected) {
+				body.startCommandIds = selectedCommandIds;
+			} else {
+				body.restartCommandIds = selectedCommandIds;
+			}
+		}
 
 		try {
 			const res = await fetch(`${base}/api/deploy`, {

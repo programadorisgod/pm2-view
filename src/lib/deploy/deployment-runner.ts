@@ -22,7 +22,7 @@ export interface DeploymentRunnerDeps {
 	deploymentRepo: IDeploymentRepository;
 	gitService: GitService;
 	pm2Repo: IPM2Repository;
-	deployConfigRepo: { getByType(projectId: string, type: 'install' | 'build' | 'restart' | 'post-deploy'): Promise<{ command: string; sortOrder: number }[]> };
+	deployConfigRepo: { getByType(projectId: string, type: 'install' | 'build' | 'restart' | 'start' | 'post-deploy'): Promise<{ command: string; sortOrder: number }[]> };
 	/** Runs `pm2 restart <name> --update-env`; injectable for testing. */
 	runPm2Restart: (
 		processName: string,
@@ -242,29 +242,69 @@ export class DeploymentRunner {
 				...projectEnv
 			};
 
-			// Verify all processes exist before restarting any
-			for (const procName of processNames) {
-				const existing = await this.deps.pm2Repo.describe(procName);
-				if (!existing) {
-					await fail(
-						`PM2 process "${procName}" not found. Start it once manually; auto-start from webhook deployments is not supported yet.`
-					);
-					return;
-				}
-			}
+			// Check if custom start or restart commands exist
+			const startCmds = await this.deps.deployConfigRepo.getByType(project.id, 'start');
+			const restartCmds = await this.deps.deployConfigRepo.getByType(project.id, 'restart');
 
-			// Restart all processes sequentially
-			for (const procName of processNames) {
-				log(`Restarting PM2 process: ${procName}`);
-				const restartCode = await this.deps.runPm2Restart(
-					procName,
-					workingDir,
-					restartEnv,
-					(line, isError) => log(line, isError)
-				);
-				if (restartCode !== 0) {
-					await fail(`PM2 restart failed for "${procName}" with exit code ${restartCode}`);
-					return;
+			if (startCmds.length > 0) {
+				for (const startCmd of startCmds) {
+					log(`Starting PM2 process (configured): ${startCmd.command}`);
+					const { bin, args, env: inlineEnv } = tokenizeCommand(startCmd.command, workingDir);
+					const code = await runCommand(
+						workingDir,
+						bin,
+						args,
+						(line, isError) => log(line, isError),
+						{ ...restartEnv, ...inlineEnv },
+						INSTALL_BUILD_TIMEOUT_MS
+					);
+					if (code !== 0) {
+						await fail(`PM2 start command failed with exit code ${code}`);
+						return;
+					}
+				}
+			} else if (restartCmds.length > 0) {
+				for (const restartCmd of restartCmds) {
+					log(`Restarting PM2 process (configured): ${restartCmd.command}`);
+					const { bin, args, env: inlineEnv } = tokenizeCommand(restartCmd.command, workingDir);
+					const code = await runCommand(
+						workingDir,
+						bin,
+						args,
+						(line, isError) => log(line, isError),
+						{ ...restartEnv, ...inlineEnv },
+						INSTALL_BUILD_TIMEOUT_MS
+					);
+					if (code !== 0) {
+						await fail(`PM2 restart command failed with exit code ${code}`);
+						return;
+					}
+				}
+			} else {
+				// Verify all processes exist before restarting any
+				for (const procName of processNames) {
+					const existing = await this.deps.pm2Repo.describe(procName);
+					if (!existing) {
+						await fail(
+							`PM2 process "${procName}" not found. Start it once manually; auto-start from webhook deployments is not supported yet.`
+						);
+						return;
+					}
+				}
+
+				// Restart all processes sequentially
+				for (const procName of processNames) {
+					log(`Restarting PM2 process: ${procName}`);
+					const restartCode = await this.deps.runPm2Restart(
+						procName,
+						workingDir,
+						restartEnv,
+						(line, isError) => log(line, isError)
+					);
+					if (restartCode !== 0) {
+						await fail(`PM2 restart failed for "${procName}" with exit code ${restartCode}`);
+						return;
+					}
 				}
 			}
 

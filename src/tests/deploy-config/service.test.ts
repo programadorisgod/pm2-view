@@ -71,6 +71,15 @@ describe('DeployConfigService', () => {
 			sortOrder: 2,
 			createdAt: new Date(),
 		},
+		{
+			id: 'cmd-6',
+			projectId: 'project-1',
+			commandType: 'start',
+			label: 'Start Ecosystem Process',
+			command: 'pm2 start ecosystem.config.cjs --only repositori-patologia-batch',
+			sortOrder: 0,
+			createdAt: new Date(),
+		},
 	];
 
 	beforeEach(() => {
@@ -90,6 +99,8 @@ describe('DeployConfigService', () => {
 			expect(result.build[0].commandType).toBe('build');
 			expect(result.restart).toHaveLength(3);
 			expect(result.restart[0].commandType).toBe('restart');
+			expect(result.start).toHaveLength(1);
+			expect(result.start[0].commandType).toBe('start');
 		});
 
 		it('should return empty groups for project with no config', async () => {
@@ -100,6 +111,7 @@ describe('DeployConfigService', () => {
 			expect(result.install).toEqual([]);
 			expect(result.build).toEqual([]);
 			expect(result.restart).toEqual([]);
+			expect(result.start).toEqual([]);
 		});
 
 		it('should sort restart commands by sortOrder', async () => {

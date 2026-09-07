@@ -19,12 +19,14 @@ export class DeployConfigService {
 		const install: DeployCommand[] = [];
 		const build: DeployCommand[] = [];
 		const restart: DeployCommand[] = [];
+		const start: DeployCommand[] = [];
 		const postDeploy: DeployCommand[] = [];
 
 		for (const cmd of commands) {
 			if (cmd.commandType === 'install') install.push(cmd);
 			else if (cmd.commandType === 'build') build.push(cmd);
 			else if (cmd.commandType === 'restart') restart.push(cmd);
+			else if (cmd.commandType === 'start') start.push(cmd);
 			else if (cmd.commandType === 'post-deploy') postDeploy.push(cmd);
 		}
 
@@ -32,9 +34,10 @@ export class DeployConfigService {
 		install.sort((a, b) => a.sortOrder - b.sortOrder);
 		build.sort((a, b) => a.sortOrder - b.sortOrder);
 		restart.sort((a, b) => a.sortOrder - b.sortOrder);
+		start.sort((a, b) => a.sortOrder - b.sortOrder);
 		postDeploy.sort((a, b) => a.sortOrder - b.sortOrder);
 
-		return { install, build, restart, postDeploy };
+		return { install, build, restart, start, postDeploy };
 	}
 
 	async saveCommand(payload: {

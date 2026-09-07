@@ -8,7 +8,7 @@ import type { RequestHandler } from './$types';
 
 const createCommandSchema = z.object({
 	project_id: z.string().min(1, 'Project ID is required'),
-	command_type: z.enum(['install', 'build', 'restart', 'post-deploy']),
+	command_type: z.enum(['install', 'build', 'restart', 'start', 'post-deploy']),
 	target_process: z.string().nullable().optional(),
 	label: z.string().min(1, 'Label is required').max(100, 'Label must be 100 characters or fewer'),
 	command: z.string().min(1, 'Command is required').max(2000, 'Command must be 2000 characters or fewer')

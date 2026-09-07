@@ -31,7 +31,10 @@ export function startStatusWatcher(intervalMs: number = 5000): void {
 						previousStatus
 					});
 
-					if (mapStatus(currentStatus) === 'error' && alertNotifier) {
+					const mappedCurrentStatus = mapStatus(currentStatus, process.pm2_env?.exit_code, process.pm2_env?.autorestart);
+					const mappedPreviousStatus = mapStatus(previousStatus);
+
+					if (mappedCurrentStatus === 'error' && mappedPreviousStatus !== 'error' && alertNotifier) {
 						alertNotifier.notifyProcessError(process.name, previousStatus).catch((err) => {
 							logger.error('Failed to send process error alert', {
 								processName: process.name,

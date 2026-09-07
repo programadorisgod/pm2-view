@@ -15,6 +15,8 @@ export interface PM2Process {
 		pm_err_log_path?: string;
 		cwd?: string;
 		pm_exec_path?: string;
+		exit_code?: number;
+		autorestart?: boolean;
 	};
 }
 

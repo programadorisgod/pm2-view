@@ -196,7 +196,7 @@
 		<button
 			type="button"
 			class="btn-primary px-4 py-2 text-body-sm font-semibold"
-			disabled={!selectedRestartId}
+			disabled={!selectedCommandId}
 			onclick={handleDeploy}
 		>
 			Deploy

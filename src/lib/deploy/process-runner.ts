@@ -133,7 +133,7 @@ export function detectPackageManagerOrDefault(dir: string): PackageManager {
 }
 
 const KNOWN_BINARIES = new Set([
-	'pnpm', 'npm', 'yarn', 'bun', 'node', 'npx', 'dlx',
+	'pm2', 'pnpm', 'npm', 'yarn', 'bun', 'node', 'npx', 'dlx',
 	'git', 'sh', 'bash', 'zsh', 'cmd', 'powershell',
 	'docker', 'make', 'cargo', 'go', 'python', 'python3', 'ruby'
 ]);

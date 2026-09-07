@@ -95,11 +95,12 @@ describe('PM2Service', () => {
 
 		it('should return error when restart fails', async () => {
 			vi.mocked(mockRepo.restart).mockRejectedValue(new Error('Restart failed'));
+			vi.mocked(mockRepo.describe).mockRejectedValue(new Error('Restart failed'));
 
 			const result = await service.restartProcess('test-app');
 
 			expect(result.success).toBe(false);
-			expect(result.message).toContain('Restart failed');
+			expect(result.message).toBe('Restart failed');
 		});
 	});
 
@@ -115,6 +116,7 @@ describe('PM2Service', () => {
 
 	describe('deleteProcess', () => {
 		it('should return success when delete succeeds', async () => {
+			vi.mocked(mockRepo.describe).mockResolvedValue(mockProcess);
 			vi.mocked(mockRepo.delete).mockResolvedValue(undefined);
 
 			const result = await service.deleteProcess('test-app');

@@ -131,10 +131,15 @@
   function getStatusVariant(status: string) {
     switch (status) {
       case "online":
+      case "launching":
         return "online";
       case "stopped":
+      case "stopping":
+      case "one-launch-only":
         return "stopped";
       case "error":
+      case "errored":
+      case "waiting restart":
         return "error";
       default:
         return "offline";

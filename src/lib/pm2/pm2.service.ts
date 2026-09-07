@@ -8,17 +8,21 @@ const execAsync = promisify(exec);
 
 export type ProcessStatus = 'online' | 'stopped' | 'error' | 'offline';
 
-export function mapStatus(pm2Status: string): ProcessStatus {
+export function mapStatus(pm2Status: string, exitCode?: number, autorestart?: boolean): ProcessStatus {
 	switch (pm2Status) {
 		case 'online':
 		case 'launching':
 			return 'online';
 		case 'stopped':
 		case 'stopping':
+		case 'one-launch-only':
 			return 'stopped';
 		case 'errored':
 		case 'error':
 		case 'waiting restart':
+			if (exitCode === 0 || autorestart === false) {
+				return 'stopped';
+			}
 			return 'error';
 		default:
 			return 'offline';
@@ -279,7 +283,7 @@ export class PM2Service {
 	}
 
 	private enrichProcess(process: PM2Process): ProcessWithStatus {
-		const status = mapStatus(process.pm2_env.status);
+		const status = mapStatus(process.pm2_env.status, process.pm2_env.exit_code, process.pm2_env.autorestart);
 		return {
 			...process,
 			status,

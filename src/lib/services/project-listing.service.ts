@@ -403,24 +403,29 @@ export class ProjectListingService {
 	private toProcessWithStatus(proc: PM2Process): ProcessWithStatus {
 		return {
 			...proc,
-			status: this.mapStatus(proc.pm2_env?.status),
+			status: this.mapStatus(proc.pm2_env?.status, proc.pm2_env?.exit_code, proc.pm2_env?.autorestart),
 			cpu: proc.monit?.cpu ?? 0,
 			memoryMB: Math.round((proc.monit?.memory ?? 0) / 1024 / 1024),
 			uptimeFormatted: this.formatUptime(proc.pm2_env?.pm_uptime),
 		};
 	}
 
-	private mapStatus(pm2Status: string | undefined): ProcessWithStatus['status'] {
+	private mapStatus(pm2Status: string | undefined, exitCode?: number, autorestart?: boolean): ProcessWithStatus['status'] {
+		if (!pm2Status) return 'offline';
 		switch (pm2Status) {
 			case 'online':
 			case 'launching':
 				return 'online';
 			case 'stopped':
 			case 'stopping':
+			case 'one-launch-only':
 				return 'stopped';
 			case 'errored':
 			case 'error':
 			case 'waiting restart':
+				if (exitCode === 0 || autorestart === false) {
+					return 'stopped';
+				}
 				return 'error';
 			default:
 				return 'offline';

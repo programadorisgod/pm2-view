@@ -136,10 +136,10 @@
       case "stopped":
       case "stopping":
       case "one-launch-only":
+      case "waiting restart":
         return "stopped";
       case "error":
       case "errored":
-      case "waiting restart":
         return "error";
       default:
         return "offline";

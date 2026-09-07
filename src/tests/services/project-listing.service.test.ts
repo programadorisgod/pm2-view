@@ -17,6 +17,7 @@ function createMockPM2Repo(overrides: Partial<IPM2Repository> = {}): IPM2Reposit
 		getLogs: vi.fn().mockResolvedValue([]),
 		start: vi.fn().mockResolvedValue(undefined),
 		clearLogs: vi.fn().mockResolvedValue(undefined),
+		deleteFiles: vi.fn().mockResolvedValue(undefined),
 		...overrides
 	};
 }
@@ -26,6 +27,7 @@ function createMockProjectRepo(overrides: Partial<IProjectRepository> = {}): IPr
 		getAll: vi.fn().mockResolvedValue([]),
 		getById: vi.fn().mockResolvedValue(null),
 		getByGithubRepo: vi.fn().mockResolvedValue([]),
+		getByPm2Name: vi.fn().mockResolvedValue(null),
 		create: vi.fn(),
 		update: vi.fn(),
 		delete: vi.fn(),
@@ -38,6 +40,7 @@ function createMockProjectRepo(overrides: Partial<IProjectRepository> = {}): IPr
 function createMockTeamRepo(overrides: Partial<ITeamRepository> = {}): ITeamRepository {
 	return {
 		findById: vi.fn().mockResolvedValue(null),
+		findByName: vi.fn().mockResolvedValue(null),
 		findAll: vi.fn(),
 		create: vi.fn(),
 		update: vi.fn(),
@@ -71,19 +74,21 @@ function createPM2Process(overrides: Partial<PM2Process> = {}): PM2Process {
 	};
 }
 
-// Helper to create a DB project
+let idCounter = 1;
 function createDBProject(overrides: Partial<Project> = {}): Project {
 	return {
-		id: 'uuid-123',
+		id: overrides.id ?? `uuid-${idCounter++}`,
 		userId: 'user-456',
 		teamId: null,
-		name: 'Test Project',
+		name: overrides.name ?? overrides.pm2Name ?? 'Test Project',
 		pm2Name: 'test-app',
+		pm2Names: null,
 		description: null,
 		targetPath: null,
 		githubRepo: null,
 		deployBranch: 'main',
 		autoDeployEnabled: false,
+		notifyEmail: null,
 		createdAt: new Date(),
 		...overrides
 	};

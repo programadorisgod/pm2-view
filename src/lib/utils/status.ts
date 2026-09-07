@@ -7,6 +7,8 @@ export function getStatusVariant(status: string): StatusVariant {
       return 'online';
     case 'stopped':
     case 'stopping':
+    case 'one-launch-only':
+    case 'waiting restart':
       return 'stopped';
     case 'error':
     case 'errored':

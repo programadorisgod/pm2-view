@@ -419,10 +419,10 @@ export class ProjectListingService {
 			case 'stopped':
 			case 'stopping':
 			case 'one-launch-only':
+			case 'waiting restart':
 				return 'stopped';
 			case 'errored':
 			case 'error':
-			case 'waiting restart':
 				if (exitCode === 0 || autorestart === false) {
 					return 'stopped';
 				}

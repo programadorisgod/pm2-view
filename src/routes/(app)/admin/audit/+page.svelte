@@ -13,7 +13,7 @@
 		return action.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
 	}
 
-	function formatTimestamp(timestamp: string) {
+	function formatTimestamp(timestamp: Date | string | number) {
 		return new Date(timestamp).toLocaleString();
 	}
 

@@ -12,11 +12,7 @@
         "check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
         "db:generate": "drizzle-kit generate",
         "db:migrate": "drizzle-kit migrate",
-        "db:push": "drizzle-kit push",
-        "migration:set-default-roles": "npx tsx src/lib/server/migrations/set-default-roles.ts",
-        "migration:create-project-members": "npx tsx src/lib/server/migrations/create-project-members.ts",
-        "migration:run-all": "npm run db:migrate && npm run migration:set-default-roles && npm run migration:create-project-members",
-        "make-admin": "npx tsx src/lib/server/migrations/make-admin.ts"
+        "db:push": "drizzle-kit push"
     },
     "devDependencies": {
         "@sveltejs/adapter-auto": "7.0.1",

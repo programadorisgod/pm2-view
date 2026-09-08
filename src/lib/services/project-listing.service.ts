@@ -32,7 +32,17 @@ export interface VisibleProject extends ProcessWithStatus {
 export class ProjectListingService {
 	private static workspaceCache = new Map<string, { root: string | null; timestamp: number }>();
 	private static ecosystemCache = new Map<string, { files: string[]; timestamp: number }>();
+	private static pm2NamesCache = new Map<string, string[]>();
 	private static readonly FS_CACHE_TTL = 30000; // 30s cache for directory structure
+	private static readonly MAX_CACHE_SIZE = 500;
+
+	private static setBoundedCache<T>(map: Map<string, T>, key: string, value: T): void {
+		if (map.size >= ProjectListingService.MAX_CACHE_SIZE) {
+			const firstKey = map.keys().next().value;
+			if (firstKey !== undefined) map.delete(firstKey);
+		}
+		map.set(key, value);
+	}
 
 	constructor(
 		private pm2Service: PM2Service,
@@ -70,7 +80,7 @@ export class ProjectListingService {
 			current = parent;
 		}
 
-		ProjectListingService.workspaceCache.set(dir, { root: wsRoot, timestamp: now });
+		ProjectListingService.setBoundedCache(ProjectListingService.workspaceCache, dir, { root: wsRoot, timestamp: now });
 		return wsRoot;
 	}
 
@@ -81,7 +91,7 @@ export class ProjectListingService {
 			return cached.files;
 		}
 		const files = await findEcosystemFiles(targetPath);
-		ProjectListingService.ecosystemCache.set(targetPath, { files, timestamp: now });
+		ProjectListingService.setBoundedCache(ProjectListingService.ecosystemCache, targetPath, { files, timestamp: now });
 		return files;
 	}
 
@@ -406,10 +416,15 @@ export class ProjectListingService {
 
 	private parsePm2Names(dbProject: Project): string[] | undefined {
 		if (!dbProject.pm2Names) return undefined;
+		const cached = ProjectListingService.pm2NamesCache.get(dbProject.pm2Names);
+		if (cached) return cached;
+
 		try {
 			const parsed = JSON.parse(dbProject.pm2Names) as unknown;
 			if (Array.isArray(parsed) && parsed.length > 0) {
-				return parsed as string[];
+				const names = parsed as string[];
+				ProjectListingService.setBoundedCache(ProjectListingService.pm2NamesCache, dbProject.pm2Names, names);
+				return names;
 			}
 		} catch { /* ignore */ }
 		return undefined;

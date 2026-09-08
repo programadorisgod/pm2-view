@@ -8,12 +8,15 @@ const OTP_TTL_MS = 5 * 60 * 1000; // 5 minutes
 const store = new Map<string, OtpPayload>();
 
 // Periodic cleanup of expired tokens
-setInterval(() => {
+const cleanupTimer = setInterval(() => {
 	const now = Date.now();
 	for (const [key, payload] of store) {
 		if (now > payload.expiresAt) store.delete(key);
 	}
 }, 60_000);
+if (cleanupTimer && typeof cleanupTimer === 'object' && 'unref' in cleanupTimer) {
+	cleanupTimer.unref();
+}
 
 export class PortOtpService {
 	generate(userId: string, port: number, pid: number | null, processName: string | null): string {

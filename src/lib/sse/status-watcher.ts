@@ -18,8 +18,11 @@ export function startStatusWatcher(intervalMs: number = 5000): void {
 			const { pm2Service } = createServices();
 			const processes = await pm2Service.getAllProcesses();
 
+			const currentIds = new Set<string>();
+
 			for (const process of processes) {
 				const id = process.pm_id.toString();
+				currentIds.add(id);
 				const currentStatus = process.pm2_env?.status ?? 'unknown';
 				const previousStatus = previousStatuses.get(id);
 
@@ -45,6 +48,13 @@ export function startStatusWatcher(intervalMs: number = 5000): void {
 				}
 
 				previousStatuses.set(id, currentStatus);
+			}
+
+			// Clean up stale IDs for processes that no longer exist
+			for (const id of previousStatuses.keys()) {
+				if (!currentIds.has(id)) {
+					previousStatuses.delete(id);
+				}
 			}
 		} catch (error) {
 			logger.error('Failed to watch process statuses via SSE', { error: String(error) });

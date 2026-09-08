@@ -8,7 +8,6 @@ import { logger } from '$lib/logger';
 import { spawn } from 'child_process';
 import { join } from 'path';
 import { existsSync } from 'fs';
-import { findEcosystemFiles } from '$lib/utils/ecosystem';
 import { escapeShellArg } from '$lib/utils/shell';
 import { z } from 'zod';
 

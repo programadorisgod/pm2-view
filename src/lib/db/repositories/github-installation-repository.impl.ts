@@ -1,6 +1,6 @@
 import { db } from '$lib/db/db';
 import { githubInstallations, githubUserInstallations } from '../schema';
-import { eq, inArray } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 import type { IGitHubInstallationRepository, GitHubInstallationRecord } from '$lib/github/github.types';
 
 export class GitHubInstallationRepository implements IGitHubInstallationRepository {

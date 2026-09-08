@@ -1,6 +1,5 @@
 import { json, type RequestHandler } from '@sveltejs/kit';
 import { auth } from '$lib/auth';
-import { rateLimiter } from '$lib/rate-limiter';
 import { logger } from '$lib/logger';
 import { parseEnv, stringifyEnv } from '$lib/utils/env-parser';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';

@@ -1,4 +1,4 @@
-import type { SSEEventType, LogEvent, MetricsEvent, ProcessStatusEvent, DeployLogEvent } from './types';
+import type { LogEvent, MetricsEvent, ProcessStatusEvent, DeployLogEvent } from './types';
 
 type EventCallback<T> = (data: T) => void;
 

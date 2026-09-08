@@ -3,7 +3,7 @@ import { ProjectRepository } from '$lib/db/repositories/project-repository.impl'
 import { ProjectFavoriteRepository } from '$lib/db/repositories/project-favorite-repository.impl';
 import { TeamRepository } from '$lib/db/repositories/team-repository.impl';
 import type { IProjectRepository, Project } from '$lib/projects/project.types';
-import type { ITeamRepository, Team } from '$lib/db/repositories/team-repository.interface';
+import type { ITeamRepository } from '$lib/db/repositories/team-repository.interface';
 import type { ProcessWithStatus, PM2Process } from '$lib/pm2/pm2.types';
 import { PM2Service } from '$lib/pm2/pm2.service';
 import { findEcosystemFiles } from '$lib/utils/ecosystem';
@@ -14,9 +14,6 @@ const WORKSPACE_INDICATORS = [
 	'pnpm-workspace.yaml', 'lerna.json', 'nx.json',
 	'turbo.json', 'rush.json', '.yarnrc.yml',
 ];
-import { db } from '$lib/db';
-import { projects as projectsSchema } from '$lib/db/schema';
-import { eq as eqFn } from 'drizzle-orm';
 
 export interface VisibleProject extends ProcessWithStatus {
 	accessType: 'personal' | 'team' | 'shared' | 'admin';

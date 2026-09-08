@@ -1,8 +1,6 @@
 import { json, type RequestHandler } from '@sveltejs/kit';
 import { GitHubWebhookVerifier } from '$lib/github/infrastructure/github-webhook-verifier';
 import { GitHubInstallationRepository } from '$lib/db/repositories/github-installation-repository.impl';
-import { GitHubSetupService } from '$lib/github/github-setup.service';
-import { GitHubAppClient } from '$lib/github/infrastructure/github-app-client';
 import { logger } from '$lib/logger';
 import { ProjectRepository } from '$lib/db/repositories/project-repository.impl';
 import { DeploymentRepository } from '$lib/db/repositories/deployment-repository.impl';

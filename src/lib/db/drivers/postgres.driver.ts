@@ -1,5 +1,5 @@
 import { drizzle } from 'drizzle-orm/node-postgres';
-import { Pool, type PoolClient } from 'pg';
+import { Pool } from 'pg';
 import type { DatabaseDriver, DatabaseDialect } from '../driver.interface';
 import * as schema from '../schema';
 

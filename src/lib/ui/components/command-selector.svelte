@@ -1,5 +1,5 @@
 <script lang="ts">
-	import type { DeployConfig, DeployCommand } from '$lib/deploy-config/deploy-config.types';
+	import type { DeployConfig } from '$lib/deploy-config/deploy-config.types';
 
 	let {
 		config,

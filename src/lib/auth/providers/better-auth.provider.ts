@@ -1,4 +1,4 @@
-import type { AuthProvider, AuthSession, AuthUser } from '../provider.interface';
+import type { AuthProvider, AuthSession } from '../provider.interface';
 import { auth } from '../auth';
 
 export class BetterAuthProvider implements AuthProvider {

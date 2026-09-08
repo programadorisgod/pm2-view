@@ -1,7 +1,7 @@
 import { db } from '$lib/db';
 import { projectFavorites } from '../schema';
 import { eq, and } from 'drizzle-orm';
-import type { ProjectFavorite, NewProjectFavorite } from '../schema/project-favorites';
+import type { ProjectFavorite } from '../schema/project-favorites';
 
 export interface IProjectFavoriteRepository {
 	getUserFavorites(userId: string): Promise<string[]>;

@@ -1,7 +1,6 @@
 <script lang="ts">
 import { base } from '$app/paths';
 import { cn } from '$lib/motion-core/utils/cn';
-import { invalidateAll } from '$app/navigation';
 import { browser } from '$app/environment';
 import type { GitHubRepoDTO } from '$lib/github/github.types';
 

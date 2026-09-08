@@ -5,7 +5,7 @@ import { DeployConfigService } from '$lib/deploy-config/deploy-config.service';
 import type { DeployConfig } from '$lib/deploy-config/deploy-config.types';
 import { createServices } from '$lib/services/factory';
 import { auth } from '$lib/auth';
-import { db } from '$lib/db';
+import { db } from '$lib/db/db';
 import { eq } from 'drizzle-orm';
 import { projects } from '$lib/db/schema';
 import { error } from '@sveltejs/kit';
@@ -17,44 +17,85 @@ export const load: PageServerLoad = async ({ params, request }) => {
 	const { pm2Service } = createServices();
 	const { id } = params;
 
-	const process = await pm2Service.getProcessById(id);
+	// Fast lookup of the target process
+	let process = await pm2Service.getProcessById(id);
 
+	// If not found by PM2 ID / name, check if ID corresponds to a DB project
+	let dbProjectFallback: any = null;
 	if (!process) {
+		dbProjectFallback = await db.query.projects.findFirst({
+			where: eq(projects.id, id)
+		});
+		if (dbProjectFallback) {
+			process = await pm2Service.getProcessById(dbProjectFallback.pm2Name);
+		}
+	}
+
+	if (!process && !dbProjectFallback) {
 		throw error(404, `Process with ID ${id} not found`);
 	}
 
-	// Get logs (limited to 50 lines for the detail page)
-	const logs = await pm2Service.getProcessLogs(id, 50);
-
-	// Get session for user-dependent operations
-	const session = await auth.api.getSession({ headers: request.headers }).catch(() => null);
-
-	// Get favorite status
-	let isFavorite = false;
-	try {
-		if (session?.user) {
-			const { ProjectFavoriteRepository } = await import('$lib/db/repositories/project-favorite-repository.impl');
-			const favRepo = new ProjectFavoriteRepository();
-			isFavorite = await favRepo.isFavorite(session.user.id, process.name);
-		}
-	} catch {
-		// Silent fail - favorite status is non-critical
+	// Create fallback synthetic process if offline
+	if (!process && dbProjectFallback) {
+		process = {
+			name: dbProjectFallback.name || dbProjectFallback.pm2Name,
+			pm_id: -1,
+			monit: { cpu: 0, memory: 0 },
+			pm2_env: {
+				status: 'stopped',
+				pm_uptime: 0,
+				restart_time: 0,
+				pm_cwd: dbProjectFallback.targetPath || undefined
+			},
+			status: 'offline',
+			cpu: 0,
+			memoryMB: 0,
+			uptimeFormatted: 'Not running'
+		};
 	}
 
-	// Get deploy configuration (auto-provisions project if not registered)
+	// Target process is guaranteed to be non-null here
+	const targetProcess = process!;
+
+	// Parallelize initial independent tasks: logs, session, and DB project lookup
+	const [logs, session, foundProject] = await Promise.all([
+		targetProcess.pm_id !== -1 ? pm2Service.getProcessLogs(id, 50).catch(() => []) : Promise.resolve([]),
+		auth.api.getSession({ headers: request.headers }).catch(() => null),
+		dbProjectFallback ? Promise.resolve(dbProjectFallback) : db.query.projects.findFirst({
+			where: eq(projects.pm2Name, targetProcess.name),
+			columns: { id: true, name: true, autoDeployEnabled: true, githubRepo: true, deployBranch: true, targetPath: true, pm2Name: true, pm2Names: true }
+		}).catch(() => null)
+	]);
+
+	// Favorite status (parallel with project processing if possible)
+	let isFavorite = false;
+	if (session?.user) {
+		try {
+			const { ProjectFavoriteRepository } = await import('$lib/db/repositories/project-favorite-repository.impl');
+			const favRepo = new ProjectFavoriteRepository();
+			isFavorite = await favRepo.isFavorite(session.user.id, targetProcess.name);
+		} catch {
+			// Silent fail - favorite status is non-critical
+		}
+	}
+
 	let deployConfig: DeployConfig = { install: [], build: [], restart: [], start: [], postDeploy: [] };
 	let projectInternalId: string | null = null;
-	let autoDeploySettings = { autoDeployEnabled: false, githubRepo: null as string | null, deployBranch: 'main', targetPath: undefined as string | undefined, pm2Names: [] as string[], pm2Name: '' as string };
-	let groupProcesses: typeof process[] = [];
-	let projectName = process.name;
-	try {
-		// Find project by pm2_name to get internal ID
-		let project = await db.query.projects.findFirst({
-			where: eq(projects.pm2Name, process.name),
-			columns: { id: true, name: true, autoDeployEnabled: true, githubRepo: true, deployBranch: true, targetPath: true, pm2Name: true, pm2Names: true }
-		});
+	let autoDeploySettings = {
+		autoDeployEnabled: false,
+		githubRepo: null as string | null,
+		deployBranch: 'main',
+		targetPath: undefined as string | undefined,
+		pm2Names: [] as string[],
+		pm2Name: '' as string
+	};
+	let groupProcesses: typeof targetProcess[] = [];
+	let projectName = targetProcess.name;
 
-		// If not found by pm2Name, check if this process is a member of a group
+	try {
+		let project = foundProject;
+
+		// If not found directly by pm2Name, search in project groups
 		if (!project) {
 			const allProjects = await db.query.projects.findMany({
 				columns: { id: true, name: true, autoDeployEnabled: true, githubRepo: true, deployBranch: true, targetPath: true, pm2Name: true, pm2Names: true }
@@ -63,21 +104,21 @@ export const load: PageServerLoad = async ({ params, request }) => {
 				if (!p.pm2Names) return false;
 				try {
 					const names = JSON.parse(p.pm2Names) as string[];
-					return names.includes(process.name);
+					return names.includes(targetProcess.name);
 				} catch { return false; }
 			}) ?? null;
 		}
 
-		// Always detect workspace root for monorepo grouping
+		// Detect workspace root for grouping
 		let workspaceRoot: string | null = null;
 		const WORKSPACE_INDICATORS = [
 			'pnpm-workspace.yaml', 'lerna.json', 'nx.json',
 			'turbo.json', 'rush.json', '.yarnrc.yml',
 		];
-		const cwd = (process.pm2_env?.pm_cwd ?? '').replace(/\/+$/, '');
+		const cwd = (targetProcess.pm2_env?.pm_cwd ?? '').replace(/\/+$/, '');
 		if (cwd) {
 			let dir = cwd;
-			for (let i = 0; i < 4; i++) {
+			for (let i = 0; i < 3; i++) {
 				for (const file of WORKSPACE_INDICATORS) {
 					if (existsSync(join(dir, file))) { workspaceRoot = dir; break; }
 				}
@@ -97,7 +138,7 @@ export const load: PageServerLoad = async ({ params, request }) => {
 			}
 		}
 
-		// Find all workspace processes for grouping
+		// Find group processes if workspace detected or project has pm2Names
 		if (workspaceRoot) {
 			const allProcesses = await pm2Service.getAllProcesses();
 			groupProcesses = allProcesses.filter(p => {
@@ -109,53 +150,9 @@ export const load: PageServerLoad = async ({ params, request }) => {
 			}
 		}
 
-		// If project found but is individual and workspace has groups → upgrade to group
-		if (project && !project.pm2Names && groupProcesses.length > 1) {
-			const groupPm2Names = groupProcesses.map(p => p.name);
-			await db.update(projects).set({
-				name: projectName,
-				pm2Names: JSON.stringify(groupPm2Names),
-				description: `PM2 group: ${groupPm2Names.join(', ')}`,
-				targetPath: workspaceRoot,
-			}).where(eq(projects.id, project.id));
-			// Refresh project data
-			project = await db.query.projects.findFirst({
-				where: eq(projects.id, project.id),
-				columns: { id: true, name: true, autoDeployEnabled: true, githubRepo: true, deployBranch: true, targetPath: true, pm2Name: true, pm2Names: true }
-			}) ?? project;
-		}
-
-		// Auto-provision: register project if it doesn't exist yet
-		if (!project && session?.user) {
-			const isGroup = groupProcesses.length > 1;
-			const groupPm2Names = isGroup ? groupProcesses.map(p => p.name) : undefined;
-			const primaryName = isGroup ? groupProcesses[0].name : process.name;
-
-			const [created] = await db.insert(projects).values({
-				id: crypto.randomUUID(),
-				userId: session.user.id,
-				name: projectName,
-				pm2Name: primaryName,
-				description: isGroup
-					? `PM2 group: ${groupProcesses.map(p => p.name).join(', ')}`
-					: `PM2 process: ${process.name}`,
-				targetPath: (isGroup ? workspaceRoot : process.pm2_env.pm_cwd) || null,
-				pm2Names: isGroup ? JSON.stringify(groupPm2Names) : null,
-			}).returning({
-				id: projects.id,
-				autoDeployEnabled: projects.autoDeployEnabled,
-				githubRepo: projects.githubRepo,
-				deployBranch: projects.deployBranch,
-				targetPath: projects.targetPath,
-				pm2Name: projects.pm2Name,
-				pm2Names: projects.pm2Names
-			});
-			project = created;
-		}
-
 		if (project) {
 			projectInternalId = project.id;
-			projectName = project.name || process.name;
+			projectName = project.name || targetProcess.name;
 			autoDeploySettings = {
 				autoDeployEnabled: project.autoDeployEnabled,
 				githubRepo: project.githubRepo,
@@ -165,8 +162,7 @@ export const load: PageServerLoad = async ({ params, request }) => {
 				pm2Name: project.pm2Name
 			};
 
-			// Load all processes in the group
-			if (autoDeploySettings.pm2Names.length > 0) {
+			if (autoDeploySettings.pm2Names.length > 0 && groupProcesses.length === 0) {
 				const allProcesses = await pm2Service.getAllProcesses();
 				groupProcesses = allProcesses.filter(p => autoDeploySettings.pm2Names.includes(p.name));
 			}
@@ -180,7 +176,7 @@ export const load: PageServerLoad = async ({ params, request }) => {
 	}
 
 	return {
-		process,
+		process: targetProcess,
 		logs,
 		isFavorite,
 		deployConfig,

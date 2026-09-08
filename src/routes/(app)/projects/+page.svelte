@@ -37,8 +37,23 @@
   let isDeployingAll = $state(false);
   let registerModal = $state({ open: false });
 
-  let favoriteProcesses = $derived(processes.filter((p) => p.isFavorite));
-  let nonFavoriteProcesses = $derived(processes.filter((p) => !p.isFavorite));
+  let searchQuery = $state("");
+
+  function matchesSearch(project: VisibleProject, q: string): boolean {
+    if (!q) return true;
+    const term = q.toLowerCase().trim();
+    if (project.name.toLowerCase().includes(term)) return true;
+    if (String(project.pm_id).toLowerCase().includes(term)) return true;
+    if (project.status.toLowerCase().includes(term)) return true;
+    if (project.ecosystemFiles?.some((f) => f.toLowerCase().includes(term))) return true;
+    if (project.pm2Names?.some((n) => n.toLowerCase().includes(term))) return true;
+    if (project.groupMembers?.some((m) => m.name.toLowerCase().includes(term) || String(m.pm_id).includes(term))) return true;
+    return false;
+  }
+
+  let filteredProcesses = $derived(processes.filter((p) => matchesSearch(p, searchQuery)));
+  let favoriteProcesses = $derived(filteredProcesses.filter((p) => p.isFavorite));
+  let nonFavoriteProcesses = $derived(filteredProcesses.filter((p) => !p.isFavorite));
   let displayedNonFavorites = $derived(nonFavoriteProcesses);
   let togglingFavorite = $state<string | null>(null);
 
@@ -241,6 +256,46 @@
     />
   {/if}
 
+  {#if processes.length > 0}
+    <!-- Search Bar -->
+    <div class="mb-lg flex items-center justify-between gap-md flex-wrap">
+      <div class="relative flex-1 max-w-md">
+        <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none" style="color: var(--text-muted);">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+          </svg>
+        </div>
+        <input
+          type="text"
+          bind:value={searchQuery}
+          placeholder="Filter by name, ID, status or ecosystem..."
+          class="w-full pl-9 pr-9 py-2 rounded-xl text-body-sm transition-all outline-none focus:ring-2 focus:ring-accent"
+          style="background: var(--bg-surface); border: 1px solid var(--border-color); color: var(--text-primary);"
+          onkeydown={(e) => { if (e.key === 'Escape') searchQuery = ''; }}
+        />
+        {#if searchQuery}
+          <button
+            type="button"
+            class="absolute inset-y-0 right-0 pr-3 flex items-center transition-colors hover:opacity-80"
+            style="color: var(--text-muted);"
+            onclick={() => (searchQuery = "")}
+            title="Clear search"
+          >
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+            </svg>
+          </button>
+        {/if}
+      </div>
+
+      {#if searchQuery.trim()}
+        <div class="text-body-sm" style="color: var(--text-secondary);">
+          Showing <span class="font-semibold" style="color: var(--text-primary);">{filteredProcesses.length}</span> of {processes.length} projects
+        </div>
+      {/if}
+    </div>
+  {/if}
+
   <!-- Favorites collapsible header -->
   {#if processes.length > 0 && favoriteProcesses.length > 0}
     <div class="mb-lg">
@@ -287,6 +342,28 @@
         </span>
       </button>
     </div>
+  {/if}
+
+  {#if processes.length > 0 && filteredProcesses.length === 0 && searchQuery.trim() !== ''}
+    <Card>
+      <div class="text-center py-2xl">
+        <svg class="w-10 h-10 mx-auto mb-md opacity-40" style="color: var(--text-muted);" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+        </svg>
+        <p class="text-h3 font-semibold mb-xs" style="color: var(--text-primary);">
+          No matching projects found
+        </p>
+        <p class="text-body-sm mb-lg" style="color: var(--text-secondary);">
+          No project matches "{searchQuery.trim()}". Try searching for another name, status, or process ID.
+        </p>
+        <button
+          class="btn-secondary px-4 py-2 text-body-sm"
+          onclick={() => (searchQuery = "")}
+        >
+          Clear search filter
+        </button>
+      </div>
+    </Card>
   {/if}
 
   {#if processes.length === 0}

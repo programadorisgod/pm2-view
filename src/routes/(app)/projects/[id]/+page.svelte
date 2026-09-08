@@ -18,19 +18,24 @@
 
   let { data }: { data: PageData } = $props();
 
-	let {
-		process: initialProcess,
-		isFavorite: initialIsFavorite,
-		deployConfig,
-		groupProcesses: initialGroupProcesses,
-		projectName,
-	} = $derived(data);
+	let initialProcess = $derived(data.process);
+	let initialIsFavorite = $derived(data.isFavorite);
+	let deployConfig = $derived(data.deployConfig);
+	let initialGroupProcesses = $derived(data.groupProcesses);
+	let projectName = $derived(data.projectName);
 
   let groupProcesses = $derived(initialGroupProcesses ?? []);
   let hasGroup = $derived(groupProcesses.length > 1);
-  let activeProcessName = $state(initialProcess.name);
+  let activeProcessName = $state('');
+
+  $effect(() => {
+    if (initialProcess?.name) {
+      activeProcessName = initialProcess.name;
+    }
+  });
+
   let process = $derived(
-    hasGroup
+    hasGroup && activeProcessName
       ? groupProcesses.find(p => p.name === activeProcessName) ?? initialProcess
       : initialProcess
   );
@@ -53,8 +58,12 @@
   let stopModal = $state({ open: false });
   let deployModal = $state({ open: false });
   let isDeploying = $state(false);
-  let isFavorite = $state(initialIsFavorite ?? false);
+  let isFavorite = $state(false);
   let togglingFavorite = $state(false);
+
+  $effect(() => {
+    isFavorite = initialIsFavorite ?? false;
+  });
 
   async function toggleFavorite() {
     togglingFavorite = true;

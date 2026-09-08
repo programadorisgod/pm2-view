@@ -12,6 +12,12 @@ export interface SSEClient {
 
 export function createSSEClient(url: string): SSEClient {
 	const es = new EventSource(url);
+	const listeners: Array<{ type: string; listener: (e: MessageEvent) => void }> = [];
+
+	const addListener = (type: string, listener: (e: MessageEvent) => void) => {
+		es.addEventListener(type, listener as EventListener);
+		listeners.push({ type, listener });
+	};
 
 	const parseEvent = <T>(e: MessageEvent): T | null => {
 		try {
@@ -24,29 +30,35 @@ export function createSSEClient(url: string): SSEClient {
 
 	return {
 		onLog: (cb: EventCallback<LogEvent>) => {
-			es.addEventListener('log', (e) => {
+			addListener('log', (e) => {
 				const data = parseEvent<LogEvent>(e);
 				if (data) cb(data);
 			});
 		},
 		onMetrics: (cb: EventCallback<MetricsEvent>) => {
-			es.addEventListener('metrics', (e) => {
+			addListener('metrics', (e) => {
 				const data = parseEvent<MetricsEvent>(e);
 				if (data) cb(data);
 			});
 		},
 		onStatus: (cb: EventCallback<ProcessStatusEvent>) => {
-			es.addEventListener('process-status', (e) => {
+			addListener('process-status', (e) => {
 				const data = parseEvent<ProcessStatusEvent>(e);
 				if (data) cb(data);
 			});
 		},
 		onDeployLog: (cb: EventCallback<DeployLogEvent>) => {
-			es.addEventListener('deploy-log', (e) => {
+			addListener('deploy-log', (e) => {
 				const data = parseEvent<DeployLogEvent>(e);
 				if (data) cb(data);
 			});
 		},
-		close: () => es.close(),
+		close: () => {
+			for (const { type, listener } of listeners) {
+				es.removeEventListener(type, listener as EventListener);
+			}
+			listeners.length = 0;
+			es.close();
+		},
 	};
 }

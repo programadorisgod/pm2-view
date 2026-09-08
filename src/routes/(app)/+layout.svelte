@@ -1,4 +1,5 @@
 	<script lang="ts">
+	import { onDestroy } from 'svelte';
 	import { Header, Sidebar, FeedbackBanner } from '$lib/ui/components';
 	import { page } from '$app/state';
 	import { base } from '$app/paths';
@@ -97,6 +98,10 @@
 			}
 		}, 1000);
 	}
+
+	onDestroy(() => {
+		if (countdownTimer) clearInterval(countdownTimer);
+	});
 </script>
 
 <div class="flex h-screen overflow-hidden" style="background: var(--bg-base);">

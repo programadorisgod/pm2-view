@@ -5,9 +5,13 @@
 
 	let { data }: { data: PageData } = $props();
 
-	const initialUsers = data.users || [];
-	let users = $state(initialUsers);
+	let initialUsers = $derived(data.users || []);
+	let users = $state<typeof initialUsers>([]);
 	let pagination = $derived(data.pagination || { page: 1, limit: 20, total: 0, totalPages: 0 });
+
+	$effect(() => {
+		users = initialUsers;
+	});
 
 	async function handleRoleChange(userId: string, newRole: string) {
 		const res = await fetch(`${base}/admin/users/${userId}`, {

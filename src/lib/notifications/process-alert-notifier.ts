@@ -31,9 +31,19 @@ export function createProcessAlertNotifier(deps: ProcessAlertDeps): ProcessAlert
 	const cooldownMs = deps.cooldownMs ?? COOLDOWN_MS;
 	const cooldowns = new Map<string, number>();
 
+	function pruneExpiredCooldowns(now: number) {
+		for (const [key, timestamp] of cooldowns) {
+			if (now - timestamp >= cooldownMs) {
+				cooldowns.delete(key);
+			}
+		}
+	}
+
 	return {
 		async notifyProcessError(processName, previousStatus) {
 			const now = Date.now();
+			pruneExpiredCooldowns(now);
+
 			const lastAlert = cooldowns.get(processName);
 			if (lastAlert && now - lastAlert < cooldownMs) {
 				return;

@@ -1,7 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { UserService } from '$lib/services/admin/user.service';
-import type { IAuthRepository, User } from '$lib/auth/auth.types';
-import type { IAuditLogRepository } from '$lib/db/repositories/audit-log-repository.interface';
+import type { User } from '$lib/auth/auth.types';
 
 // Mock @sveltejs/kit error function
 vi.mock('@sveltejs/kit', () => ({

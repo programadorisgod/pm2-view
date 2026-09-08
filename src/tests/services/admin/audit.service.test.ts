@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { AuditService } from '$lib/services/admin/audit.service';
-import type { IAuditLogRepository, AuditLogWithActor, AuditLogFilters } from '$lib/db/repositories/audit-log-repository.interface';
+import type { AuditLogWithActor, AuditLogFilters } from '$lib/db/repositories/audit-log-repository.interface';
 
 // Mock audit log data
 const mockLog1: AuditLogWithActor = {

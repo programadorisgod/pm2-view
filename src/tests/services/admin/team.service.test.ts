@@ -1,7 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { TeamService } from '$lib/services/admin/team.service';
-import type { ITeamRepository, Team, TeamMember } from '$lib/db/repositories/team-repository.interface';
-import type { IAuditLogRepository } from '$lib/db/repositories/audit-log-repository.interface';
+import type { Team, TeamMember } from '$lib/db/repositories/team-repository.interface';
 
 // Mock @sveltejs/kit error function
 vi.mock('@sveltejs/kit', () => ({

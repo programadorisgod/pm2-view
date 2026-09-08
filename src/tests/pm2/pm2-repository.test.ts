@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { PM2Repository } from '../../lib/pm2/pm2-repository.impl';
-import type { IPM2Repository, PM2Process } from '../../lib/pm2/pm2.types';
+import type { IPM2Repository } from '../../lib/pm2/pm2.types';
 
 describe('PM2 Repository', () => {
 	beforeEach(() => {

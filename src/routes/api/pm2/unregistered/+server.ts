@@ -3,7 +3,7 @@ import { adminHandler } from '$lib/server/admin-handler';
 import { createServices } from '$lib/services/factory';
 import { ProjectRepository } from '$lib/db/repositories/project-repository.impl';
 import { existsSync, readFileSync } from 'fs';
-import { join, basename, dirname } from 'path';
+import { join, dirname } from 'path';
 
 interface UnregisteredProcess {
 	name: string;

@@ -1,4 +1,3 @@
-import { error } from '@sveltejs/kit';
 import { adminHandler } from '$lib/server/admin-handler';
 import { createAuditService } from '$lib/services/admin/audit.service';
 

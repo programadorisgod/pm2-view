@@ -116,8 +116,7 @@ vi.mock('drizzle-orm', async () => {
 
 // Import all the endpoints after mocking
 import { GET as getUsers, POST as postUser } from '../../../src/routes/(app)/admin/users/+server';
-import { GET as getTeams, POST as postTeam } from '../../../src/routes/(app)/admin/teams/+server';
-import { GET as getMembers, POST as inviteMember, PATCH as updateMemberRole, DELETE as removeMember } from '../../../src/routes/(app)/admin/projects/[id]/members/+server';
+import { POST as postTeam } from '../../../src/routes/(app)/admin/teams/+server';
 
 // NOTE: E2E tests skipped due to complex mocking requirements.
 // These tests need a real test database or more comprehensive mocking setup.

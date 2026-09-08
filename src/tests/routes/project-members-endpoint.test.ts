@@ -1,5 +1,4 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import type { RequestHandler } from '../../../src/routes/(app)/projects/[id]/members/$types';
 
 // Mock database module
 vi.mock('$lib/db', () => {

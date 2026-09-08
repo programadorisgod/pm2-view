@@ -1,5 +1,4 @@
 <script lang="ts">
-	import { base } from '$app/paths';
 	import { hasPermission } from '$lib/auth/permissions';
 
 	// Permission matrix — mirrors statements in $lib/auth/permissions.ts

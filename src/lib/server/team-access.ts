@@ -1,7 +1,6 @@
 import { db } from '$lib/db';
 import { eq, and } from 'drizzle-orm';
 import { teamMembers } from '$lib/db/schema';
-import type { TeamMember } from '$lib/db/schema';
 
 /**
  * Gets the role of a user in a specific team.

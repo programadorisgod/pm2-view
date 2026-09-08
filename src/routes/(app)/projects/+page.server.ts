@@ -1,5 +1,3 @@
-import { PM2Repository } from '$lib/pm2/pm2-repository.impl';
-import { PM2Service } from '$lib/pm2/pm2.service';
 import { createServices } from '$lib/services/factory';
 import { createProjectListingService } from '$lib/services/project-listing.service';
 import { createProjectSharingService } from '$lib/services/admin/project-sharing.service';

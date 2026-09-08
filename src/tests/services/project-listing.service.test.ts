@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { ProjectListingService } from '../../lib/services/project-listing.service';
 import { PM2Service } from '../../lib/pm2/pm2.service';
-import type { IPM2Repository, ProcessWithStatus, PM2Process } from '../../lib/pm2/pm2.types';
+import type { IPM2Repository, PM2Process } from '../../lib/pm2/pm2.types';
 import type { IProjectRepository, Project } from '../../lib/projects/project.types';
 import type { ITeamRepository, Team } from '../../lib/db/repositories/team-repository.interface';
 import type { ProjectFavoriteRepository } from '../../lib/db/repositories/project-favorite-repository.impl';

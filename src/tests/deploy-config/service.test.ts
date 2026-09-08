@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { DeployConfigService } from '../../../src/lib/deploy-config/deploy-config.service';
-import type { IDeployConfigRepository, DeployConfig, DeployCommand, CommandType } from '../../../src/lib/deploy-config/deploy-config.types';
+import type { IDeployConfigRepository, DeployCommand } from '../../../src/lib/deploy-config/deploy-config.types';
 import type { IPM2Repository } from '../../../src/lib/pm2/pm2.types';
 
 // Mock the repository

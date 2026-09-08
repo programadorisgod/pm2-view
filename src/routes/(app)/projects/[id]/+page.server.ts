@@ -1,5 +1,3 @@
-import { PM2Repository } from '$lib/pm2/pm2-repository.impl';
-import { PM2Service } from '$lib/pm2/pm2.service';
 import { DeployConfigRepository } from '$lib/db/repositories/deploy-config-repository.impl';
 import { DeployConfigService } from '$lib/deploy-config/deploy-config.service';
 import type { DeployConfig } from '$lib/deploy-config/deploy-config.types';

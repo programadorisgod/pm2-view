@@ -1,7 +1,6 @@
 import { db } from '$lib/db';
 import { eq, and } from 'drizzle-orm';
 import { projectMembers, projects, teamMembers } from '$lib/db/schema';
-import type { ProjectMember } from '$lib/db/schema';
 
 /**
  * Maps team roles to project roles.

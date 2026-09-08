@@ -1,4 +1,4 @@
-import type { AuthProvider, AuthSession, AuthUser } from './provider.interface';
+import type { AuthProvider, AuthUser } from './provider.interface';
 import { createAuthProvider } from './factory';
 
 export interface LoginResult {

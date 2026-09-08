@@ -1,4 +1,3 @@
-import { error } from '@sveltejs/kit';
 import type { IAuditLogRepository, AuditLogFilters, AuditLogWithActor } from '$lib/db/repositories/audit-log-repository.interface';
 import { AuditLogRepository } from '$lib/db/repositories/audit-log-repository.impl';
 

@@ -11,7 +11,7 @@
 		value: string;
 		name?: string;
 		placeholder?: string;
-		autocomplete?: string;
+		autocomplete?: import('svelte/elements').HTMLInputAttributes['autocomplete'];
 		required?: boolean;
 	} = $props();
 

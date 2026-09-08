@@ -10,7 +10,7 @@
 		onrolechange,
 		onban
 	}: {
-		users: (AuthUser & { createdAt: string })[];
+		users: (AuthUser & { createdAt?: Date | string })[];
 		pagination?: { page: number; limit: number; total: number; totalPages: number };
 		onrolechange?: (userId: string, newRole: string) => void;
 		onban?: (userId: string, reason?: string) => void;

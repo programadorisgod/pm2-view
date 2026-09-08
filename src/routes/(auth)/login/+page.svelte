@@ -20,8 +20,8 @@
 			}
 			return;
 		}
-		authClient.getSession().then((session) => {
-			if (session?.user) {
+		authClient.getSession().then((res: any) => {
+			if (res?.data?.user || res?.user) {
 				window.location.href = `${base}/`;
 			}
 		});

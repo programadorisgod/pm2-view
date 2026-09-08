@@ -132,10 +132,7 @@
 						class="w-8 h-8 rounded-md flex items-center justify-center transition-colors"
 						style="color: var(--text-secondary);"
 						onclick={(e) => {
-							const rect = (e.target as HTMLElement).getBoundingClientRect();
-							document.documentElement.style.setProperty('--x', `${rect.left + rect.width / 2}px`);
-							document.documentElement.style.setProperty('--y', `${rect.top + rect.height / 2}px`);
-							theme.toggle();
+							theme.toggle(e.clientX, e.clientY);
 						}}
 						aria-label="Toggle theme"
 					>
@@ -257,7 +254,7 @@
 			{/snippet}
 		</Header>
 
-		<main class="flex-1 overflow-y-auto p-lg lg:p-xl scrollbar-thin page-enter">
+		<main class="flex-1 overflow-y-auto p-lg lg:p-xl scrollbar-thin">
 			{#if updateFeedback}
 				<div class="mb-lg">
 					<FeedbackBanner

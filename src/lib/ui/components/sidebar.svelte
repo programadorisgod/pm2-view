@@ -51,7 +51,7 @@
 
 <aside
 	class={cn(
-		'h-screen flex flex-col transition-all duration-300',
+		'app-sidebar h-screen flex flex-col transition-[width,opacity] duration-300',
 		collapsed ? 'w-0 overflow-hidden opacity-0' : 'w-[220px] opacity-100',
 		className
 	)}

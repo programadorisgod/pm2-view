@@ -15,7 +15,7 @@
 
 <header
 	class={cn(
-		'sticky top-0 z-50 flex items-center justify-between px-lg h-[52px]',
+		'app-header sticky top-0 z-50 flex items-center justify-between px-lg h-[52px]',
 		className
 	)}
 	style="background: var(--glass-bg); backdrop-filter: blur(12px); border-bottom: 1px solid var(--border-color);"

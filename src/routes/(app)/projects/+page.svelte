@@ -245,21 +245,22 @@
   {#if processes.length > 0 && favoriteProcesses.length > 0}
     <div class="mb-lg">
       <button
-        class="flex items-center gap-sm px-3 py-2 rounded-lg transition-colors w-fit"
+        class="flex items-center gap-sm px-3 py-2 rounded-lg transition-colors w-fit hover:border-[var(--border-hover)]"
         style="background: var(--bg-surface); border: 1px solid var(--border-color);"
         onclick={() => { favoritesExpanded = !favoritesExpanded; }}
       >
         <svg
           class="w-4 h-4 transition-transform"
-          style="color: #FFD740; transform: {favoritesExpanded ? 'rotate(90deg)' : 'rotate(0deg)'};"
+          style="color: var(--text-secondary); transform: {favoritesExpanded ? 'rotate(90deg)' : 'rotate(0deg)'};"
           fill="none"
           stroke="currentColor"
           viewBox="0 0 24 24"
         >
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
         </svg>
-        <span class="text-body-sm font-semibold" style="color: #FFD740;">
-          ★ Favorites ({favoriteProcesses.length})
+        <span style="color: var(--color-favorite);">★</span>
+        <span class="text-body-sm font-semibold" style="color: var(--text-primary);">
+          Favorites ({favoriteProcesses.length})
         </span>
       </button>
     </div>
@@ -332,7 +333,7 @@
                     class="transition-colors"
                     disabled={togglingFavorite === getFavoriteKey(process)}
                     style={process.isFavorite
-                      ? "color: #FFD740; text-shadow: 0 0 6px rgba(255, 215, 64, 0.65); background: rgba(255, 215, 64, 0.18); border: 1px solid rgba(255, 215, 64, 0.45); border-radius: 999px; padding: 0.1rem 0.4rem;"
+                      ? "color: var(--color-favorite); background: var(--color-favorite-bg); border: 1px solid var(--color-favorite-border); border-radius: 999px; padding: 0.1rem 0.4rem;"
                       : "color: var(--text-muted); background: transparent; border: 1px solid transparent; border-radius: 999px; padding: 0.1rem 0.4rem;"}
                     class:opacity-40={togglingFavorite === getFavoriteKey(process)}
                     onclick={() => toggleFavorite(process.name, process)}
@@ -486,7 +487,7 @@
                   class="transition-colors"
                   disabled={togglingFavorite === getFavoriteKey(process)}
                   style={process.isFavorite
-                    ? "color: #FFD740; text-shadow: 0 0 6px rgba(255, 215, 64, 0.65); background: rgba(255, 215, 64, 0.18); border: 1px solid rgba(255, 215, 64, 0.45); border-radius: 999px; padding: 0.1rem 0.4rem;"
+                    ? "color: var(--color-favorite); background: var(--color-favorite-bg); border: 1px solid var(--color-favorite-border); border-radius: 999px; padding: 0.1rem 0.4rem;"
                     : "color: var(--text-muted); background: transparent; border: 1px solid transparent; border-radius: 999px; padding: 0.1rem 0.4rem;"}
                   class:opacity-40={togglingFavorite === getFavoriteKey(process)}
                   onclick={() => toggleFavorite(process.name, process)}

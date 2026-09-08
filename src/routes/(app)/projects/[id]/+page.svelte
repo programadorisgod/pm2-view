@@ -449,7 +449,7 @@
         <button
           class="transition-colors self-center"
           disabled={togglingFavorite}
-          style="font-size: 1.25rem; line-height: 1; color: {isFavorite ? '#FFD740' : 'var(--text-muted)'}; opacity: {togglingFavorite ? 0.5 : 1};"
+          style="font-size: 1.25rem; line-height: 1; color: {isFavorite ? 'var(--color-favorite)' : 'var(--text-muted)'}; opacity: {togglingFavorite ? 0.5 : 1};"
           onclick={toggleFavorite}
           title={isFavorite ? "Remove from favorites" : "Add to favorites"}
         >

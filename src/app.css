@@ -18,6 +18,9 @@
 		--card-shadow: 0 0 0 1px rgba(0, 0, 0, 0.08), 0 2px 4px rgba(0, 0, 0, 0.04);
 		--card-shadow-hover: 0 0 0 1px rgba(0, 0, 0, 0.12), 0 4px 8px rgba(0, 0, 0, 0.04);
 		--glow-color: rgba(0, 112, 243, 0.08);
+		--color-favorite: #D97706;
+		--color-favorite-bg: rgba(217, 119, 6, 0.1);
+		--color-favorite-border: rgba(217, 119, 6, 0.25);
 	}
 
 	.dark {
@@ -35,6 +38,9 @@
 		--card-shadow: 0 0 0 1px rgba(255, 255, 255, 0.06), 0 2px 4px rgba(0, 0, 0, 0.4);
 		--card-shadow-hover: 0 0 0 1px rgba(255, 255, 255, 0.1), 0 4px 8px rgba(0, 0, 0, 0.5);
 		--glow-color: rgba(0, 112, 243, 0.06);
+		--color-favorite: #FBBF24;
+		--color-favorite-bg: rgba(251, 191, 36, 0.15);
+		--color-favorite-border: rgba(251, 191, 36, 0.35);
 	}
 
 	html {
@@ -198,39 +204,6 @@
 }
 
 /* ============================================
-   PAGE TRANSITIONS — Svelte transitions
-   ============================================ */
-.page-enter {
-	animation: page-enter 350ms cubic-bezier(0, 0, 0.2, 1) both;
-}
-
-.page-exit {
-	animation: page-exit 200ms cubic-bezier(0.4, 0, 0.2, 1) both;
-}
-
-@keyframes page-enter {
-	from {
-		opacity: 0;
-		transform: translateY(16px) scale(0.99);
-	}
-	to {
-		opacity: 1;
-		transform: translateY(0) scale(1);
-	}
-}
-
-@keyframes page-exit {
-	from {
-		opacity: 1;
-		transform: translateY(0) scale(1);
-	}
-	to {
-		opacity: 0;
-		transform: translateY(-8px) scale(0.98);
-	}
-}
-
-/* ============================================
    TAB TRANSITIONS — Premium smooth
    ============================================ */
 .tab-content {
@@ -249,17 +222,47 @@
 }
 
 /* ============================================
-   STAGGERED LIST ANIMATIONS
+   THEME VIEW TRANSITION (Circular reveal)
    ============================================ */
-.stagger-item {
-	animation: stagger-enter 350ms cubic-bezier(0, 0, 0.2, 1) both;
-	animation-delay: calc(var(--stagger-index, 0) * 50ms);
+::view-transition-old(root) {
+	animation: none;
+	mix-blend-mode: normal;
+	z-index: 1;
 }
 
-@keyframes stagger-enter {
+::view-transition-new(root) {
+	animation: theme-reveal 400ms cubic-bezier(0.4, 0, 0.2, 1) both;
+	mix-blend-mode: normal;
+	z-index: 9999;
+}
+
+@keyframes theme-reveal {
+	from {
+		clip-path: circle(0px at var(--theme-x, 50%) var(--theme-y, 50%));
+	}
+	to {
+		clip-path: circle(var(--theme-r, 150%) at var(--theme-x, 50%) var(--theme-y, 50%));
+	}
+}
+
+/* ============================================
+   PAGE NAVIGATION VIEW TRANSITIONS (onNavigate)
+   ============================================ */
+@keyframes page-fade-out {
+	from {
+		opacity: 1;
+		transform: translateY(0);
+	}
+	to {
+		opacity: 0;
+		transform: translateY(-4px);
+	}
+}
+
+@keyframes page-fade-in {
 	from {
 		opacity: 0;
-		transform: translateY(12px);
+		transform: translateY(6px);
 	}
 	to {
 		opacity: 1;
@@ -267,44 +270,64 @@
 	}
 }
 
+html.page-navigating::view-transition-old(root) {
+	animation: 160ms cubic-bezier(0.4, 0, 1, 1) both page-fade-out;
+	z-index: 1;
+}
+
+html.page-navigating::view-transition-new(root) {
+	animation: 240ms cubic-bezier(0, 0, 0.2, 1) 30ms both page-fade-in;
+	z-index: 2;
+}
+
+/* Persistent layout elements during page navigation */
+html.page-navigating #app-sidebar,
+html.page-navigating .app-sidebar {
+	view-transition-name: app-sidebar;
+}
+
+html.page-navigating #app-header,
+html.page-navigating .app-header {
+	view-transition-name: app-header;
+}
+
 /* ============================================
-   THEME TRANSITION
+   MODAL & DIALOG ANIMATIONS
    ============================================ */
-@keyframes theme-fade-in {
-	from { opacity: 0.85; }
-	to { opacity: 1; }
+dialog {
+	transition: opacity 200ms cubic-bezier(0.16, 1, 0.3, 1),
+	            transform 200ms cubic-bezier(0.16, 1, 0.3, 1),
+	            overlay 200ms ease allow-discrete,
+	            display 200ms ease allow-discrete;
 }
 
-@keyframes theme-fade-out {
-	from { opacity: 1; }
-	to { opacity: 0; }
+dialog[open] {
+	opacity: 1;
+	transform: scale(1);
 }
 
-html.theme-transitioning::view-transition-old(root) {
-	animation: 300ms cubic-bezier(0.4, 0, 0.2, 1) both theme-fade-out;
+@starting-style {
+	dialog[open] {
+		opacity: 0;
+		transform: scale(0.96);
+	}
 }
 
-html.theme-transitioning::view-transition-new(root) {
-	animation: 400ms cubic-bezier(0, 0, 0.2, 1) 50ms both theme-fade-in;
+dialog::backdrop {
+	background-color: rgba(0, 0, 0, 0);
+	backdrop-filter: blur(0px);
+	transition: background-color 200ms ease, backdrop-filter 200ms ease, display 200ms ease allow-discrete, overlay 200ms ease allow-discrete;
 }
 
-/* ============================================
-   VIEW TRANSITIONS (Chrome/Edge)
-   ============================================ */
-::view-transition-old(root) {
-	animation: 200ms cubic-bezier(0.4, 0, 0.2, 1) both page-exit;
+dialog[open]::backdrop {
+	background-color: rgba(0, 0, 0, 0.6);
+	backdrop-filter: blur(2px);
 }
 
-::view-transition-new(root) {
-	animation: 350ms cubic-bezier(0, 0, 0.2, 1) 50ms both page-enter;
+@starting-style {
+	dialog[open]::backdrop {
+		background-color: rgba(0, 0, 0, 0);
+		backdrop-filter: blur(0px);
+	}
 }
 
-::view-transition-group(.process-name) {
-	animation: 300ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
-}
-
-::view-transition-group(.stagger-item) {
-	animation-duration: 300ms;
-	animation-timing-function: cubic-bezier(0, 0, 0.2, 1);
-	animation-delay: calc(var(--stagger-index, 0) * 40ms);
-}

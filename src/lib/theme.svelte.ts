@@ -12,22 +12,32 @@ function getInitialTheme(): 'dark' | 'light' {
 export class Theme {
 	current: 'dark' | 'light' = $state(getInitialTheme());
 
-	toggle() {
+	toggle(x?: number, y?: number) {
 		if (!browser) return;
 
-		// Use View Transitions API for smooth theme switch
-		if (document.startViewTransition) {
-			document.documentElement.classList.add('theme-transitioning');
-			document.startViewTransition(() => {
-				this.current = this.current === 'dark' ? 'light' : 'dark';
-				this.apply();
-			}).finished.finally(() => {
-				document.documentElement.classList.remove('theme-transitioning');
-			});
-		} else {
-			this.current = this.current === 'dark' ? 'light' : 'dark';
+		const next = this.current === 'dark' ? 'light' : 'dark';
+
+		if (!document.startViewTransition) {
+			this.current = next;
 			this.apply();
+			return;
 		}
+
+		const posX = x ?? window.innerWidth / 2;
+		const posY = y ?? 0;
+		const endRadius = Math.hypot(
+			Math.max(posX, window.innerWidth - posX),
+			Math.max(posY, window.innerHeight - posY)
+		);
+
+		document.documentElement.style.setProperty('--theme-x', `${posX}px`);
+		document.documentElement.style.setProperty('--theme-y', `${posY}px`);
+		document.documentElement.style.setProperty('--theme-r', `${endRadius}px`);
+
+		document.startViewTransition(() => {
+			this.current = next;
+			this.apply();
+		});
 	}
 
 	apply() {

@@ -12,11 +12,45 @@ const execAsync = promisify(exec);
 
 export class PM2Repository implements IPM2Repository {
 	private logPathCache = new Map<string, { out: string | null; err: string | null }>();
+	private listCache: { data: PM2Process[]; timestamp: number } | null = null;
+	private readonly CACHE_TTL_MS = 2500; // 2.5s TTL for snappy navigation between pages
 
-	async list(params?: PaginationParams): Promise<PM2Process[] | PaginatedResult<PM2Process>> {
+	private sanitizeProcess(p: any): PM2Process {
+		// Strip giant process.env dictionaries and keep only necessary fields for UI
+		return {
+			name: p.name ?? 'unknown',
+			pm_id: p.pm_id ?? -1,
+			monit: {
+				cpu: p.monit?.cpu ?? 0,
+				memory: p.monit?.memory ?? 0
+			},
+			pm2_env: {
+				status: p.pm2_env?.status ?? 'stopped',
+				pm_uptime: p.pm2_env?.pm_uptime ?? 0,
+				restart_time: p.pm2_env?.restart_time ?? 0,
+				pm_cwd: p.pm2_env?.pm_cwd ?? p.pm2_env?.cwd ?? '',
+				pm_exec_path: p.pm2_env?.pm_exec_path ?? '',
+				pm_out_log_path: p.pm2_env?.pm_out_log_path,
+				pm_err_log_path: p.pm2_env?.pm_err_log_path,
+				exit_code: p.pm2_env?.exit_code,
+				autorestart: p.pm2_env?.autorestart
+			}
+		};
+	}
+
+	async list(params?: PaginationParams, forceFresh = false): Promise<PM2Process[] | PaginatedResult<PM2Process>> {
 		try {
-			const { stdout } = await execAsync('pm2 jlist');
-			const processes = JSON.parse(stdout) as PM2Process[];
+			const now = Date.now();
+			let processes: PM2Process[];
+
+			if (!forceFresh && this.listCache && (now - this.listCache.timestamp < this.CACHE_TTL_MS)) {
+				processes = this.listCache.data;
+			} else {
+				const { stdout } = await execAsync('pm2 jlist');
+				const raw = JSON.parse(stdout) as any[];
+				processes = raw.map(p => this.sanitizeProcess(p));
+				this.listCache = { data: processes, timestamp: now };
+			}
 
 			if (!params) return processes;
 
@@ -37,8 +71,8 @@ export class PM2Repository implements IPM2Repository {
 
 	async describe(name: string): Promise<PM2Process | null> {
 		try {
-			const { stdout } = await execAsync('pm2 jlist');
-			const processes = JSON.parse(stdout) as PM2Process[];
+			const listResult = await this.list();
+			const processes = Array.isArray(listResult) ? listResult : listResult.data;
 			return processes.find(p => p.pm_id.toString() === name || p.name === name) ?? null;
 		} catch (error) {
 			logger.error('Failed to describe PM2 process', { name, error: String(error) });
@@ -50,24 +84,28 @@ export class PM2Repository implements IPM2Repository {
     const safeName = escapeShellArg(name);
     await execAsync(`pm2 restart ${safeName}`);
     this.logPathCache.delete(name);
+    this.listCache = null;
   }
 
   async start(name: string): Promise<void> {
     const safeName = escapeShellArg(name);
     await execAsync(`pm2 start ${safeName}`);
     this.logPathCache.delete(name);
+    this.listCache = null;
   }
 
 	async stop(name: string): Promise<void> {
 		const safeName = escapeShellArg(name);
 		await execAsync(`pm2 stop ${safeName}`);
 		this.logPathCache.delete(name);
+		this.listCache = null;
 	}
 
 	async delete(name: string): Promise<void> {
 		const safeName = escapeShellArg(name);
 		await execAsync(`pm2 delete ${safeName}`);
 		this.logPathCache.delete(name);
+		this.listCache = null;
 	}
 
 	async deleteFiles(cwd: string): Promise<void> {

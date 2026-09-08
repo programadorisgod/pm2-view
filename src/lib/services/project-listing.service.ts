@@ -33,12 +33,60 @@ export interface VisibleProject extends ProcessWithStatus {
  * Shows DB projects (with targetPath) even when PM2 is not running them.
  */
 export class ProjectListingService {
+	private static workspaceCache = new Map<string, { root: string | null; timestamp: number }>();
+	private static ecosystemCache = new Map<string, { files: string[]; timestamp: number }>();
+	private static readonly FS_CACHE_TTL = 30000; // 30s cache for directory structure
+
 	constructor(
 		private pm2Service: PM2Service,
 		private projectRepo: IProjectRepository,
 		private teamRepo: ITeamRepository,
 		private favoriteRepo: ProjectFavoriteRepository
 	) {}
+
+	private getCachedWorkspaceRoot(startDir: string): string | null {
+		const dir = startDir.replace(/\/+$/, '');
+		const now = Date.now();
+		const cached = ProjectListingService.workspaceCache.get(dir);
+		if (cached && now - cached.timestamp < ProjectListingService.FS_CACHE_TTL) {
+			return cached.root;
+		}
+
+		let current = dir;
+		let wsRoot: string | null = null;
+		for (let i = 0; i < 3; i++) {
+			for (const file of WORKSPACE_INDICATORS) {
+				if (existsSync(join(current, file))) { wsRoot = current; break; }
+			}
+			if (!wsRoot) {
+				const pkgPath = join(current, 'package.json');
+				if (existsSync(pkgPath)) {
+					try {
+						const pkg = JSON.parse(readFileSync(pkgPath, 'utf-8'));
+						if (pkg.workspaces) wsRoot = current;
+					} catch { /* ignore */ }
+				}
+			}
+			if (wsRoot) break;
+			const parent = dirname(current);
+			if (parent === current) break;
+			current = parent;
+		}
+
+		ProjectListingService.workspaceCache.set(dir, { root: wsRoot, timestamp: now });
+		return wsRoot;
+	}
+
+	private async getCachedEcosystemFiles(targetPath: string): Promise<string[]> {
+		const now = Date.now();
+		const cached = ProjectListingService.ecosystemCache.get(targetPath);
+		if (cached && now - cached.timestamp < ProjectListingService.FS_CACHE_TTL) {
+			return cached.files;
+		}
+		const files = await findEcosystemFiles(targetPath);
+		ProjectListingService.ecosystemCache.set(targetPath, { files, timestamp: now });
+		return files;
+	}
 
 	/**
 	 * Get all projects visible to a user based on their access level.
@@ -47,18 +95,19 @@ export class ProjectListingService {
 	 */
 	async getVisibleProjects(userId: string, userRole: string): Promise<VisibleProject[]> {
 		const isAdmin = userRole === 'admin';
-		// Get user's favorites
-		const favoriteNames = new Set(await this.favoriteRepo.getUserFavorites(userId));
 
-		// Get user's team memberships
-		const userTeams = await this.teamRepo.getUserTeams(userId);
-		const teamIds = userTeams.map(t => t.id);
+		// Parallelize initial database and PM2 queries
+		const [rawFavorites, userTeams, dbProjects, processes] = await Promise.all([
+			this.favoriteRepo.getUserFavorites(userId),
+			this.teamRepo.getUserTeams(userId),
+			userRole === 'admin'
+				? this.projectRepo.getAll()
+				: this.teamRepo.getUserTeams(userId).then(teams => this.projectRepo.findByAccess({ userId, teamIds: teams.map(t => t.id) })),
+			this.pm2Service.getAllProcesses()
+		]);
+
+		const favoriteNames = new Set(rawFavorites);
 		const teamNameMap = new Map(userTeams.map(t => [t.id, t.name]));
-
-		// Get accessible projects from DB
-		const dbProjects = userRole === 'admin'
-			? await this.projectRepo.getAll()
-			: await this.projectRepo.findByAccess({ userId, teamIds });
 
 		// Build maps: primary name -> project, and secondary name -> project
 		const primaryProjectMap = new Map(dbProjects.map(p => [p.pm2Name, p]));
@@ -76,63 +125,32 @@ export class ProjectListingService {
 			}
 		}
 
-		// Get PM2 processes for status (non-admins only see matched projects)
-		const processes = await this.pm2Service.getAllProcesses();
-
-		// Upgrade individual records to groups when workspace has multiple processes
+		// Detect and group workspace projects in-memory without synchronous blocking DB writes on read
 		for (const p of dbProjects) {
 			if (p.pm2Names || !p.targetPath) continue;
-			// Check if this individual record is part of a workspace
-			let dir = p.targetPath.replace(/\/+$/, '');
-			let wsRoot: string | null = null;
-			for (let i = 0; i < 4; i++) {
-				for (const file of WORKSPACE_INDICATORS) {
-					if (existsSync(join(dir, file))) { wsRoot = dir; break; }
-				}
-				if (!wsRoot) {
-					const pkgPath = join(dir, 'package.json');
-					if (existsSync(pkgPath)) {
-						try {
-							const pkg = JSON.parse(readFileSync(pkgPath, 'utf-8'));
-							if (pkg.workspaces) wsRoot = dir;
-						} catch { /* ignore */ }
-					}
-				}
-				if (wsRoot) break;
-				const parent = dirname(dir);
-				if (parent === dir) break;
-				dir = parent;
-			}
+			const wsRoot = this.getCachedWorkspaceRoot(p.targetPath);
 			if (!wsRoot) continue;
+
 			// Find all processes in this workspace
 			const wsProcesses = processes.filter(proc => {
 				const pCwd = (proc.pm2_env?.pm_cwd ?? '').replace(/\/+$/, '');
 				return pCwd.startsWith(wsRoot + '/') || pCwd === wsRoot;
 			});
 			if (wsProcesses.length <= 1) continue;
-			// Upgrade: update DB record
+
 			const groupPm2Names = wsProcesses.map(proc => proc.name);
 			const wsName = basename(wsRoot);
-			try {
-				await db.update(projectsSchema).set({
-					name: wsName,
-					pm2Names: JSON.stringify(groupPm2Names),
-					description: `PM2 group: ${groupPm2Names.join(', ')}`,
-					targetPath: wsRoot,
-				}).where(eqFn(projectsSchema.id, p.id));
-				// Update maps
-				p.name = wsName;
-				p.pm2Names = JSON.stringify(groupPm2Names);
-				p.description = `PM2 group: ${groupPm2Names.join(', ')}`;
-				p.targetPath = wsRoot;
-				for (const n of groupPm2Names) {
-					if (n !== p.pm2Name) secondaryProjectMap.set(n, p);
-				}
-			} catch { /* ignore upgrade errors */ }
+
+			p.name = wsName;
+			p.pm2Names = JSON.stringify(groupPm2Names);
+			p.description = `PM2 group: ${groupPm2Names.join(', ')}`;
+			p.targetPath = wsRoot;
+			for (const n of groupPm2Names) {
+				if (n !== p.pm2Name) secondaryProjectMap.set(n, p);
+			}
 		}
 
-		// Also detect workspace groups among ALL PM2 processes (for users without project access)
-		// This ensures monorepo processes are grouped even when no DB record exists yet
+		// Detect workspace groups among ALL PM2 processes (for users without project access)
 		const registeredNames = new Set([
 			...Array.from(primaryProjectMap.keys()),
 			...Array.from(secondaryProjectMap.keys()),
@@ -347,11 +365,11 @@ export class ProjectListingService {
 			})
 			.filter(dbProject => dbProject.targetPath && existsSync(dbProject.targetPath));
 
-		// Parallelize filesystem checks for ecosystem files
+		// Parallelize filesystem checks for ecosystem files with caching
 		const ecosystemResults = await Promise.all(
 			offlineProjects.map(async (dbProject) => ({
 				dbProject,
-				ecosystemFiles: await findEcosystemFiles(dbProject.targetPath!)
+				ecosystemFiles: await this.getCachedEcosystemFiles(dbProject.targetPath!)
 			}))
 		);
 

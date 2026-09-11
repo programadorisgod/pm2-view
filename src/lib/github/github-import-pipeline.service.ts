@@ -2,6 +2,7 @@ import { spawn } from 'child_process';
 import { existsSync, readFileSync, readdirSync } from 'fs';
 import { join } from 'path';
 import type { PackageManager } from '$lib/deploy/deploy.types';
+import { hasPackageDependencies } from '$lib/deploy/process-runner';
 import { findEcosystemFiles, parseEcosystemAppNames } from '$lib/utils/ecosystem';
 
 const LOCK_FILES: Record<string, PackageManager> = {
@@ -196,7 +197,7 @@ export class GitHubImportPipelineService {
 		targetPath: string,
 		processName: string,
 		onLog: ImportLogCallback,
-		options?: { installCommand?: string; buildCommand?: string; skipClone?: boolean },
+		options?: { installCommand?: string; buildCommand?: string; skipClone?: boolean; skipInstall?: boolean },
 	): Promise<Phase1Result> {
 		const log = (step: ImportStep, line: string, isError: boolean) => {
 			onLog(step, line, isError);
@@ -296,66 +297,72 @@ export class GitHubImportPipelineService {
 		}
 
 		// Step 2: Install
-		log('install', '─── Starting: install ───', false);
+		if (options?.skipInstall) {
+			log('install', '─── Skipped: install (skipInstall flag enabled) ───', false);
+		} else if (!options?.installCommand && existsSync(join(actualTargetPath, 'package.json')) && !hasPackageDependencies(actualTargetPath)) {
+			log('install', '─── Skipped: no dependencies in package.json ───', false);
+		} else {
+			log('install', '─── Starting: install ───', false);
 
-		try {
-			let installResult: { exitCode: number; output: string[] };
+			try {
+				let installResult: { exitCode: number; output: string[] };
 
-			if (options?.installCommand) {
-				const tokens = options.installCommand.trim().split(/\s+/);
-				const bin = tokens[0];
-				const args = tokens.slice(1);
-				const output: string[] = [];
-				const exitCode = await runCommand(actualTargetPath, bin, args, (line, isError) => {
-					output.push(line);
-					log('install', line, isError);
-				});
-				installResult = { exitCode, output };
-			} else {
-				installResult = await this.runInstall(actualTargetPath, packageManager, (line, isError) =>
-					log('install', line, isError),
-				);
-			}
+				if (options?.installCommand) {
+					const tokens = options.installCommand.trim().split(/\s+/);
+					const bin = tokens[0];
+					const args = tokens.slice(1);
+					const output: string[] = [];
+					const exitCode = await runCommand(actualTargetPath, bin, args, (line, isError) => {
+						output.push(line);
+						log('install', line, isError);
+					});
+					installResult = { exitCode, output };
+				} else {
+					installResult = await this.runInstall(actualTargetPath, packageManager, (line, isError) =>
+						log('install', line, isError),
+					);
+				}
 
-			// Check if pnpm requires approval for native builds
-			if (packageManager === 'pnpm') {
-				const pendingPackages = extractPendingPackages(installResult.output);
-				if (pendingPackages.length > 0) {
-					log('install', '─── Pending approval for native builds ───', false);
+				// Check if pnpm requires approval for native builds
+				if (packageManager === 'pnpm') {
+					const pendingPackages = extractPendingPackages(installResult.output);
+					if (pendingPackages.length > 0) {
+						log('install', '─── Pending approval for native builds ───', false);
+						log('install', `─── Failed: install (exit ${installResult.exitCode}) ───`, true);
+						return {
+							success: false,
+							targetPath: actualTargetPath,
+							processName,
+							ecosystemFiles: [],
+							needsApproval: true,
+							pendingPackages,
+							error: `Package manager requires approval for: ${pendingPackages.join(', ')}`,
+						};
+					}
+				}
+
+				if (installResult.exitCode !== 0) {
 					log('install', `─── Failed: install (exit ${installResult.exitCode}) ───`, true);
 					return {
 						success: false,
 						targetPath: actualTargetPath,
 						processName,
 						ecosystemFiles: [],
-						needsApproval: true,
-						pendingPackages,
-						error: `Package manager requires approval for: ${pendingPackages.join(', ')}`,
+						error: `Install failed with exit code ${installResult.exitCode}`,
 					};
 				}
-			}
 
-			if (installResult.exitCode !== 0) {
-				log('install', `─── Failed: install (exit ${installResult.exitCode}) ───`, true);
+				log('install', '─── Completed: install ───', false);
+			} catch (err) {
+				log('install', `─── Failed: install (${err instanceof Error ? err.message : 'Unknown error'}) ───`, true);
 				return {
 					success: false,
 					targetPath: actualTargetPath,
 					processName,
 					ecosystemFiles: [],
-					error: `Install failed with exit code ${installResult.exitCode}`,
+					error: err instanceof Error ? err.message : 'Install failed',
 				};
 			}
-
-			log('install', '─── Completed: install ───', false);
-		} catch (err) {
-			log('install', `─── Failed: install (${err instanceof Error ? err.message : 'Unknown error'}) ───`, true);
-			return {
-				success: false,
-				targetPath: actualTargetPath,
-				processName,
-				ecosystemFiles: [],
-				error: err instanceof Error ? err.message : 'Install failed',
-			};
 		}
 
 		// Step 3: Build (optional - only if build script exists or custom command provided)

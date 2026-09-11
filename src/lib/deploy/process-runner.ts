@@ -132,6 +132,22 @@ export function detectPackageManagerOrDefault(dir: string): PackageManager {
 	return 'npm';
 }
 
+/**
+ * Checks whether a package.json exists in `dir` and contains any dependencies or devDependencies.
+ */
+export function hasPackageDependencies(dir: string): boolean {
+	const pkgPath = join(dir, 'package.json');
+	if (!existsSync(pkgPath)) return false;
+	try {
+		const pkg = JSON.parse(readFileSync(pkgPath, 'utf-8'));
+		const deps = pkg.dependencies && typeof pkg.dependencies === 'object' ? Object.keys(pkg.dependencies) : [];
+		const devDeps = pkg.devDependencies && typeof pkg.devDependencies === 'object' ? Object.keys(pkg.devDependencies) : [];
+		return deps.length > 0 || devDeps.length > 0;
+	} catch {
+		return false;
+	}
+}
+
 const KNOWN_BINARIES = new Set([
 	'pm2', 'pnpm', 'npm', 'yarn', 'bun', 'node', 'npx', 'dlx',
 	'git', 'sh', 'bash', 'zsh', 'cmd', 'powershell',

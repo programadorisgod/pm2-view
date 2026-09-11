@@ -11,7 +11,7 @@ import type {
 	DeployStepResult,
 	PackageManager,
 } from './deploy.types';
-import { tokenizeCommand } from './process-runner';
+import { tokenizeCommand, hasPackageDependencies } from './process-runner';
 
 const LOCK_FILES: Record<string, PackageManager> = {
 	'pnpm-lock.yaml': 'pnpm',
@@ -335,7 +335,13 @@ export class DeployService {
 		}
 
 		// Step 2: package manager install (with pnpm approval detection)
-		if (options?.installCommand) {
+		if (options?.skipInstall) {
+			log('install', '─── Skipped: install (skipInstall flag enabled) ───', false);
+			steps.push({ step: 'install', success: true, exitCode: 0 });
+		} else if (!options?.installCommand && existsSync(join(workingDir, 'package.json')) && !hasPackageDependencies(workingDir)) {
+			log('install', '─── Skipped: no dependencies in package.json ───', false);
+			steps.push({ step: 'install', success: true, exitCode: 0 });
+		} else if (options?.installCommand) {
 			// Custom install command
 			log('install', '─── Starting: install (custom) ───', false);
 			const { bin, args, env: inlineEnv } = tokenizeCommand(options.installCommand, workingDir);

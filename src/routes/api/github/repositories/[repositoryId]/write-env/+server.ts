@@ -4,7 +4,7 @@ import { rateLimiter } from '$lib/rate-limiter';
 import { logger } from '$lib/logger';
 import { stringifyEnv } from '$lib/utils/env-parser';
 import { existsSync, writeFileSync } from 'fs';
-import { join } from 'path';
+import { join, resolve, sep } from 'path';
 import { z } from 'zod';
 
 const writeEnvSchema = z.object({
@@ -26,6 +26,10 @@ export const POST: RequestHandler = async ({ params, request, getClientAddress }
 	const session = await auth.api.getSession({ headers: request.headers });
 	if (!session?.user) {
 		return json({ error: 'Unauthorized' }, { status: 401 });
+	}
+	const user = session.user as any;
+	if (user.banned) {
+		return json({ error: 'Account is banned' }, { status: 403 });
 	}
 
 	const repositoryId = Number(params.repositoryId);
@@ -66,8 +70,15 @@ export const POST: RequestHandler = async ({ params, request, getClientAddress }
 	}
 
 	try {
+		const resolvedRoot = resolve(targetPath);
+		const envDir = envSubdir ? resolve(resolvedRoot, envSubdir) : resolvedRoot;
+
+		// Path traversal protection: envDir must be within targetPath
+		if (envDir !== resolvedRoot && !envDir.startsWith(resolvedRoot + sep)) {
+			return json({ error: 'Target directory must be inside the target path' }, { status: 400 });
+		}
+
 		const envContent = stringifyEnv(envVars as Record<string, string>);
-		const envDir = envSubdir ? join(targetPath, envSubdir) : targetPath;
 		const envPath = join(envDir, '.env');
 
 		// Ensure the target directory exists

@@ -1,4 +1,7 @@
 import { json, type RequestHandler } from '@sveltejs/kit';
+import { auth } from '$lib/auth';
+import { getProjectRole } from '$lib/server/project-access';
+import { ProjectRepository } from '$lib/db/repositories/project-repository.impl';
 import { logger } from '$lib/logger';
 import { existsSync, readdirSync } from 'fs';
 import { join, relative, resolve, sep } from 'path';
@@ -49,7 +52,16 @@ function collectDirs(root: string): string[] {
 	return dirs;
 }
 
-export const GET: RequestHandler = async ({ params }) => {
+export const GET: RequestHandler = async ({ params, request }) => {
+	const session = await auth.api.getSession({ headers: request.headers });
+	if (!session?.user) {
+		return json({ error: 'Unauthorized' }, { status: 401 });
+	}
+	const user = session.user as any;
+	if (user.banned) {
+		return json({ error: 'Account is banned' }, { status: 403 });
+	}
+
 	const id = params.id;
 	if (!id) {
 		return json({ error: 'Process ID is required' }, { status: 400 });
@@ -64,6 +76,21 @@ export const GET: RequestHandler = async ({ params }) => {
 
 		if (!process) {
 			return json({ error: 'Process not found' }, { status: 404 });
+		}
+
+		if (user.role !== 'admin') {
+			const projectRepo = new ProjectRepository();
+			const allProjects = await projectRepo.getAll();
+			const project = allProjects.find(
+				(p) => p.id === id || p.pm2Name === process.name || (p.pm2Names && p.pm2Names.includes(process.name))
+			);
+			if (!project) {
+				return json({ error: 'Access denied to this project' }, { status: 403 });
+			}
+			const role = await getProjectRole(user.id, project.id, user.role);
+			if (!role) {
+				return json({ error: 'Access denied to this project' }, { status: 403 });
+			}
 		}
 
 		const cwd = pm2Service.resolveProjectDir(process);

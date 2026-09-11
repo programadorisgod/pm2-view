@@ -1,5 +1,8 @@
 import { json, type RequestHandler } from '@sveltejs/kit';
 import { z } from 'zod';
+import { auth } from '$lib/auth';
+import { getProjectRole } from '$lib/server/project-access';
+import { ProjectRepository } from '$lib/db/repositories/project-repository.impl';
 import { PM2Repository } from '$lib/pm2/pm2-repository.impl';
 import { DeployService } from '$lib/deploy/deploy.service';
 import { DeployConfigRepository } from '$lib/db/repositories/deploy-config-repository.impl';
@@ -37,6 +40,15 @@ export const POST: RequestHandler = async ({ request, getClientAddress }) => {
 		);
 	}
 
+	const session = await auth.api.getSession({ headers: request.headers });
+	if (!session?.user) {
+		return json({ error: 'Unauthorized' }, { status: 401 });
+	}
+	const user = session.user as any;
+	if (user.banned) {
+		return json({ error: 'Account is banned' }, { status: 403 });
+	}
+
 	const body = await request.json();
 	const validationResult = deploySchema.safeParse(body);
 
@@ -46,11 +58,50 @@ export const POST: RequestHandler = async ({ request, getClientAddress }) => {
 
 	const { pm_id, projectId, restartCommandIds, startCommandIds, installCommand, buildCommand } = validationResult.data;
 
+	// Resolve project ID
+	let resolvedProjectId = projectId;
+	if (!resolvedProjectId) {
+		const pm2Repo = new PM2Repository();
+		const proc = await pm2Repo.describe(pm_id);
+		if (proc) {
+			const projectRepo = new ProjectRepository();
+			const allProjects = await projectRepo.getAll();
+			const match = allProjects.find((p) => {
+				if (p.pm2Name === proc.name) return true;
+				if (p.pm2Names) {
+					try {
+						return (JSON.parse(p.pm2Names) as string[]).includes(proc.name);
+					} catch {
+						return false;
+					}
+				}
+				return false;
+			});
+			if (match) resolvedProjectId = match.id;
+		}
+	}
+
+	// Verify permissions
+	if (user.role !== 'admin') {
+		if (!resolvedProjectId) {
+			return json({ error: 'Admin role required to deploy unregistered processes' }, { status: 403 });
+		}
+		const role = await getProjectRole(user.id, resolvedProjectId, user.role);
+		if (!role || (role !== 'owner' && role !== 'editor')) {
+			return json({ error: 'Forbidden: editor or owner permission required' }, { status: 403 });
+		}
+	}
+
+	// Only admins can supply ad-hoc raw install/build command strings
+	const isCustomCommandAllowed = user.role === 'admin';
+	const safeInstallCommand = isCustomCommandAllowed ? installCommand : undefined;
+	const safeBuildCommand = isCustomCommandAllowed ? buildCommand : undefined;
+
 	// Resolve restart command IDs to actual commands
 	let resolvedRestartCommands: string[] | undefined;
-	if (restartCommandIds && restartCommandIds.length > 0 && projectId) {
+	if (restartCommandIds && restartCommandIds.length > 0 && resolvedProjectId) {
 		const deployConfigRepo = new DeployConfigRepository();
-		const commands = await deployConfigRepo.getByProjectId(projectId);
+		const commands = await deployConfigRepo.getByProjectId(resolvedProjectId);
 		const selectedCommands = commands.filter((c) => restartCommandIds.includes(c.id));
 		if (selectedCommands.length !== restartCommandIds.length) {
 			activeDeploys.delete(pm_id);
@@ -61,11 +112,12 @@ export const POST: RequestHandler = async ({ request, getClientAddress }) => {
 			.map((c) => c.command);
 	}
 
+
 	// Resolve start command IDs to actual commands
 	let resolvedStartCommands: string[] | undefined;
-	if (startCommandIds && startCommandIds.length > 0 && projectId) {
+	if (startCommandIds && startCommandIds.length > 0 && resolvedProjectId) {
 		const deployConfigRepo = new DeployConfigRepository();
-		const commands = await deployConfigRepo.getByProjectId(projectId);
+		const commands = await deployConfigRepo.getByProjectId(resolvedProjectId);
 		const selectedCommands = commands.filter((c) => startCommandIds.includes(c.id));
 		if (selectedCommands.length !== startCommandIds.length) {
 			activeDeploys.delete(pm_id);
@@ -77,16 +129,21 @@ export const POST: RequestHandler = async ({ request, getClientAddress }) => {
 	}
 
 	let deployOptions: DeployOptions | undefined =
-		installCommand || buildCommand || resolvedRestartCommands || resolvedStartCommands
-			? { installCommand, buildCommand, restartCommands: resolvedRestartCommands, startCommands: resolvedStartCommands }
+		safeInstallCommand || safeBuildCommand || resolvedRestartCommands || resolvedStartCommands
+			? {
+					installCommand: safeInstallCommand,
+					buildCommand: safeBuildCommand,
+					restartCommands: resolvedRestartCommands,
+					startCommands: resolvedStartCommands
+				}
 			: undefined;
 
 	// Load DB-managed env vars for the project (fail open — non-critical)
 	let managedEnv: Record<string, string> | undefined;
-	if (projectId) {
+	if (resolvedProjectId) {
 		try {
 			const envVarRepo = new EnvVarRepository();
-			const vars = await envVarRepo.getByProjectId(projectId);
+			const vars = await envVarRepo.getByProjectId(resolvedProjectId);
 			if (vars.length > 0) {
 				managedEnv = Object.fromEntries(vars.map((v) => [v.key, v.value]));
 			}

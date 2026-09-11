@@ -99,6 +99,8 @@
   let envPath = $state<string | null>(null);
   let envRestarting = $state(false);
   let envFileInput = $state<HTMLInputElement | null>(null);
+  // Indices of rows whose values are revealed (when focused/clicked)
+  let revealedEnvRows = $state<Record<number, boolean>>({});
   let importPreview = $state<{
     fileName: string;
     content: string;
@@ -806,15 +808,40 @@
                     oninput={(e) => updateEnvRow(i, "key", e.currentTarget.value)}
                     onpaste={(e) => handleEnvPaste(i, e)}
                   />
-                  <input
-                    class="flex-1 min-w-0 font-mono text-body-sm px-2 py-1 rounded border"
-                    style="background: var(--bg-base); color: var(--text-primary); border-color: var(--border-color);"
-                    value={env.value}
-                    placeholder="value"
-                    spellcheck="false"
-                    oninput={(e) => updateEnvRow(i, "value", e.currentTarget.value)}
-                    onpaste={(e) => handleEnvPaste(i, e)}
-                  />
+                  <div class="relative flex-1 min-w-0 flex items-center">
+                    <input
+                      type={revealedEnvRows[i] ? "text" : "password"}
+                      class="w-full font-mono text-body-sm pl-2 pr-8 py-1 rounded border"
+                      style="background: var(--bg-base); color: var(--text-primary); border-color: var(--border-color);"
+                      value={env.value}
+                      placeholder="••••••••"
+                      spellcheck="false"
+                      onfocus={() => { revealedEnvRows[i] = true; }}
+                      onblur={() => { revealedEnvRows[i] = false; }}
+                      oninput={(e) => updateEnvRow(i, "value", e.currentTarget.value)}
+                      onpaste={(e) => handleEnvPaste(i, e)}
+                    />
+                    <button
+                      type="button"
+                      class="absolute right-2 text-xs p-1 rounded opacity-60 hover:opacity-100 transition-opacity"
+                      style="color: var(--text-muted);"
+                      tabindex="-1"
+                      onclick={() => { revealedEnvRows[i] = !revealedEnvRows[i]; }}
+                      title={revealedEnvRows[i] ? "Hide value" : "Show value"}
+                      aria-label={revealedEnvRows[i] ? "Hide value" : "Show value"}
+                    >
+                      {#if revealedEnvRows[i]}
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l18 18"/>
+                        </svg>
+                      {:else}
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
+                        </svg>
+                      {/if}
+                    </button>
+                  </div>
                   <button
                     class="shrink-0 p-1.5 rounded"
                     style="color: #FF5B4F;"

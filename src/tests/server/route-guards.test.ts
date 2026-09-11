@@ -126,8 +126,8 @@ describe('requireRole', () => {
 });
 
 describe('requireProjectAccess', () => {
-	const regularUser = { id: 'user-1', email: 'user@test.com', name: 'User', role: 'user', banned: false, banReason: null };
-	const adminUser = { id: 'user-1', email: 'admin@test.com', name: 'Admin', role: 'admin', banned: false, banReason: null };
+	const regularUser: AuthUser = { id: 'user-1', email: 'user@test.com', name: 'User', role: 'user', banned: false, banReason: null, emailVerified: true, createdAt: new Date() };
+	const adminUser: AuthUser = { id: 'user-1', email: 'admin@test.com', name: 'Admin', role: 'admin', banned: false, banReason: null, emailVerified: true, createdAt: new Date() };
 
 	beforeEach(() => {
 		vi.clearAllMocks();

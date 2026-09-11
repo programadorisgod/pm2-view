@@ -88,12 +88,22 @@ export class AuditService {
   }
 
   private escapeCsvField(value: string): string {
-    // If the value contains comma, quote, or newline, wrap in quotes
-    if (value.includes(',') || value.includes('"') || value.includes('\n') || value.includes('\r')) {
-      // Escape quotes by doubling them
-      return '"' + value.replace(/"/g, '""') + '"';
+    if (!value) return '';
+
+    // OWASP A03: Mitigate CSV Formula Injection (DDE injection)
+    // If field starts with =, +, -, @, tab (\t), or CR (\r), prepend a single quote
+    const formulaPrefixes = ['=', '+', '-', '@', '\t', '\r'];
+    let sanitized = value;
+    if (formulaPrefixes.some(prefix => sanitized.startsWith(prefix))) {
+      sanitized = `'${sanitized}`;
     }
-    return value;
+
+    // If the value contains comma, quote, or newline, wrap in quotes
+    if (sanitized.includes(',') || sanitized.includes('"') || sanitized.includes('\n') || sanitized.includes('\r')) {
+      // Escape quotes by doubling them
+      return '"' + sanitized.replace(/"/g, '""') + '"';
+    }
+    return sanitized;
   }
 }
 

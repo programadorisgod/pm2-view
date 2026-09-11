@@ -13,8 +13,8 @@
 
 	// Search and sort state
 	let searchQuery = $state('');
-	let sortBy = $state<'name' | 'updated'>('name');
-	let sortOrder = $state<'asc' | 'desc'>('asc');
+	let sortBy = $state<'name' | 'updated'>('updated');
+	let sortOrder = $state<'asc' | 'desc'>('desc');
 	let showSortMenu = $state(false);
 	let sortMenuRef = $state<HTMLDivElement | undefined>();
 	let showDisconnectConfirm = $state(false);
@@ -60,19 +60,23 @@
 				return repo.name.toLowerCase().includes(q) || repo.fullName.toLowerCase().includes(q);
 			})
 			.toSorted((a, b) => {
-				let cmp: number;
 				if (sortBy === 'name') {
-					cmp = a.name.localeCompare(b.name);
+					const cmp = a.name.localeCompare(b.name, undefined, { sensitivity: 'base' });
+					return sortOrder === 'asc' ? cmp : -cmp;
 				} else {
-					cmp = new Date(a.updatedAt).getTime() - new Date(b.updatedAt).getTime();
+					const timeA = a.updatedAt ? new Date(a.updatedAt).getTime() : 0;
+					const timeB = b.updatedAt ? new Date(b.updatedAt).getTime() : 0;
+					const safeTimeA = Number.isNaN(timeA) ? 0 : timeA;
+					const safeTimeB = Number.isNaN(timeB) ? 0 : timeB;
+					const cmp = safeTimeA - safeTimeB;
+					return sortOrder === 'asc' ? cmp : -cmp;
 				}
-				return sortOrder === 'asc' ? cmp : -cmp;
 			})
 	);
 
 	function sortLabel(): string {
 		const dir = sortOrder === 'asc' ? '↑' : '↓';
-		return sortBy === 'name' ? `${dir} Name` : `${dir} Last Updated`;
+		return sortBy === 'name' ? `Name ${dir}` : `Updated ${dir}`;
 	}
 
 	function toggleSortDir() {
@@ -80,7 +84,12 @@
 	}
 
 	function setSortBy(by: 'name' | 'updated') {
-		sortBy = by;
+		if (sortBy === by) {
+			sortOrder = sortOrder === 'asc' ? 'desc' : 'asc';
+		} else {
+			sortBy = by;
+			sortOrder = by === 'updated' ? 'desc' : 'asc';
+		}
 		showSortMenu = false;
 	}
 
@@ -214,25 +223,14 @@
 							<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
 								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4h13M3 8h9m-9 4h6m4 0l-4 4m0 0l4 4"/>
 							</svg>
-							Sort
+							<span>Sort: {sortLabel()}</span>
 						</button>
 						{#if showSortMenu}
 							<div
-								class="absolute right-0 top-full mt-1 w-48 rounded-lg shadow-lg z-10"
+								class="absolute right-0 top-full mt-1 w-52 rounded-lg shadow-lg z-10"
 								style="background: var(--bg-surface); border: 1px solid var(--border-color);"
 							>
 								<div class="p-1">
-									<button
-										type="button"
-										class="w-full flex items-center justify-between px-3 py-2 rounded-md text-caption"
-										style="background: {sortBy === 'name' ? 'rgba(0, 112, 243, 0.1)' : 'transparent'}; color: var(--text-primary);"
-										onclick={() => setSortBy('name')}
-									>
-										<span>Name</span>
-										{#if sortBy === 'name'}
-											<span style="color: #0070F3;">{sortOrder === 'asc' ? '↑' : '↓'}</span>
-										{/if}
-									</button>
 									<button
 										type="button"
 										class="w-full flex items-center justify-between px-3 py-2 rounded-md text-caption"
@@ -241,7 +239,18 @@
 									>
 										<span>Last Updated</span>
 										{#if sortBy === 'updated'}
-											<span style="color: #0070F3;">{sortOrder === 'asc' ? '↑' : '↓'}</span>
+											<span style="color: #0070F3; font-weight: 500;">{sortOrder === 'desc' ? 'Newest first ↓' : 'Oldest first ↑'}</span>
+										{/if}
+									</button>
+									<button
+										type="button"
+										class="w-full flex items-center justify-between px-3 py-2 rounded-md text-caption"
+										style="background: {sortBy === 'name' ? 'rgba(0, 112, 243, 0.1)' : 'transparent'}; color: var(--text-primary);"
+										onclick={() => setSortBy('name')}
+									>
+										<span>Name</span>
+										{#if sortBy === 'name'}
+											<span style="color: #0070F3; font-weight: 500;">{sortOrder === 'asc' ? 'A to Z ↑' : 'Z to A ↓'}</span>
 										{/if}
 									</button>
 									<div class="border-t my-1" style="border-color: var(--border-color);"></div>

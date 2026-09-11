@@ -1,4 +1,6 @@
 import { type RequestHandler } from '@sveltejs/kit';
+import { auth } from '$lib/auth';
+import { getProjectRole } from '$lib/server/project-access';
 import { PM2Repository } from '$lib/pm2/pm2-repository.impl';
 import { DeployService } from '$lib/deploy/deploy.service';
 import { EnvVarRepository } from '$lib/db/repositories/env-var-repository.impl';
@@ -23,6 +25,21 @@ export const POST: RequestHandler = async ({ params, request, getClientAddress }
 		);
 	}
 
+	const session = await auth.api.getSession({ headers: request.headers });
+	if (!session?.user) {
+		return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+			status: 401,
+			headers: { 'Content-Type': 'application/json' }
+		});
+	}
+	const user = session.user as any;
+	if (user.banned) {
+		return new Response(JSON.stringify({ error: 'Account is banned' }), {
+			status: 403,
+			headers: { 'Content-Type': 'application/json' }
+		});
+	}
+
 	const pmId = params.pmId;
 	if (!pmId) {
 		return new Response(JSON.stringify({ error: 'Process ID is required' }), {
@@ -41,11 +58,39 @@ export const POST: RequestHandler = async ({ params, request, getClientAddress }
 			? body.projectId
 			: undefined;
 
+	let resolvedProjectId = projectId;
+	if (!resolvedProjectId) {
+		const proc = await pm2Repo.describe(pmId);
+		if (proc) {
+			const { ProjectRepository } = await import('$lib/db/repositories/project-repository.impl');
+			const projectRepo = new ProjectRepository();
+			const allProjects = await projectRepo.getAll();
+			const match = allProjects.find((p) => p.pm2Name === proc.name || (p.pm2Names && p.pm2Names.includes(proc.name)));
+			if (match) resolvedProjectId = match.id;
+		}
+	}
+
+	if (user.role !== 'admin') {
+		if (!resolvedProjectId) {
+			return new Response(JSON.stringify({ error: 'Admin role required to manage unregistered processes' }), {
+				status: 403,
+				headers: { 'Content-Type': 'application/json' }
+			});
+		}
+		const role = await getProjectRole(user.id, resolvedProjectId, user.role);
+		if (!role || (role !== 'owner' && role !== 'editor')) {
+			return new Response(JSON.stringify({ error: 'Forbidden: editor or owner permission required' }), {
+				status: 403,
+				headers: { 'Content-Type': 'application/json' }
+			});
+		}
+	}
+
 	let deployOptions: DeployOptions | undefined;
-	if (projectId) {
+	if (resolvedProjectId) {
 		try {
 			const envVarRepo = new EnvVarRepository();
-			const vars = await envVarRepo.getByProjectId(projectId);
+			const vars = await envVarRepo.getByProjectId(resolvedProjectId);
 			if (vars.length > 0) {
 				deployOptions = {
 					env: Object.fromEntries(vars.map((v) => [v.key, v.value])),
@@ -53,7 +98,7 @@ export const POST: RequestHandler = async ({ params, request, getClientAddress }
 			}
 		} catch (err) {
 			logger.error('Failed to load managed env vars for approve-builds', {
-				projectId,
+				projectId: resolvedProjectId,
 				error: err,
 			});
 		}

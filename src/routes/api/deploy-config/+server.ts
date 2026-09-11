@@ -19,6 +19,10 @@ export const POST: RequestHandler = async ({ request }) => {
 	if (!session?.user) {
 		return json({ error: 'Unauthorized' }, { status: 401 });
 	}
+	const user = session.user as any;
+	if (user.banned) {
+		return json({ error: 'Account is banned' }, { status: 403 });
+	}
 
 	const body = await request.json();
 	const validationResult = createCommandSchema.safeParse(body);
@@ -31,10 +35,10 @@ export const POST: RequestHandler = async ({ request }) => {
 	const { project_id, command_type, target_process, label, command } = validationResult.data;
 
 	// Check project access
-	const userRole = (session.user as { role?: string }).role;
-	const role = await getProjectRole(session.user.id, project_id, userRole);
-	if (!role) {
-		return json({ error: 'Access denied' }, { status: 403 });
+	const userRole = user.role;
+	const role = await getProjectRole(user.id, project_id, userRole);
+	if (!role || (role !== 'owner' && role !== 'editor')) {
+		return json({ error: 'Forbidden: editor or owner permission required' }, { status: 403 });
 	}
 
 	const repo = new DeployConfigRepository();
@@ -67,6 +71,10 @@ export const PUT: RequestHandler = async ({ request }) => {
 	if (!session?.user) {
 		return json({ error: 'Unauthorized' }, { status: 401 });
 	}
+	const user = session.user as any;
+	if (user.banned) {
+		return json({ error: 'Account is banned' }, { status: 403 });
+	}
 
 	const body = await request.json();
 	const validationResult = updateCommandSchema.safeParse(body);
@@ -93,10 +101,10 @@ export const PUT: RequestHandler = async ({ request }) => {
 	}
 
 	// Check project access using the command's projectId
-	const userRole = (session.user as { role?: string }).role;
-	const role = await getProjectRole(session.user.id, cmd.projectId, userRole);
-	if (!role) {
-		return json({ error: 'Access denied' }, { status: 403 });
+	const userRole = user.role;
+	const role = await getProjectRole(user.id, cmd.projectId, userRole);
+	if (!role || (role !== 'owner' && role !== 'editor')) {
+		return json({ error: 'Forbidden: editor or owner permission required' }, { status: 403 });
 	}
 
 	try {
@@ -118,6 +126,10 @@ export const DELETE: RequestHandler = async ({ request }) => {
 	if (!session?.user) {
 		return json({ error: 'Unauthorized' }, { status: 401 });
 	}
+	const user = session.user as any;
+	if (user.banned) {
+		return json({ error: 'Account is banned' }, { status: 403 });
+	}
 
 	const body = await request.json();
 	const { id } = body;
@@ -136,10 +148,10 @@ export const DELETE: RequestHandler = async ({ request }) => {
 	}
 
 	// Check project access using the command's projectId
-	const userRole = (session.user as { role?: string }).role;
-	const role = await getProjectRole(session.user.id, cmd.projectId, userRole);
-	if (!role) {
-		return json({ error: 'Access denied' }, { status: 403 });
+	const userRole = user.role;
+	const role = await getProjectRole(user.id, cmd.projectId, userRole);
+	if (!role || (role !== 'owner' && role !== 'editor')) {
+		return json({ error: 'Forbidden: editor or owner permission required' }, { status: 403 });
 	}
 
 	const service = new DeployConfigService(repo);

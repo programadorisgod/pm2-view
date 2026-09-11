@@ -3,12 +3,13 @@ import { auth } from '$lib/auth';
 import { db } from '$lib/db';
 import { projects } from '$lib/db/schema';
 import { eq } from 'drizzle-orm';
+import { getProjectRole } from '$lib/server/project-access';
 import { rateLimiter } from '$lib/rate-limiter';
 import { logger } from '$lib/logger';
 import { spawn } from 'child_process';
-import { join } from 'path';
+import { join, resolve, sep } from 'path';
 import { existsSync } from 'fs';
-import { escapeShellArg } from '$lib/utils/shell';
+import { escapeShellArg, isValidPm2Name } from '$lib/utils/shell';
 import { z } from 'zod';
 
 const startSchema = z.object({
@@ -41,6 +42,10 @@ export const POST: RequestHandler = async ({ request, getClientAddress }) => {
 	if (!session?.user) {
 		return json({ error: 'Unauthorized' }, { status: 401 });
 	}
+	const user = session.user as any;
+	if (user.banned) {
+		return json({ error: 'Account is banned' }, { status: 403 });
+	}
 
 	let body: unknown;
 	try {
@@ -56,14 +61,26 @@ export const POST: RequestHandler = async ({ request, getClientAddress }) => {
 
 	const { projectName, ecosystemFile } = validationResult.data;
 
+	// Validate projectName characters
+	if (!isValidPm2Name(projectName)) {
+		return json({ error: 'Invalid project name format' }, { status: 400 });
+	}
+
 	// Find project in DB
-	const project = await db.query.projects.findFirst({
+	const project = await (db as any).query.projects.findFirst({
 		where: eq(projects.pm2Name, projectName),
 		columns: { id: true, targetPath: true }
 	});
 
 	if (!project) {
 		return json({ error: 'Project not found in database' }, { status: 404 });
+	}
+
+	if (user.role !== 'admin') {
+		const role = await getProjectRole(user.id, project.id, user.role);
+		if (!role || (role !== 'owner' && role !== 'editor')) {
+			return json({ error: 'Forbidden: editor or owner permission required' }, { status: 403 });
+		}
 	}
 
 	if (!project.targetPath) {
@@ -77,19 +94,17 @@ export const POST: RequestHandler = async ({ request, getClientAddress }) => {
 		return json({ error: `Target path does not exist: ${targetPath}` }, { status: 400 });
 	}
 
-	// Validate ecosystem file exists
-	const ecosystemPath = join(targetPath, ecosystemFile);
+	// Validate ecosystem file exists and is strictly within targetPath
+	const resolvedTarget = resolve(targetPath);
+	const ecosystemPath = resolve(resolvedTarget, ecosystemFile);
+	if (ecosystemPath !== resolvedTarget && !ecosystemPath.startsWith(resolvedTarget + sep)) {
+		return json({ error: 'Ecosystem file must be inside the target path' }, { status: 400 });
+	}
 	if (!existsSync(ecosystemPath)) {
 		return json({ error: `Ecosystem file not found: ${ecosystemFile}` }, { status: 400 });
 	}
 
-	// Sanitize process name
-	let sanitizedName: string;
-	try {
-		sanitizedName = escapeShellArg(projectName).replace(/^'|'$/g, '');
-	} catch {
-		return json({ error: 'Invalid project name' }, { status: 400 });
-	}
+	const sanitizedName = projectName;
 
 	// Start PM2 process
 	try {

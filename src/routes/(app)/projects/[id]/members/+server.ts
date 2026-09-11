@@ -3,7 +3,7 @@ import type { RequestHandler } from './$types';
 import { requireProjectAccess } from '$lib/server/route-guards';
 import { getProjectRole } from '$lib/server/project-access';
 import { logAudit } from '$lib/server/audit';
-import { db } from '$lib/db';
+import { db } from '$lib/db/db';
 import { projectMembers, projects, users } from '$lib/db/schema';
 import { eq, and, count } from 'drizzle-orm';
 import { z } from 'zod';
@@ -29,7 +29,7 @@ export const GET: RequestHandler = async ({ params, locals }) => {
 	}
 
 	// Check project access
-	requireProjectAccess(projectId, user);
+	await requireProjectAccess(projectId, user);
 
 	try {
 		const members = await db.query.projectMembers.findMany({
@@ -77,7 +77,7 @@ export const POST: RequestHandler = async ({ params, request, locals }) => {
 	const body = await request.json();
 	const parseResult = inviteSchema.safeParse(body);
 	if (!parseResult.success) {
-		throw error(400, parseResult.error.errors[0].message);
+		throw error(400, parseResult.error.issues[0]?.message ?? 'Invalid input');
 	}
 
 	const { userId, role } = parseResult.data;
@@ -161,7 +161,7 @@ export const PATCH: RequestHandler = async ({ params, request, locals }) => {
 
 	const parseResult = updateRoleSchema.safeParse({ role });
 	if (!parseResult.success) {
-		throw error(400, parseResult.error.errors[0].message);
+		throw error(400, parseResult.error.issues[0]?.message ?? 'Invalid role');
 	}
 
 	try {

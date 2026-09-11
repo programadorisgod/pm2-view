@@ -1,5 +1,7 @@
 import { json, type RequestHandler } from '@sveltejs/kit';
 import { auth } from '$lib/auth';
+import { getProjectRole } from '$lib/server/project-access';
+import { ProjectRepository } from '$lib/db/repositories/project-repository.impl';
 import { logger } from '$lib/logger';
 import { parseEnv, stringifyEnv } from '$lib/utils/env-parser';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
@@ -13,7 +15,40 @@ const envSchema = z.object({
 	processName: z.string().optional(),
 });
 
-export const GET: RequestHandler = async ({ params }) => {
+async function checkProjectPermission(
+	userId: string,
+	userRole: string,
+	paramId: string,
+	processName: string,
+	minRole: 'viewer' | 'editor' | 'owner'
+): Promise<boolean> {
+	if (userRole === 'admin') return true;
+
+	const projectRepo = new ProjectRepository();
+	const allProjects = await projectRepo.getAll();
+	const project = allProjects.find(
+		(p) => p.id === paramId || p.pm2Name === processName || (p.pm2Names && p.pm2Names.includes(processName))
+	);
+
+	if (!project) return false;
+
+	const role = await getProjectRole(userId, project.id, userRole);
+	if (!role) return false;
+
+	const hierarchy: Record<string, number> = { owner: 3, editor: 2, viewer: 1 };
+	return (hierarchy[role] ?? 0) >= (hierarchy[minRole] ?? 0);
+}
+
+export const GET: RequestHandler = async ({ params, request }) => {
+	const session = await auth.api.getSession({ headers: request.headers });
+	if (!session?.user) {
+		return json({ error: 'Unauthorized' }, { status: 401 });
+	}
+	const user = session.user as any;
+	if (user.banned) {
+		return json({ error: 'Account is banned' }, { status: 403 });
+	}
+
 	const id = params.id;
 	if (!id) {
 		return json({ error: 'Process ID is required' }, { status: 400 });
@@ -28,6 +63,11 @@ export const GET: RequestHandler = async ({ params }) => {
 
 		if (!process) {
 			return json({ error: 'Process not found' }, { status: 404 });
+		}
+
+		const hasAccess = await checkProjectPermission(user.id, user.role, id, process.name, 'viewer');
+		if (!hasAccess) {
+			return json({ error: 'Access denied: project permission required' }, { status: 403 });
 		}
 
 		const cwd = pm2Service.resolveProjectDir(process);
@@ -57,7 +97,17 @@ export const GET: RequestHandler = async ({ params }) => {
 };
 
 export const PUT: RequestHandler = async ({ params, request }) => {
+	const session = await auth.api.getSession({ headers: request.headers });
+	if (!session?.user) {
+		return json({ error: 'Unauthorized' }, { status: 401 });
+	}
+	const user = session.user as any;
+	if (user.banned) {
+		return json({ error: 'Account is banned' }, { status: 403 });
+	}
+
 	const id = params.id;
+
 	if (!id) {
 		return json({ error: 'Process ID is required' }, { status: 400 });
 	}
@@ -87,6 +137,11 @@ export const PUT: RequestHandler = async ({ params, request }) => {
 
 		if (!process) {
 			return json({ error: 'Process not found' }, { status: 404 });
+		}
+
+		const hasAccess = await checkProjectPermission(user.id, user.role, id, process.name, 'editor');
+		if (!hasAccess) {
+			return json({ error: 'Access denied: editor or owner permission required' }, { status: 403 });
 		}
 
 		const cwd = pm2Service.resolveProjectDir(process);
@@ -140,6 +195,15 @@ const importEnvSchema = z.object({
 });
 
 export const POST: RequestHandler = async ({ params, request }) => {
+	const session = await auth.api.getSession({ headers: request.headers });
+	if (!session?.user) {
+		return json({ error: 'Unauthorized' }, { status: 401 });
+	}
+	const user = session.user as any;
+	if (user.banned) {
+		return json({ error: 'Account is banned' }, { status: 403 });
+	}
+
 	const id = params.id;
 	if (!id) {
 		return json({ error: 'Process ID is required' }, { status: 400 });
@@ -170,6 +234,11 @@ export const POST: RequestHandler = async ({ params, request }) => {
 
 		if (!process) {
 			return json({ error: 'Process not found' }, { status: 404 });
+		}
+
+		const hasAccess = await checkProjectPermission(user.id, user.role, id, process.name, 'editor');
+		if (!hasAccess) {
+			return json({ error: 'Access denied: editor or owner permission required' }, { status: 403 });
 		}
 
 		const cwd = pm2Service.resolveProjectDir(process);

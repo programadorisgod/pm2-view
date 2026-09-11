@@ -116,7 +116,7 @@ export function getAuth() {
 </html>`
 					});
 					if (!sent) {
-						console.log(`[auth] Password reset link for ${user.email}: ${url}`);
+						console.warn(`[auth] Failed to send password reset email to ${user.email}. Verify SMTP configuration.`);
 					}
 				},
 				resetPasswordTokenExpiresIn: 60 * 60, // 1 hour

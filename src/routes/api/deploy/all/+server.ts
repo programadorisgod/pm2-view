@@ -1,4 +1,5 @@
 import { json, type RequestHandler } from '@sveltejs/kit';
+import { auth } from '$lib/auth';
 import { PM2Repository } from '$lib/pm2/pm2-repository.impl';
 import { DeployService } from '$lib/deploy/deploy.service';
 import { DeployConfigRepository } from '$lib/db/repositories/deploy-config-repository.impl';
@@ -20,6 +21,18 @@ export const POST: RequestHandler = async ({ request, getClientAddress }) => {
 			{ error: 'Too many requests. Please try again later.' },
 			{ status: 429, headers: { 'Retry-After': String(rateLimitResult.retryAfter ?? 60) } },
 		);
+	}
+
+	const session = await auth.api.getSession({ headers: request.headers });
+	if (!session?.user) {
+		return json({ error: 'Unauthorized' }, { status: 401 });
+	}
+	const user = session.user as any;
+	if (user.banned) {
+		return json({ error: 'Account is banned' }, { status: 403 });
+	}
+	if (user.role !== 'admin') {
+		return json({ error: 'Forbidden: admin role required for multi-app deploys' }, { status: 403 });
 	}
 
 	if (activeMultiDeploy) {

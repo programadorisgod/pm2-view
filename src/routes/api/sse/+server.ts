@@ -1,4 +1,5 @@
 import { sseManager } from '$lib/sse/server';
+import { auth } from '$lib/auth';
 import { logger } from '$lib/logger';
 import type { RequestHandler } from './$types';
 
@@ -9,7 +10,22 @@ const HEADERS = {
 	'X-Accel-Buffering': 'no',
 };
 
-export const GET: RequestHandler = async ({ setHeaders }) => {
+export const GET: RequestHandler = async ({ request, setHeaders }) => {
+	const session = await auth.api.getSession({ headers: request.headers });
+	if (!session?.user) {
+		return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+			status: 401,
+			headers: { 'Content-Type': 'application/json' }
+		});
+	}
+	const user = session.user as any;
+	if (user.banned) {
+		return new Response(JSON.stringify({ error: 'Account is banned' }), {
+			status: 403,
+			headers: { 'Content-Type': 'application/json' }
+		});
+	}
+
 	const connectionId = crypto.randomUUID();
 
 	const stream = new ReadableStream({

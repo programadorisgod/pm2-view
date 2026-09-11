@@ -14,10 +14,12 @@ export class ConsoleLogger implements Logger {
   }
 
   warn(message: string, context?: Record<string, unknown>): void {
+    if (!dev) return;
     console.warn(`[${this.prefix}] ⚠️  ${this.formatMessage(message, context)}`);
   }
 
   error(message: string, context?: Record<string, unknown>): void {
+    if (!dev) return;
     console.error(`[${this.prefix}] ❌ ${this.formatMessage(message, context)}`);
   }
 

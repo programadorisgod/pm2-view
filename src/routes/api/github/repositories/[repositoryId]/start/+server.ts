@@ -1,8 +1,9 @@
 import { json, type RequestHandler } from '@sveltejs/kit';
 import { auth } from '$lib/auth';
-import { db } from '$lib/db';
+import { db } from '$lib/db/db';
 import { projects } from '$lib/db/schema';
 import { eq } from 'drizzle-orm';
+import { getProjectRole } from '$lib/server/project-access';
 import { rateLimiter } from '$lib/rate-limiter';
 import { logger } from '$lib/logger';
 import { GitHubImportPipelineService, type ImportStep } from '$lib/github/github-import-pipeline.service';
@@ -40,6 +41,10 @@ export const POST: RequestHandler = async ({ request, getClientAddress }) => {
 	const session = await auth.api.getSession({ headers: request.headers });
 	if (!session?.user) {
 		return json({ error: 'Unauthorized' }, { status: 401 });
+	}
+	const user = session.user as any;
+	if (user.banned) {
+		return json({ error: 'Account is banned' }, { status: 403 });
 	}
 
 	// Parse and validate body
@@ -111,12 +116,20 @@ export const POST: RequestHandler = async ({ request, getClientAddress }) => {
 					// Save project with targetPath to DB
 					try {
 						// First check if a project with this targetPath already exists (consolidate)
-						let project = await db.query.projects.findFirst({
+						let project = await (db as any).query.projects.findFirst({
 							where: eq(projects.targetPath, targetPath),
-							columns: { id: true, pm2Name: true }
+							columns: { id: true, pm2Name: true, userId: true }
 						});
 
 						if (project) {
+							// Only owner/admin can modify an existing project
+							if (project.userId !== session.user.id && user.role !== 'admin') {
+								const role = await getProjectRole(session.user.id, project.id, user.role);
+								if (!role || (role !== 'owner' && role !== 'editor')) {
+									throw new Error('Access denied: cannot modify existing project belonging to another user');
+								}
+							}
+
 							// Update existing project with new pm2Name and targetPath
 							await db.update(projects)
 								.set({
@@ -127,10 +140,17 @@ export const POST: RequestHandler = async ({ request, getClientAddress }) => {
 								.where(eq(projects.id, project.id));
 						} else {
 							// Check by pm2Name as fallback
-							project = await db.query.projects.findFirst({
+							project = await (db as any).query.projects.findFirst({
 								where: eq(projects.pm2Name, sanitizedProcessName),
-								columns: { id: true }
+								columns: { id: true, userId: true }
 							});
+
+							if (project && project.userId !== session.user.id && user.role !== 'admin') {
+								const role = await getProjectRole(session.user.id, project.id, user.role);
+								if (!role || (role !== 'owner' && role !== 'editor')) {
+									throw new Error('Access denied: process name matches existing project belonging to another user');
+								}
+							}
 
 							if (!project) {
 								// Create new project record

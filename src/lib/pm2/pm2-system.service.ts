@@ -174,16 +174,17 @@ export class PM2SystemService {
 	}
 
 	/**
-	 * The command is trusted to come from `pm2 startup`, but we still constrain it
-	 * to a single-line sudo invocation of pm2 startup to block injection.
+	 * Constrains the startup command to a strictly validated canonical PM2 startup invocation
+	 * and forbids any shell metacharacters, pipes, subshells, or command chaining.
 	 */
 	private isSafeStartupCommand(command: string): boolean {
-		return (
-			command.startsWith('sudo ') &&
-			!/\n/.test(command) &&
-			/\bpm2\b/.test(command) &&
-			/\bstartup\b/.test(command)
-		);
+		if (/[;&|`\n\r()<>{}]/.test(command)) {
+			return false;
+		}
+
+		const canonicalRegex =
+			/^sudo\s+(?:env\s+PATH=[^\s;&|`\(\)]+\s+)?(?:[^\s;&|`\(\)]+\/)?pm2\s+startup\s+(?:systemd|upstart|launchd|rcd|systemv)?\s*(?:-u\s+[a-zA-Z0-9._-]+\s+--hp\s+[a-zA-Z0-9_./-]+)?$/;
+		return canonicalRegex.test(command);
 	}
 }
 

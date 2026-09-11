@@ -21,7 +21,16 @@ const removeMemberSchema = z.object({
 	userId: z.string().min(1, 'User ID is required')
 });
 
-export const GET: RequestHandler = async ({ params }) => {
+export const GET: RequestHandler = async ({ params, request }) => {
+	const session = await auth.api.getSession({ headers: request.headers });
+	if (!session?.user) {
+		return json({ error: 'Unauthorized' }, { status: 401 });
+	}
+	const user = session.user as any;
+	if (user.banned) {
+		return json({ error: 'Account is banned' }, { status: 403 });
+	}
+
 	const { id: teamId } = params;
 	const teamRepo = createTeamRepository();
 	const team = await teamRepo.findById(teamId) as any;
@@ -30,7 +39,14 @@ export const GET: RequestHandler = async ({ params }) => {
 		return json({ error: 'Team not found' }, { status: 404 });
 	}
 
-	const members = (team.teamMembers ?? []).map(tm => ({
+	if (user.role !== 'admin') {
+		const isMember = (team.teamMembers ?? []).some((tm: any) => tm.userId === user.id);
+		if (!isMember) {
+			return json({ error: 'Access denied: not a member of this team' }, { status: 403 });
+		}
+	}
+
+	const members = (team.teamMembers ?? []).map((tm: any) => ({
 		userId: tm.userId,
 		role: tm.role,
 		joinedAt: tm.createdAt,

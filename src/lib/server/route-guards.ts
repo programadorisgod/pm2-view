@@ -5,28 +5,25 @@ import { eq, and } from 'drizzle-orm';
 import { projectMembers } from '$lib/db/schema';
 import { getProjectRole } from './project-access';
 
-/**
- * Throws a SvelteKit error if the user is not an admin.
- * Admin users have access to all routes.
- *
- * @param user - The authenticated user
- * @throws {Error} With status 403 if user is not admin
- */
+const ROLE_HIERARCHY: Record<string, number> = {
+	owner: 3,
+	editor: 2,
+	viewer: 1
+};
+
 export function requireAdmin(user: AuthUser): void {
+	if (user.banned) {
+		throw error(403, 'Account is banned');
+	}
 	if (user.role !== 'admin') {
 		throw error(403, 'Access denied: Admin role required');
 	}
 }
 
-/**
- * Throws a SvelteKit error if the user does not have the required role.
- * Admin users automatically pass all role checks (admin has all roles).
- *
- * @param user - The authenticated user
- * @param role - The required role ('admin', 'user', 'viewer')
- * @throws {Error} With status 403 if user does not have the required role
- */
 export function requireRole(user: AuthUser, role: string): void {
+	if (user.banned) {
+		throw error(403, 'Account is banned');
+	}
 	// Admin has all roles
 	if (user.role === 'admin') {
 		return;
@@ -37,48 +34,43 @@ export function requireRole(user: AuthUser, role: string): void {
 	}
 }
 
-/**
- * Checks if a user has access to a project and optionally verifies a specific role.
- * Admin users have universal access to all projects.
- * For non-admins, uses getProjectRole() which checks both project_members table and project creator.
- * Returns the member record if access is granted (or undefined for project creators/admins).
- *
- * @param projectId - The project ID to check access for
- * @param user - The authenticated user (role is checked for admin bypass)
- * @param requiredRole - Optional role requirement ('owner', 'editor', 'viewer')
- * @returns The project member record if available, or undefined for admins/creators
- * @throws {Error} With status 403 if user is not a project member
- * @throws {Error} With status 403 if user does not have the required role
- */
 export async function requireProjectAccess(
 	projectId: string,
 	user: AuthUser,
 	requiredRole?: string
 ): Promise<typeof projectMembers.$inferSelect | undefined> {
+	if (user.banned) {
+		throw error(403, 'Account is banned');
+	}
+
 	// Admin has universal access to all projects
 	if (user.role === 'admin') {
-		// Return member record if it exists, otherwise undefined (admin bypass)
-		const member = await db.query.projectMembers.findFirst({
+		const member = await (db as any).query.projectMembers.findFirst({
 			where: and(eq(projectMembers.projectId, projectId), eq(projectMembers.userId, user.id))
 		});
 		return member;
 	}
 
 	// Use getProjectRole to check access (checks both project_members and creator)
-	const role = await getProjectRole(user.id, projectId);
+	const role = await getProjectRole(user.id, projectId, user.role);
 
 	if (!role) {
 		throw error(403, 'You do not have access to this project');
 	}
 
-	if (requiredRole && role !== requiredRole) {
-		throw error(403, `Access denied: ${requiredRole} role required`);
+	if (requiredRole) {
+		const userWeight = ROLE_HIERARCHY[role] ?? 0;
+		const requiredWeight = ROLE_HIERARCHY[requiredRole] ?? 0;
+		if (userWeight < requiredWeight) {
+			throw error(403, `Access denied: ${requiredRole} role required`);
+		}
 	}
 
 	// Fetch the member record if it exists (for project creators, there may not be a member record)
-	const member = await db.query.projectMembers.findFirst({
+	const member = await (db as any).query.projectMembers.findFirst({
 		where: and(eq(projectMembers.projectId, projectId), eq(projectMembers.userId, user.id))
 	});
 
 	return member;
 }
+

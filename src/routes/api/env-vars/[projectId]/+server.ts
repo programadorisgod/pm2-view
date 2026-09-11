@@ -24,17 +24,27 @@ export const GET: RequestHandler = async ({ params, request }) => {
 	if (!session?.user) {
 		return json({ error: 'Unauthorized' }, { status: 401 });
 	}
+	const user = session.user as any;
+	if (user.banned) {
+		return json({ error: 'Account is banned' }, { status: 403 });
+	}
 
 	const { projectId } = params;
-	const userRole = (session.user as { role?: string }).role;
-	const role = await getProjectRole(session.user.id, projectId, userRole);
+	const userRole = user.role;
+	const role = await getProjectRole(user.id, projectId, userRole);
 	if (!role) {
 		return json({ error: 'Access denied' }, { status: 403 });
 	}
 
 	const repo = new EnvVarRepository();
 	const envVars = await repo.getByProjectId(projectId);
-	return json(envVars);
+
+	// Mask secret variables if user is only a viewer
+	const resultVars = role === 'viewer'
+		? envVars.map((v) => (v.isSecret ? { ...v, value: '********' } : v))
+		: envVars;
+
+	return json(resultVars);
 };
 
 export const PUT: RequestHandler = async ({ params, request }) => {
@@ -42,10 +52,14 @@ export const PUT: RequestHandler = async ({ params, request }) => {
 	if (!session?.user) {
 		return json({ error: 'Unauthorized' }, { status: 401 });
 	}
+	const user = session.user as any;
+	if (user.banned) {
+		return json({ error: 'Account is banned' }, { status: 403 });
+	}
 
 	const { projectId } = params;
-	const userRole = (session.user as { role?: string }).role;
-	const role = await getProjectRole(session.user.id, projectId, userRole);
+	const userRole = user.role;
+	const role = await getProjectRole(user.id, projectId, userRole);
 	if (!role || (role !== 'owner' && role !== 'editor')) {
 		return json({ error: 'Forbidden: editor or owner permission required' }, { status: 403 });
 	}

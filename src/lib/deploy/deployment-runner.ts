@@ -1,4 +1,5 @@
 import { existsSync } from 'fs';
+import { join } from 'path';
 import type { Project } from '$lib/projects/project.types';
 import type { IPM2Repository } from '$lib/pm2/pm2.types';
 import type { IDeploymentRepository, DeployStage, Deployment } from './deployment.types';
@@ -7,6 +8,7 @@ import {
 	runCommand,
 	detectPackageManagerOrDefault,
 	tokenizeCommand,
+	hasPackageDependencies,
 	type EnvMap
 } from './process-runner';
 import { loadProjectEnv, readPackageScripts } from './deploy.service';
@@ -163,6 +165,8 @@ export class DeploymentRunner {
 						return;
 					}
 				}
+			} else if (existsSync(join(workingDir, 'package.json')) && !hasPackageDependencies(workingDir)) {
+				log('Skipping install: no dependencies found in package.json');
 			} else {
 				log(`Installing dependencies (${packageManager})`);
 				const code = await runCommand(

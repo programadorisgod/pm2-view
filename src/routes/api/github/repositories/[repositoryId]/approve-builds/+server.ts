@@ -10,6 +10,7 @@ const approveSchema = z.object({
 	processName: z.string().min(1, 'Process name is required'),
 	installCommand: z.string().optional(),
 	buildCommand: z.string().optional(),
+	skipInstall: z.boolean().optional(),
 });
 
 export const POST: RequestHandler = async ({ params, request, getClientAddress }) => {
@@ -46,7 +47,7 @@ export const POST: RequestHandler = async ({ params, request, getClientAddress }
 		return json({ error: message }, { status: 400 });
 	}
 
-	const { targetPath, processName, installCommand, buildCommand } = validationResult.data;
+	const { targetPath, processName, installCommand, buildCommand, skipInstall } = validationResult.data;
 
 	const encoder = new TextEncoder();
 	const pipeline = new GitHubImportPipelineService();
@@ -89,7 +90,7 @@ export const POST: RequestHandler = async ({ params, request, getClientAddress }
 					targetPath,
 					processName,
 					onLog,
-					{ installCommand, buildCommand, skipClone: true },
+					{ installCommand, buildCommand, skipClone: true, skipInstall },
 				);
 
 				if (!installResult.success) {

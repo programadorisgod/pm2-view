@@ -17,6 +17,7 @@ const importSchema = z.object({
 	processName: z.string().min(1, 'Process name is required'),
 	installCommand: z.string().optional(),
 	buildCommand: z.string().optional(),
+	skipInstall: z.boolean().optional(),
 });
 
 function getZodErrorMessage(result: unknown): string {
@@ -63,7 +64,7 @@ export const POST: RequestHandler = async ({ params, request, getClientAddress }
 		return json({ error: getZodErrorMessage(validationResult) }, { status: 400 });
 	}
 
-	const { targetPath, processName, installCommand, buildCommand } = validationResult.data;
+	const { targetPath, processName, installCommand, buildCommand, skipInstall } = validationResult.data;
 
 	// Validate targetPath is absolute
 	if (!targetPath.startsWith('/')) {
@@ -158,7 +159,7 @@ export const POST: RequestHandler = async ({ params, request, getClientAddress }
 						// Also log server-side for debugging
 						logger.info(`[github-import][${step}]`, { line, isError });
 					},
-					{ installCommand, buildCommand }
+					{ installCommand, buildCommand, skipInstall }
 				);
 
 			if (result.needsApproval) {

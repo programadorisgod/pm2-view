@@ -1,5 +1,8 @@
 import { describe, it, expect } from 'vitest';
-import { tokenizeCommand } from '../../../src/lib/deploy/process-runner';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { tokenizeCommand, hasPackageDependencies } from '../../../src/lib/deploy/process-runner';
 
 describe('tokenizeCommand', () => {
 	it('splits a plain command into bin and args', () => {
@@ -44,5 +47,45 @@ describe('tokenizeCommand', () => {
 			args: [],
 			env: {}
 		});
+	});
+});
+
+describe('hasPackageDependencies', () => {
+	it('returns false when package.json does not exist', () => {
+		expect(hasPackageDependencies('/nonexistent-dir-12345')).toBe(false);
+	});
+
+	it('returns false when package.json has no dependencies or devDependencies (e.g. token-validator)', () => {
+		const tempDir = mkdtempSync(join(tmpdir(), 'pkg-test-'));
+		try {
+			writeFileSync(
+				join(tempDir, 'package.json'),
+				JSON.stringify({
+					name: 'token-validator',
+					version: '1.0.0',
+					type: 'module',
+					scripts: { start: 'node src/server.js' }
+				})
+			);
+			expect(hasPackageDependencies(tempDir)).toBe(false);
+		} finally {
+			rmSync(tempDir, { recursive: true, force: true });
+		}
+	});
+
+	it('returns true when package.json has dependencies or devDependencies', () => {
+		const tempDir = mkdtempSync(join(tmpdir(), 'pkg-test-'));
+		try {
+			writeFileSync(
+				join(tempDir, 'package.json'),
+				JSON.stringify({
+					name: 'my-app',
+					dependencies: { express: '^4.18.0' }
+				})
+			);
+			expect(hasPackageDependencies(tempDir)).toBe(true);
+		} finally {
+			rmSync(tempDir, { recursive: true, force: true });
+		}
 	});
 });

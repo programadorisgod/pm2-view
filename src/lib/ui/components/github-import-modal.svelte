@@ -35,6 +35,7 @@ import type { GitHubRepoDTO } from '$lib/github/github.types';
 	let processName = $state('');
 	let installCommand = $state<string | undefined>(undefined);
 	let buildCommand = $state<string | undefined>(undefined);
+	let skipInstall = $state(false);
 	let showAdvanced = $state(false);
 	let envSubdir = $state('');
 
@@ -64,6 +65,7 @@ import type { GitHubRepoDTO } from '$lib/github/github.types';
 			selectedEcosystemFile = null;
 			installCommand = undefined;
 			buildCommand = undefined;
+			skipInstall = false;
 			showAdvanced = false;
 			envSubdir = '';
 			view = 'config';
@@ -135,11 +137,12 @@ import type { GitHubRepoDTO } from '$lib/github/github.types';
 		lines = [];
 
 		try {
-			const body: Record<string, string | undefined> = {
+			const body: Record<string, unknown> = {
 				targetPath,
 				processName,
 			};
-			if (installCommand) body.installCommand = installCommand;
+			if (skipInstall) body.skipInstall = true;
+			if (!skipInstall && installCommand) body.installCommand = installCommand;
 			if (buildCommand) body.buildCommand = buildCommand;
 
 			const res = await fetch(`${base}/api/github/repositories/${repository.id}/import`, {
@@ -257,8 +260,9 @@ import type { GitHubRepoDTO } from '$lib/github/github.types';
 				body: JSON.stringify({
 					targetPath,
 					processName,
-					installCommand,
+					installCommand: skipInstall ? undefined : installCommand,
 					buildCommand,
+					skipInstall: skipInstall || undefined,
 				}),
 			});
 
@@ -694,7 +698,22 @@ import type { GitHubRepoDTO } from '$lib/github/github.types';
 
 						{#if showAdvanced}
 							<div class="mt-md space-y-md pl-md border-l-2" style="border-color: var(--border-color);">
+								<!-- Skip Install Toggle -->
+								<div class="flex items-center gap-xs">
+									<input
+										id="skipInstall"
+										type="checkbox"
+										bind:checked={skipInstall}
+										class="w-4 h-4 rounded cursor-pointer"
+										style="accent-color: #0070F3;"
+									/>
+									<label for="skipInstall" class="text-caption font-medium cursor-pointer" style="color: var(--text-secondary);">
+										Skip dependency install (useful for projects without dependencies)
+									</label>
+								</div>
+
 								<!-- Custom Install Command -->
+								{#if !skipInstall}
 								<div>
 									<label for="installCommand" class="block text-caption font-medium mb-xs" style="color: var(--text-secondary);">
 										Custom Install Command
@@ -708,6 +727,7 @@ import type { GitHubRepoDTO } from '$lib/github/github.types';
 										style="background: var(--bg-base); border: 1px solid var(--border-color); color: var(--text-primary);"
 									/>
 								</div>
+								{/if}
 
 								<!-- Custom Build Command -->
 								<div>
@@ -743,13 +763,13 @@ import type { GitHubRepoDTO } from '$lib/github/github.types';
 						style="background: #0070F3; color: #FFFFFF;"
 						onclick={handleCloneAndInstall}
 					>
-						Clone & Install
+						{skipInstall ? 'Clone & Setup' : 'Clone & Install'}
 					</button>
 				</div>
 			{/if}
 
 			<!-- Cloning/Installing View -->
-			{#if view === 'cloning' || view === 'starting'}
+			{#if view === 'cloning'}
 				<!-- Step indicators -->
 				<div class="flex gap-sm px-lg pt-md">
 					{#each ['clone', 'install', 'approve', 'build', 'ecosystem'] as step}

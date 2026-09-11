@@ -18,6 +18,7 @@ const deploySchema = z.object({
 	startCommandIds: z.array(z.string()).optional(),
 	installCommand: z.string().optional(),
 	buildCommand: z.string().optional(),
+	skipInstall: z.boolean().optional(),
 });
 
 function getZodErrorMessage(result: any): string {
@@ -56,7 +57,7 @@ export const POST: RequestHandler = async ({ request, getClientAddress }) => {
 		return json({ error: getZodErrorMessage(validationResult) }, { status: 400 });
 	}
 
-	const { pm_id, projectId, restartCommandIds, startCommandIds, installCommand, buildCommand } = validationResult.data;
+	const { pm_id, projectId, restartCommandIds, startCommandIds, installCommand, buildCommand, skipInstall } = validationResult.data;
 
 	// Resolve project ID
 	let resolvedProjectId = projectId;
@@ -129,12 +130,13 @@ export const POST: RequestHandler = async ({ request, getClientAddress }) => {
 	}
 
 	let deployOptions: DeployOptions | undefined =
-		safeInstallCommand || safeBuildCommand || resolvedRestartCommands || resolvedStartCommands
+		safeInstallCommand || safeBuildCommand || resolvedRestartCommands || resolvedStartCommands || skipInstall !== undefined
 			? {
 					installCommand: safeInstallCommand,
 					buildCommand: safeBuildCommand,
 					restartCommands: resolvedRestartCommands,
-					startCommands: resolvedStartCommands
+					startCommands: resolvedStartCommands,
+					skipInstall,
 				}
 			: undefined;
 

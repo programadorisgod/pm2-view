@@ -444,6 +444,16 @@ When no params are passed, returns the full array (backward compatible).
 
 ## Logging
 
+### Architecture
+
+PM2 View provides unified structured logging with environment-aware logger implementations:
+
+```
+$lib/logger/index.ts
+  ├─ NODE_ENV === 'production'  → PinoLogger (structured JSON, high performance)
+  └─ NODE_ENV !== 'production'  → ConsoleLogger (formatted terminal output)
+```
+
 ### Logger Interface
 
 ```typescript
@@ -455,38 +465,69 @@ interface Logger {
 }
 ```
 
+### Production Logging (Pino)
+
+In production, `PinoLogger` (`src/lib/logger/pino.logger.ts`) emits structured JSON logs via Pino:
+- **Zero console pollution**: Raw `console.log` and `console.error` calls are restricted to local development.
+- **Structured context**: Accepts metadata payloads (`Record<string, unknown>`) and serializes `Error` objects cleanly.
+- **Granular tracing**: Structured logs track critical lifecycle events across authentication, route guards, PM2 process commands, GitHub imports, deployments, and audit actions.
+- **Redaction**: Credentials, private keys, and auth secrets are omitted from log metadata.
+
 ### Usage
 
 ```typescript
 import { logger } from "$lib/logger";
 
-logger.info("Process started", { name: "api-server" });
-logger.error("Failed to connect", { error: String(error) });
-logger.debug("Detailed info", { query: "SELECT * FROM users" });
+logger.info("Process started", { name: "api-server", pid: 1234 });
+logger.error("Failed to connect", { error: String(error), endpoint: "/api/sse" });
+logger.debug("Detailed query info", { query: "SELECT * FROM users" });
 ```
 
 ### Debug Mode
 
-Set `DEBUG=true` in environment to enable debug-level logging.
+Set `DEBUG=true` in the environment to enable debug-level log output in either environment.
 
 ---
 
 ## Security
 
-### Threat Model
+### Threat Model & OWASP Top 10 Hardening
 
-| Threat            | Mitigation                                  |
-| ----------------- | ------------------------------------------- |
-| Command injection | `escapeShellArg()` on all PM2 process names |
-| SQL injection     | Drizzle ORM parameterized queries           |
-| Brute force       | Rate limiting (100 req/min per IP)          |
-| XSS               | Svelte auto-escapes output, CSP headers     |
-| CSRF              | Better Auth built-in protection             |
-| Credential theft  | HTTP-only session cookies, bcrypt hashing   |
+| Threat / Vulnerability | OWASP Category | Mitigation in PM2 View |
+| ---------------------- | -------------- | ---------------------- |
+| **Command Injection (RCE)** | A03: Injection | • `escapeShellArg()` wraps all PM2 process names.<br>• Strict regex validation and platform whitelisting for PM2 system startup commands (`pm2-system.service.ts`). |
+| **Broken Access Control** | A01: Broken Access Control | • Strict route guards (`requireAuth`, `requireAdmin`, `requireProjectAccess`, `requireProjectRole`) enforced across PM2 actions, project endpoints, deploy operations, env variables, and SSE.<br>• Multi-tier RBAC (Global, Team, Project). |
+| **Sensitive Data Exposure** | A02: Cryptographic Failures | • Environment variables masked by default in the UI (`••••••••••••`) with click-to-reveal toggle.<br>• Server-side endpoints require project ownership or editor role before revealing `.env`.<br>• Secrets and private keys excluded from logs and client bundles. |
+| **SQL Injection** | A03: Injection | • Drizzle ORM parameterized queries across all database drivers. |
+| **XSS & Clickjacking** | A03: Injection / A05: Security Misconfiguration | • Svelte auto-escapes HTML output.<br>• HTTP Security Headers enforced on all responses (`Content-Security-Policy`, `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`, `Referrer-Policy: strict-origin-when-cross-origin`, `Permissions-Policy`). |
+| **CSRF & OAuth Replay** | A07: Identification and Auth Failures | • Better Auth built-in CSRF validation and trusted origin verification (`VITE_ALLOWED_HOSTS`).<br>• Better Auth upgraded to patch OAuth token replay advisories. |
+| **Brute Force & DoS** | A04: Insecure Design | • Sliding-window in-memory rate limiting (100 req/min per IP) on critical endpoints (`/projects/api`, `/api/logout`, `/api/ports*`). |
+| **CSV Formula Injection** | A03: Injection | • Audit export CSV sanitizes cells starting with `=`, `+`, `-`, or `@` with prepended tab quotes. |
+| **Credential Theft** | A07: Identification and Auth Failures | • HTTP-only, SameSite session cookies.<br>• Password hashing via bcrypt. |
+
+### HTTP Security Headers
+
+Configured centrally in `src/hooks.server.ts` for all requests:
+- **`Content-Security-Policy`**: Defines allowed origins for scripts, styles, fonts, and WebSocket/SSE connections.
+- **`X-Frame-Options: DENY`**: Blocks iframe embedding to prevent clickjacking.
+- **`X-Content-Type-Options: nosniff`**: Prevents MIME confusion exploits.
+- **`Referrer-Policy: strict-origin-when-cross-origin`**: Protects privacy in external navigation.
+- **`Permissions-Policy`**: Disables unused browser hardware capabilities (camera, microphone, geolocation).
+
+### Route Guards & Authorization (RBAC)
+
+Endpoints in `src/routes/api/` and `src/routes/(app)/` enforce authorization via `src/lib/server/route-guards.ts`:
+- `requireAuth(locals)`: Rejects unauthenticated requests with HTTP 401.
+- `requireAdmin(locals)`: Rejects non-admin users with HTTP 403.
+- `requireProjectAccess(locals, projectId, minRole)`: Resolves project membership (direct or team-mapped) and verifies role tier (`owner`, `editor`, `viewer`).
+- `requireProjectRole(locals, projectId, minRole)`: Ensures operations like restarting, writing `.env`, and deploying require `owner` or `editor` permissions.
 
 ### Environment Variables Masking
 
-Sensitive env var keys (containing PASSWORD, SECRET, TOKEN, KEY, API, AUTH) are masked in the UI as `••••••••••••` with a show/hide toggle.
+Environment variable keys and values in the project detail view (`src/routes/(app)/projects/[id]/+page.svelte`) are masked by default:
+- Values appear as `••••••••••••`.
+- Users can click an individual variable or toggle visibility to inspect values.
+- Non-authorized members cannot query raw env variables via API.
 
 ---
 
@@ -702,7 +743,16 @@ Pushes to a configured GitHub repository + branch trigger a full background depl
 
 A **Deploy All** button (`/api/deploy/all`) sequentially deploys every online process, streaming NDJSON.
 
-Full guide: [docs/auto-deploy.md](docs/auto-deploy.md).
+### GitHub Import Pipeline & Skip Install
+
+The GitHub repository import wizard (`src/lib/ui/components/github-import-modal.svelte` & `src/lib/github/github-import-pipeline.service.ts`) provides a streamlined setup flow:
+
+1. **Config & Options**: Configure clone target path, process name, and optional custom commands. Includes a **Skip dependency installation** (`skipInstall`) option.
+2. **Zero-Dependency Auto-Detection**: If the cloned repository's `package.json` contains no `dependencies` and no `devDependencies`, the import pipeline automatically flags `skipInstall: true`, avoiding unnecessary package manager runs.
+3. **Optimized Wizard Transitions**: Streamlined single-stage view transitions eliminate duplicate concurrent rendering during clone and process startup phases.
+4. **Deploy Pipeline Support**: The `skipInstall` flag is propagated through `DeployService` and `DeploymentRunner`, skipping dependency installation steps when requested.
+
+Full guide: [docs/auto-deploy.md](docs/auto-deploy.md) and [docs/github-integration.md](docs/github-integration.md).
 
 ---
 

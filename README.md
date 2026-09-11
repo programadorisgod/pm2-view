@@ -28,9 +28,11 @@ A beautiful, modern visual dashboard for managing PM2 processes. Monitor CPU, RA
 - **Log Viewer toolbar** — Reorganized into two aligned rows with a newest↔oldest sort order toggle, new-error highlighting, and dismiss
 - **Real-time Metrics** — Push-based CPU/RAM updates every 10s via SSE (live-only, no DB persistence)
 - **Environment Variables** — View, edit, add, and delete env vars (applied on next deploy)
-- **GitHub Integration** — Connect a GitHub App, list/import accessible repositories, multi-app ecosystem detection (see [docs/github-integration.md](docs/github-integration.md))
+- **GitHub Integration** — Connect a GitHub App, list/import accessible repositories, skip-install option, zero-dependency detection, and multi-app ecosystem detection (see [docs/github-integration.md](docs/github-integration.md))
 - **Auto-deploy** — Trigger full deploys (git → install → build → pm2 restart) from GitHub push webhooks, with email notifications and per-stage history (see [docs/auto-deploy.md](docs/auto-deploy.md))
 - **Deploy All** — Sequentially deploy every online process from one button
+- **Structured Logging** — Production-ready structured JSON logging powered by Pino with clean console output for local development
+- **Security & Hardening** — OWASP Top 10 hardening, HTTP security headers (CSP, X-Frame-Options), strict RBAC route guards, environment variable masking, and CSV formula sanitization (see [SECURITY.md](SECURITY.md))
 - **Teams** — Manage teams, invite members, assign roles (team_owner, team_admin, team_member), team-based project access
 - **Project Sharing** — Invite users with owner/editor/viewer roles, assign projects to teams (see [docs/sharing-permissions.md](docs/sharing-permissions.md))
 - **Metrics Dashboard** — Visual CPU/RAM bars, aggregated stats
@@ -486,18 +488,18 @@ pm2-view/
 
 ## Security
 
-- Passwords hashed by Better Auth (bcrypt)
-- HTTP-only session cookies
-- CSRF protection built-in
-- Auth guard on all protected routes
-- Role-based access control (admin / user / viewer) — the `/admin` panel and admin-only operations (`/api/update`, `/api/pm2/system`) require the `admin` role
-- Shell commands sanitized with `escapeShellArg()` to prevent command injection
-- The PM2 startup command is validated (single-line `sudo` + `pm2 startup`) before execution
-- Rate limiting on the PM2 system endpoint (100 req/min per IP)
-- Team-based access control — users only see projects they own or have team access to
-- Team detail pages protected — non-members get 403
+- **OWASP Top 10 Hardened** — Comprehensive security protections across all layers (see [SECURITY.md](SECURITY.md))
+- **HTTP Security Headers** — `Content-Security-Policy`, `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`, `Referrer-Policy`, and `Permissions-Policy` in `src/hooks.server.ts`
+- **Granular Route Guards (RBAC)** — Endpoints enforce authentication and authorization (`requireAuth`, `requireAdmin`, `requireProjectAccess`, `requireProjectRole`) across PM2 process actions, deployment triggers, env vars, logs, and SSE
+- **Passwords & Sessions** — Passwords hashed by Better Auth (bcrypt); HTTP-only, secure, SameSite cookies with CSRF validation
+- **Shell Command Sanitization** — Shell commands sanitized with `escapeShellArg()` to prevent command injection
+- **PM2 Startup Hardening** — PM2 system startup commands are strictly validated against strict regex and platform whitelists before execution
+- **Environment Secrets Protection** — Sensitive environment variable values are masked by default in the UI with interactive reveal controls
+- **CSV Formula Injection Mitigation** — Audit export spreadsheets sanitize formula characters (`=`, `+`, `-`, `@`)
+- **Rate Limiting** — In-memory sliding-window rate limiting (100 req/min per IP) on critical endpoints (`/projects/api`, `/api/logout`, `/api/ports*`)
+- **Team-based Access Control** — Users only see projects they own or have team access to; team detail pages reject non-members with 403
 
-See [SECURITY.md](SECURITY.md) for vulnerability reporting.
+See [SECURITY.md](SECURITY.md) for full security policy and vulnerability reporting.
 
 ## Contributing
 

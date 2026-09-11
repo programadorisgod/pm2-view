@@ -320,12 +320,16 @@ pm2 restart pm2-view          # production (or whatever your app name is)
 
 The import is a multi-step wizard (`src/lib/ui/components/github-import-modal.svelte`), streamed over NDJSON:
 
-1. **Configure** — target directory (absolute path, default `{REPOS_PATH}/{repo.name}`) and process name. Optional advanced custom install/build commands.
-2. **Clone & install & build & detect** (`POST /api/github/repositories/[id]/import`) — `GitHubImportPipelineService.runPhase1()` clones `--depth 1` with a fresh installation token, installs dependencies (auto-detects pnpm/bun/npm), builds (if a build script exists), then detects ecosystem files and parses app names.
+1. **Configure** — target directory (absolute path, default `{REPOS_PATH}/{repo.name}`) and process name. Optional advanced custom install/build commands, and a **Skip dependency installation** (`skipInstall`) checkbox option.
+2. **Clone & install & build & detect** (`POST /api/github/repositories/[id]/import`) — `GitHubImportPipelineService.runPhase1()` clones `--depth 1` with a fresh installation token.
+   - **Skip Install / Zero-Dependency Auto-Detection**: If `skipInstall` was checked or if `package.json` contains no `dependencies` and no `devDependencies`, dependency installation is automatically bypassed.
+   - Otherwise, installs dependencies (auto-detects pnpm/bun/npm).
+   - Builds (if a build script exists), then detects ecosystem files and parses app names.
    - **pnpm native builds** that require approval surface a `needsApproval` state; clicking **Approve & Continue** runs `pnpm approve-builds --all` and resumes.
+   - The UI ensures seamless, non-overlapping stage transitions (clone → ecosystem / app select → start).
 3. **Select apps** — if more than one app is declared in an ecosystem file, tick which apps to register (they become a `pm2Names` group). Otherwise pick the ecosystem file to start.
-4. **Environment (optional)** — paste or upload `.env` variables, optionally targeting a subdirectory (e.g. `app/backend`) via the `.env Location` field. `POST .../write-env` writes the file. Can be skipped.
-5. **Start** (`POST /api/github/repositories/[id]/start`) — runs `pm2 start <ecosystem file> --update-env` and saves/updates the project record (with `pm2Names` for groups) in the DB.
+4. **Environment (optional)** — paste or upload `.env` variables, optionally targeting a subdirectory (e.g. `app/backend`) via the `.env Location` field. `POST .../write-env` writes the file (protected by user authorization checks). Can be skipped.
+5. **Start** (`POST /api/github/repositories/[id]/start`) — runs `pm2 start <ecosystem file> --update-env` and saves/updates the project record (with `pm2Names` for groups) in the DB. Enforces authentication and authorization guards.
 
 The repository list supports **search and sort**, and you can **disconnect** the GitHub account entirely (`POST /api/github/disconnect`).
 

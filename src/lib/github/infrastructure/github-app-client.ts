@@ -118,7 +118,9 @@ export class GitHubAppClient {
 	}> {
 		const octokit = await this.getInstallationOctokit(installationId);
 		try {
-			const { data } = await octokit.rest.apps.listReposAccessibleToInstallation();
+			const { data } = await octokit.rest.apps.listReposAccessibleToInstallation({
+				per_page: 100
+			});
 			return {
 				repositories: data.repositories.map((repo) => ({
 					id: repo.id,
@@ -128,7 +130,7 @@ export class GitHubAppClient {
 					defaultBranch: repo.default_branch ?? 'main',
 					cloneUrl: repo.clone_url,
 					description: repo.description ?? null,
-					updatedAt: repo.updated_at
+					updatedAt: repo.updated_at ?? ''
 				}))
 			};
 		} catch (err: any) {

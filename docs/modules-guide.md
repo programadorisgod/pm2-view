@@ -110,6 +110,30 @@ A unified container and server workload manager supporting both Docker and Podma
 
 ---
 
+## 7. Nginx Engine & Reverse Proxy Manager
+
+![Nginx Engine & Reverse Proxy Manager](../snapshots/7.png)
+
+A visual dashboard and configuration suite for managing local Nginx gateway configurations and application reverse proxies.
+
+- **Route**: `/nginx` *(Admin only)*
+- **Configuration Root**: `/etc/nginx/conf.d` and `/etc/nginx/conf.d/apps/`
+- **Features**:
+  - **Route & Gateway Mapping**: Overview of main server blocks (e.g. `rpatic.conf`, HTTP 80 → HTTPS 443 redirect, SSL certificates) and separate application cards for `/apps/*.conf` with active `location` routes, target proxy ports, and buffering/timeout settings.
+  - **In-App Config Editor**: Syntax-highlighted editor with line counters and tab indentation for modifying any `.conf` file safely.
+  - **Automated Syntax Testing (`nginx -t`)**: Every save automatically runs `sudo nginx -t` and displays the exact stdout/stderr terminal output. If errors exist, they are highlighted immediately before downtime occurs.
+  - **Hot Daemon Reloading (`nginx -s reload`)**: One-click configuration reloading via `sudo` elevation without interrupting active client connections.
+  - **App Template Generator**: Quick-start templates for *Reverse Proxy (Node/PM2)*, *WebSocket / SSE*, *Static Frontend*, or *Blank*.
+  - **Reload Reminders**: Clear reminder notifications after creating or editing files to prevent forgetting to reload the Nginx daemon.
+
+![Nginx Configuration Editor](../snapshots/8.png)
+*In-app configuration editor with instant `nginx -t` validation and sudo elevation.*
+
+![New Application Config Generator](../snapshots/9.png)
+*Template generator for quickly creating reverse proxy configurations in `/apps/`.*
+
+---
+
 ## Related Documentation
 
 - [Architecture & Layers](architecture.md)

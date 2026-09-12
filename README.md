@@ -10,10 +10,11 @@ A modern, high-performance visual dashboard and orchestration suite for servers 
 
 ![PM2 View Projects Dashboard](snapshots/00.png)
 
-> 📖 **Visual Modules Guide:** For walkthroughs and screenshots of all modules (Projects, Containers, Port Manager, User Management, Teams, and Audit Logs), check out the [Modules Guide](docs/modules-guide.md).
+> 📖 **Visual Modules Guide:** For walkthroughs and screenshots of all modules (Projects, Containers, Nginx Reverse Proxy, Port Manager, User Management, Teams, and Audit Logs), check out the [Modules Guide](docs/modules-guide.md).
 
 ## Features
 
+- **Nginx Engine & Reverse Proxy Manager** — Visual overview of gateway configurations and `/etc/nginx/conf.d/apps/` reverse proxies, click-to-edit with automated `nginx -t` validation, hot daemon reloading (`nginx -s reload`), and template scaffolding (admin only, see [docs/modules-guide.md#7-nginx-engine--reverse-proxy-manager](docs/modules-guide.md#7-nginx-engine--reverse-proxy-manager))
 - **Container & Workload Management (Docker & Podman)** — Native socket inspection and lifecycle control for containers, images, volumes, and networks with real-time CPU/memory stats and log streaming
 - **Container Watchdog & Alerts** — Background watchdog that monitors critical containers and delivers immediate alerts through Email (SMTP) and Telegram
 - **Authentication** — Email/password with Better Auth, **Google sign-in**, and **password reset** (email or console fallback)
@@ -90,6 +91,7 @@ src/lib/
 ├── containers/        # Container client models, formatting & types
 ├── server/containers/ # Docker & Podman engine, watchdog, alerts, settings
 ├── ports/             # Port scanning + OTP-verified kill (see docs/port-manager.md)
+├── nginx/             # Nginx gateway & reverse proxy management domain
 ├── logger/            # Structured logging
 ├── rate-limiter/      # In-memory rate limiting
 ├── pagination/        # Pagination types and helpers

@@ -354,10 +354,31 @@ export class NginxService {
 	}
 
 	/**
+	 * Resolves the absolute path to the nginx binary.
+	 * Searches standard system sbin and bin directories, falling back to 'nginx'.
+	 */
+	static getNginxBinary(): string {
+		const candidates = [
+			'/usr/sbin/nginx',
+			'/sbin/nginx',
+			'/usr/local/sbin/nginx',
+			'/usr/local/nginx/sbin/nginx',
+			'/usr/bin/nginx'
+		];
+		for (const candidate of candidates) {
+			if (fs.existsSync(candidate)) {
+				return candidate;
+			}
+		}
+		return 'nginx';
+	}
+
+	/**
 	 * Runs `sudo nginx -t` to test the configuration syntax.
 	 */
 	async testConfig(sudoPassword?: string): Promise<NginxTestResult> {
-		const result = await this.runSudoCommand('nginx -t', sudoPassword);
+		const nginxBin = NginxService.getNginxBinary();
+		const result = await this.runSudoCommand(`${nginxBin} -t`, sudoPassword);
 		return {
 			ok: result.ok,
 			output: result.output,
@@ -382,7 +403,8 @@ export class NginxService {
 			};
 		}
 
-		const result = await this.runSudoCommand('nginx -s reload', sudoPassword);
+		const nginxBin = NginxService.getNginxBinary();
+		const result = await this.runSudoCommand(`${nginxBin} -s reload`, sudoPassword);
 		return {
 			ok: result.ok,
 			output: result.output || 'Nginx recargado exitosamente.',
@@ -402,8 +424,15 @@ export class NginxService {
 			const useSudo = Boolean(password);
 			const cmd = useSudo ? `sudo -S -p '' ${command}` : command;
 
+			const systemPaths = ['/usr/local/sbin', '/usr/sbin', '/sbin', '/usr/local/bin', '/usr/bin', '/bin'];
+			const currentPaths = (process.env.PATH || '').split(':').filter(Boolean);
+			const mergedPath = Array.from(new Set([...systemPaths, ...currentPaths])).join(':');
+
 			const child = spawn('sh', ['-c', cmd], {
-				env: process.env,
+				env: {
+					...process.env,
+					PATH: mergedPath
+				},
 				stdio: ['pipe', 'pipe', 'pipe']
 			});
 

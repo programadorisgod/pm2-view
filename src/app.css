@@ -18,9 +18,41 @@
 		--card-shadow: 0 0 0 1px rgba(0, 0, 0, 0.08), 0 2px 4px rgba(0, 0, 0, 0.04);
 		--card-shadow-hover: 0 0 0 1px rgba(0, 0, 0, 0.12), 0 4px 8px rgba(0, 0, 0, 0.04);
 		--glow-color: rgba(0, 112, 243, 0.08);
-		--color-favorite: #D97706;
-		--color-favorite-bg: rgba(217, 119, 6, 0.1);
-		--color-favorite-border: rgba(217, 119, 6, 0.25);
+
+		/* Design system aliases & component tokens */
+		--bg: var(--bg-base);
+		--bg-elevated: var(--bg-card);
+		--bg-raised: #F5F5F5;
+		--bg-hover: var(--bg-card-hover);
+		--border: var(--border-color);
+		--border-strong: rgba(0, 0, 0, 0.14);
+		--text: var(--text-primary);
+		--text-faint: var(--text-muted);
+		--accent: #0070F3;
+		--accent-hover: #0060DF;
+		--drawer-shadow: -18px 0 36px rgba(0, 0, 0, 0.08);
+		--modal-shadow: 0 0 0 1px rgba(0, 0, 0, 0.08), 0 16px 36px rgba(0, 0, 0, 0.12);
+		--success: #00E676;
+		--success-bg: rgba(0, 230, 118, 0.12);
+		--danger: #FF5B4F;
+		--danger-bg: rgba(255, 91, 79, 0.12);
+		--warning: #FFD740;
+		--warning-bg: rgba(255, 215, 64, 0.12);
+		--status-paused: #FFB74D;
+		--status-paused-bg: rgba(255, 183, 77, 0.12);
+		--status-offline: #666666;
+		--status-offline-bg: rgba(102, 102, 102, 0.12);
+		--info: #0070F3;
+		--info-bg: rgba(0, 112, 243, 0.08);
+
+		/* Radius tokens */
+		--radius-xs: 4px;
+		--radius-sm: 6px;
+		--radius: 8px;
+		--radius-md: 8px;
+		--radius-lg: 12px;
+		--radius-xl: 16px;
+		--radius-pill: 9999px;
 	}
 
 	.dark {
@@ -38,9 +70,18 @@
 		--card-shadow: 0 0 0 1px rgba(255, 255, 255, 0.06), 0 2px 4px rgba(0, 0, 0, 0.4);
 		--card-shadow-hover: 0 0 0 1px rgba(255, 255, 255, 0.1), 0 4px 8px rgba(0, 0, 0, 0.5);
 		--glow-color: rgba(0, 112, 243, 0.06);
-		--color-favorite: #FBBF24;
-		--color-favorite-bg: rgba(251, 191, 36, 0.15);
-		--color-favorite-border: rgba(251, 191, 36, 0.35);
+
+		/* Design system aliases & component tokens */
+		--bg: var(--bg-base);
+		--bg-elevated: var(--bg-card);
+		--bg-raised: var(--bg-card-hover);
+		--bg-hover: var(--bg-card-hover);
+		--border: var(--border-color);
+		--border-strong: rgba(255, 255, 255, 0.12);
+		--text: var(--text-primary);
+		--text-faint: var(--text-muted);
+		--drawer-shadow: -18px 0 44px rgba(0, 0, 0, 0.55);
+		--modal-shadow: 0 0 0 1px rgba(255, 255, 255, 0.08), 0 20px 48px rgba(0, 0, 0, 0.6);
 	}
 
 	html {
@@ -204,6 +245,39 @@
 }
 
 /* ============================================
+   PAGE TRANSITIONS — Svelte transitions
+   ============================================ */
+.page-enter {
+	animation: page-enter 350ms cubic-bezier(0, 0, 0.2, 1) both;
+}
+
+.page-exit {
+	animation: page-exit 200ms cubic-bezier(0.4, 0, 0.2, 1) both;
+}
+
+@keyframes page-enter {
+	from {
+		opacity: 0;
+		transform: translateY(16px) scale(0.99);
+	}
+	to {
+		opacity: 1;
+		transform: translateY(0) scale(1);
+	}
+}
+
+@keyframes page-exit {
+	from {
+		opacity: 1;
+		transform: translateY(0) scale(1);
+	}
+	to {
+		opacity: 0;
+		transform: translateY(-8px) scale(0.98);
+	}
+}
+
+/* ============================================
    TAB TRANSITIONS — Premium smooth
    ============================================ */
 .tab-content {
@@ -222,112 +296,62 @@
 }
 
 /* ============================================
-   THEME VIEW TRANSITION (Circular reveal)
+   STAGGERED LIST ANIMATIONS
+   ============================================ */
+.stagger-item {
+	animation: stagger-enter 350ms cubic-bezier(0, 0, 0.2, 1) both;
+	animation-delay: calc(var(--stagger-index, 0) * 50ms);
+}
+
+@keyframes stagger-enter {
+	from {
+		opacity: 0;
+		transform: translateY(12px);
+	}
+	to {
+		opacity: 1;
+		transform: translateY(0);
+	}
+}
+
+/* ============================================
+   THEME TRANSITION
+   ============================================ */
+@keyframes theme-fade-in {
+	from { opacity: 0.85; }
+	to { opacity: 1; }
+}
+
+@keyframes theme-fade-out {
+	from { opacity: 1; }
+	to { opacity: 0; }
+}
+
+html.theme-transitioning::view-transition-old(root) {
+	animation: 300ms cubic-bezier(0.4, 0, 0.2, 1) both theme-fade-out;
+}
+
+html.theme-transitioning::view-transition-new(root) {
+	animation: 400ms cubic-bezier(0, 0, 0.2, 1) 50ms both theme-fade-in;
+}
+
+/* ============================================
+   VIEW TRANSITIONS (Chrome/Edge)
    ============================================ */
 ::view-transition-old(root) {
-	animation: none;
-	mix-blend-mode: normal;
-	z-index: 1;
+	animation: 200ms cubic-bezier(0.4, 0, 0.2, 1) both page-exit;
 }
 
 ::view-transition-new(root) {
-	animation: theme-reveal 400ms cubic-bezier(0.4, 0, 0.2, 1) both;
-	mix-blend-mode: normal;
-	z-index: 9999;
+	animation: 350ms cubic-bezier(0, 0, 0.2, 1) 50ms both page-enter;
 }
 
-@keyframes theme-reveal {
-	from {
-		clip-path: circle(0px at var(--theme-x, 50%) var(--theme-y, 50%));
-	}
-	to {
-		clip-path: circle(var(--theme-r, 150%) at var(--theme-x, 50%) var(--theme-y, 50%));
-	}
+::view-transition-group(.process-name) {
+	animation: 300ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
 }
 
-/* ============================================
-   PAGE NAVIGATION VIEW TRANSITIONS (onNavigate)
-   ============================================ */
-@keyframes page-fade-out {
-	from {
-		opacity: 1;
-		transform: translateY(0);
-	}
-	to {
-		opacity: 0;
-		transform: translateY(-4px);
-	}
+::view-transition-group(.stagger-item) {
+	animation-duration: 300ms;
+	animation-timing-function: cubic-bezier(0, 0, 0.2, 1);
+	animation-delay: calc(var(--stagger-index, 0) * 40ms);
 }
-
-@keyframes page-fade-in {
-	from {
-		opacity: 0;
-		transform: translateY(6px);
-	}
-	to {
-		opacity: 1;
-		transform: translateY(0);
-	}
-}
-
-html.page-navigating::view-transition-old(root) {
-	animation: 160ms cubic-bezier(0.4, 0, 1, 1) both page-fade-out;
-	z-index: 1;
-}
-
-html.page-navigating::view-transition-new(root) {
-	animation: 240ms cubic-bezier(0, 0, 0.2, 1) 30ms both page-fade-in;
-	z-index: 2;
-}
-
-/* Persistent layout elements during page navigation */
-html.page-navigating #app-sidebar,
-html.page-navigating .app-sidebar {
-	view-transition-name: app-sidebar;
-}
-
-html.page-navigating #app-header,
-html.page-navigating .app-header {
-	view-transition-name: app-header;
-}
-
-/* ============================================
-   MODAL & DIALOG ANIMATIONS
-   ============================================ */
-dialog {
-	transition: opacity 200ms cubic-bezier(0.16, 1, 0.3, 1),
-	            transform 200ms cubic-bezier(0.16, 1, 0.3, 1),
-	            overlay 200ms ease allow-discrete,
-	            display 200ms ease allow-discrete;
-}
-
-dialog[open] {
-	opacity: 1;
-	transform: scale(1);
-}
-
-@starting-style {
-	dialog[open] {
-		opacity: 0;
-		transform: scale(0.96);
-	}
-}
-
-dialog::backdrop {
-	background-color: rgba(0, 0, 0, 0);
-	backdrop-filter: blur(0px);
-	transition: background-color 200ms ease, backdrop-filter 200ms ease, display 200ms ease allow-discrete, overlay 200ms ease allow-discrete;
-}
-
-dialog[open]::backdrop {
-	background-color: rgba(0, 0, 0, 0.6);
-	backdrop-filter: blur(2px);
-}
-
-@starting-style {
-	dialog[open]::backdrop {
-		background-color: rgba(0, 0, 0, 0);
-		backdrop-filter: blur(0px);
-	}
-}
-

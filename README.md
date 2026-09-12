@@ -1,19 +1,21 @@
-# PM2 View
+# PM2 View — Server & VPS Management Suite
 
-A beautiful, modern visual dashboard for managing PM2 processes. Monitor CPU, RAM, uptime, view real-time logs via SSE, and manage environment variables — all from a sleek web interface.
+A modern, high-performance visual dashboard and orchestration suite for servers and VPS. Seamlessly manage PM2 application processes, inspect and control Docker & Podman containers (workloads, images, volumes, networks), monitor live CPU/RAM metrics via SSE, stream real-time logs, scan and free network ports, and automate GitHub deployments — all from a unified, sleek web interface.
 
 ![Dashboard](https://img.shields.io/badge/SvelteKit-2.x-ff3e00?logo=svelte)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5.x-3178c6?logo=typescript)
 ![Database](https://img.shields.io/badge/DB-PostgreSQL%20%7C%20SQLite-4ff5d9)
 ![Real-time](https://img.shields.io/badge/Real--time-SSE-00E676)
+![Containers](https://img.shields.io/badge/Containers-Docker%20%7C%20Podman-2496ED?logo=docker)
 
 ![PM2 View Projects Dashboard](snapshots/00.png)
 
-> 📖 **Visual Modules Guide:** For walkthroughs and screenshots of all modules (Authentication, Port Manager, User Management, Teams, and Audit Logs), check out the [Modules Guide](docs/modules-guide.md).
-
+> 📖 **Visual Modules Guide:** For walkthroughs and screenshots of all modules (Projects, Containers, Port Manager, User Management, Teams, and Audit Logs), check out the [Modules Guide](docs/modules-guide.md).
 
 ## Features
 
+- **Container & Workload Management (Docker & Podman)** — Native socket inspection and lifecycle control for containers, images, volumes, and networks with real-time CPU/memory stats and log streaming
+- **Container Watchdog & Alerts** — Background watchdog that monitors critical containers and delivers immediate alerts through Email (SMTP) and Telegram
 - **Authentication** — Email/password with Better Auth, **Google sign-in**, and **password reset** (email or console fallback)
 - **Dashboard** — Overview of all PM2 processes with real-time status
 - **Project Cards** — Beautiful cards showing CPU, RAM, uptime, and status
@@ -28,18 +30,18 @@ A beautiful, modern visual dashboard for managing PM2 processes. Monitor CPU, RA
 - **Log Viewer toolbar** — Reorganized into two aligned rows with a newest↔oldest sort order toggle, new-error highlighting, and dismiss
 - **Real-time Metrics** — Push-based CPU/RAM updates every 10s via SSE (live-only, no DB persistence)
 - **Environment Variables** — View, edit, add, and delete env vars (applied on next deploy)
+- **Env Import** — Import environment variables from a local `.env` file with folder picker and paste-to-split rows
 - **GitHub Integration** — Connect a GitHub App, list/import accessible repositories, skip-install option, zero-dependency detection, and multi-app ecosystem detection (see [docs/github-integration.md](docs/github-integration.md))
 - **Auto-deploy** — Trigger full deploys (git → install → build → pm2 restart) from GitHub push webhooks, with email notifications and per-stage history (see [docs/auto-deploy.md](docs/auto-deploy.md))
 - **Deploy All** — Sequentially deploy every online process from one button
+- **Deploy Confirmation** — Confirmation modal before Deploy All to prevent accidental bulk deployments
 - **Structured Logging** — Production-ready structured JSON logging powered by Pino with clean console output for local development
 - **Security & Hardening** — OWASP Top 10 hardening, HTTP security headers (CSP, X-Frame-Options), strict RBAC route guards, environment variable masking, and CSV formula sanitization (see [SECURITY.md](SECURITY.md))
 - **Teams** — Manage teams, invite members, assign roles (team_owner, team_admin, team_member), team-based project access
 - **Project Sharing** — Invite users with owner/editor/viewer roles, assign projects to teams (see [docs/sharing-permissions.md](docs/sharing-permissions.md))
 - **Metrics Dashboard** — Visual CPU/RAM bars, aggregated stats
-- **Port Manager** — Scan system ports in use (TCP/UDP), search/filter by port/process/address, and free ports with OTP email verification before killing (admin only)
 - **Metrics Recording** — Persistent metrics snapshots stored in the database with repository layer for historical queries
-- **Env Import** — Import environment variables from a local `.env` file with folder picker and paste-to-split rows
-- **Deploy Confirmation** — Confirmation modal before Deploy All to prevent accidental bulk deployments
+- **Port Manager** — Scan system ports in use (TCP/UDP), search/filter by port/process/address, and free ports with OTP email verification before killing (admin only)
 - **Admin Panel** — Manage users, teams, and audit logs; role-based access control (see [docs/sharing-permissions.md](docs/sharing-permissions.md))
 - **Audit Logs** — Append-only trail of admin actions with filters (action/actor/date), pagination, and CSV export (see [docs/audit-module.md](docs/audit-module.md))
 - **Dark/Light Mode** — Toggle between themes with smooth transitions
@@ -57,6 +59,8 @@ A beautiful, modern visual dashboard for managing PM2 processes. Monitor CPU, RA
 | **Validation** | Zod                                                             |
 | **Styling**    | Tailwind CSS                                                    |
 | **Real-time**  | Server-Sent Events (SSE)                                        |
+| **Containers** | Dockerode (Docker & Podman socket API)                         |
+| **Logging**    | Pino (Structured JSON logging)                                  |
 | **Testing**    | Vitest                                                          |
 
 ## Architecture
@@ -83,6 +87,8 @@ src/lib/
 │   ├── metrics-emitter.ts
 │   └── status-watcher.ts
 ├── services/          # Service container (DI factory)
+├── containers/        # Container client models, formatting & types
+├── server/containers/ # Docker & Podman engine, watchdog, alerts, settings
 ├── ports/             # Port scanning + OTP-verified kill (see docs/port-manager.md)
 ├── logger/            # Structured logging
 ├── rate-limiter/      # In-memory rate limiting
@@ -112,6 +118,7 @@ src/lib/
 - Node.js 20+
 - pnpm (or npm/yarn)
 - PM2 installed globally (`npm i -g pm2`)
+- Optional: Docker or Podman daemon running (for container features)
 
 ### Installation
 
@@ -151,6 +158,8 @@ This runs a one-off script (`src/lib/server/migrations/make-admin.ts`) that upda
 - Access the `/admin` panel (users, teams, audit logs, roles)
 - Create users, change roles, ban/unban, and delete users
 - See **all** projects (admin bypasses project-level access checks)
+- Access the `/ports` manager and terminate ports with OTP email verification
+- Manage container watchdog alerting settings
 - Run admin-only PM2 operations: [PM2 Save](#pm2-save) / [PM2 Startup](#pm2-startup), and the [Update button](#one-click-update)
 
 **Safety guards:** an admin cannot change their own role, and the **last remaining admin** cannot be demoted, banned, or deleted (HTTP 409).
@@ -268,7 +277,7 @@ GOOGLE_CLIENT_ID=
 GOOGLE_CLIENT_SECRET=
 VITE_ALLOWED_HOSTS=localhost
 
-# Email (optional — password reset delivery; console fallback if unset)
+# Email & Alerting (optional — password reset delivery & watchdog alerts)
 SMTP_HOST=
 SMTP_PORT=587
 SMTP_SECURE=false
@@ -276,6 +285,15 @@ SMTP_USER=
 SMTP_PASS=
 SMTP_FROM_EMAIL=
 NOTIFICATION_CHANNELS=nodemailer
+
+# Telegram Alerts (optional — container watchdog notifications)
+TELEGRAM_BOT_TOKEN=
+TELEGRAM_CHAT_ID=
+NOTIFY_TO=
+
+# Container Daemon (optional — auto-detected via sockets if unset)
+DOCKER_HOST=
+CONTAINERS_SOCKET=
 
 # PM2 (optional)
 PM2_HOST=localhost
@@ -313,6 +331,16 @@ npx drizzle-kit push
 # Generate migrations
 npx drizzle-kit generate
 ```
+
+## Container & Workload Management
+
+Manage your server's container ecosystem directly from `/container` without SSH access:
+
+- **Multi-Engine Support**: Automatically discovers and communicates with Docker (`/var/run/docker.sock`) or rootless/root Podman (`/run/podman/podman.sock`) sockets.
+- **Containers**: Start, stop, restart, delete, inspect metadata, view live CPU/memory charts, and stream container logs in real time.
+- **Images**: Browse stored images, inspect layers and tags, and remove unused images.
+- **Volumes & Networks**: Inspect volume mount points, network drivers, IP subnets, and attached containers.
+- **Watchdog Service**: An integrated background monitor that watches container health and dispatches instant incident notifications via SMTP email and Telegram.
 
 ## GitHub Integration
 
@@ -418,23 +446,9 @@ es.addEventListener("deploy-log", (e) => console.log(JSON.parse(e.data)));
 - Theme toggle: 400ms crossfade
 - List items: 50ms stagger delay
 
-## Screenshots
+## Visual Tour & Screenshots
 
-### Dashboard
-
-Process overview with summary cards and quick links.
-
-### Projects
-
-Grid of project cards with CPU, RAM, uptime, and action buttons.
-
-### Project Detail
-
-Tabs for Overview, Logs (real-time), and Environment Variables.
-
-### Metrics
-
-Visual performance metrics with progress bars and auto-refresh.
+For a full visual walkthrough with screenshots of every module (Projects Dashboard, Containers & Workloads, Port Manager, User Management, Teams, and Audit Logs), see the [Modules Guide](docs/modules-guide.md).
 
 ## Testing
 
@@ -461,6 +475,8 @@ pm2-view/
 │   │   │   └── repositories/ # Data access implementations
 │   │   ├── sse/            # Real-time SSE communication
 │   │   ├── services/       # DI factory
+│   │   ├── containers/     # Container models and helpers
+│   │   ├── server/         # Server-side engines (Docker/Podman) & background watchdog
 │   │   ├── ports/          # Port scanning + OTP-verified kill
 │   │   ├── logger/         # Structured logging
 │   │   ├── rate-limiter/   # Rate limiting
@@ -474,8 +490,8 @@ pm2-view/
 │   │   └── config/         # Configuration
 │   ├── routes/
 │   │   ├── (auth)/         # Login, register
-│   │   ├── (app)/          # Protected routes (projects, teams, ports, admin)
-│   │   └── api/            # API endpoints (including /api/sse, /api/ports)
+│   │   ├── (app)/          # Protected routes (projects, container, teams, ports, admin)
+│   │   └── api/            # API endpoints (/api/sse, /api/containers, /api/images, /api/ports, etc.)
 │   ├── app.css             # Global styles
 │   └── app.html            # HTML shell
 ├── drizzle/                # Migrations

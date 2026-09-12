@@ -13,7 +13,8 @@ export const sessions = sqliteTable('sessions', {
 	createdAt: integer('created_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
 	updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
 	ipAddress: text('ip_address'),
-	userAgent: text('user_agent')
+	userAgent: text('user_agent'),
+	impersonatedBy: text('impersonated_by')
 });
 
 export type Session = typeof sessions.$inferSelect;

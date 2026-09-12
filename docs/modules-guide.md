@@ -94,9 +94,26 @@ An append-only, searchable compliance and activity trail tracking sensitive admi
 
 ---
 
+## 6. Containers & Workload Management
+
+![Containers & Workload Management](../snapshots/6.png)
+
+A unified container and server workload manager supporting both Docker and Podman daemon sockets.
+
+- **Route**: `/container`
+- **Features**:
+  - **Multi-Engine Detection**: Auto-detects local Docker (`/var/run/docker.sock`) and Podman (`/run/podman/podman.sock` or rootless `$XDG_RUNTIME_DIR/podman/podman.sock`) sockets.
+  - **Container Operations**: Start, stop, restart, delete, inspect metadata, and view real-time CPU/memory consumption per container.
+  - **Live Log Streaming**: Stream container stdout and stderr in real-time directly inside the web console.
+  - **Resource Management**: Dedicated tabs for inspecting and pruning **Images**, persistent **Volumes**, and virtual bridge/host **Networks**.
+  - **Watchdog & Automated Alerting**: Background health monitor that detects unexpected restarts or container failure states and dispatches incident alerts through **Email (SMTP)** and **Telegram Bot**.
+
+---
+
 ## Related Documentation
 
 - [Architecture & Layers](architecture.md)
 - [Multi-Process Groups](multi-process-groups.md)
+- [Port Manager Deep Dive](port-manager.md)
 - [GitHub Integration & Auto-Deploy](auto-deploy.md)
 - [Process Error Alerts](process-error-alerts.md)

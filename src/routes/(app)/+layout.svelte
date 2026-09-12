@@ -1,5 +1,4 @@
 	<script lang="ts">
-	import { onDestroy } from 'svelte';
 	import { Header, Sidebar, FeedbackBanner } from '$lib/ui/components';
 	import { page } from '$app/state';
 	import { base } from '$app/paths';
@@ -24,9 +23,9 @@
 	let navItems = $derived([
 		{ label: 'Dashboard', href: `${base}/`, active: page.url.pathname === base || page.url.pathname === base + '/' },
 		{ label: 'Projects', href: `${base}/projects`, active: page.url.pathname.startsWith(`${base}/projects`) && !page.url.pathname.includes('/sharing') },
+		{ label: 'Container', href: `${base}/container`, active: page.url.pathname.startsWith(`${base}/container`) },
 		{ label: 'Teams', href: `${base}/teams`, active: page.url.pathname.startsWith(`${base}/teams`) },
 		{ label: 'GitHub', href: `${base}/github`, active: page.url.pathname.startsWith(`${base}/github`) },
-		{ label: 'Ports', href: `${base}/ports`, active: page.url.pathname.startsWith(`${base}/ports`) },
 		{ label: 'Metrics', href: `${base}/metrics`, active: page.url.pathname === `${base}/metrics` },
 		...(isAdmin ? [
 			{
@@ -98,10 +97,6 @@
 			}
 		}, 1000);
 	}
-
-	onDestroy(() => {
-		if (countdownTimer) clearInterval(countdownTimer);
-	});
 </script>
 
 <div class="flex h-screen overflow-hidden" style="background: var(--bg-base);">
@@ -137,7 +132,10 @@
 						class="w-8 h-8 rounded-md flex items-center justify-center transition-colors"
 						style="color: var(--text-secondary);"
 						onclick={(e) => {
-							theme.toggle(e.clientX, e.clientY);
+							const rect = (e.target as HTMLElement).getBoundingClientRect();
+							document.documentElement.style.setProperty('--x', `${rect.left + rect.width / 2}px`);
+							document.documentElement.style.setProperty('--y', `${rect.top + rect.height / 2}px`);
+							theme.toggle();
 						}}
 						aria-label="Toggle theme"
 					>
@@ -259,7 +257,7 @@
 			{/snippet}
 		</Header>
 
-		<main class="flex-1 overflow-y-auto p-lg lg:p-xl scrollbar-thin">
+		<main class="flex-1 overflow-y-auto p-lg lg:p-xl scrollbar-thin page-enter">
 			{#if updateFeedback}
 				<div class="mb-lg">
 					<FeedbackBanner

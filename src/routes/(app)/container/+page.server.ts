@@ -1,5 +1,4 @@
 import { requireAdmin } from '$lib/server/route-guards';
-import { createServices } from '$lib/services/factory';
 import { error } from '@sveltejs/kit';
 import type { PageServerLoad } from './$types';
 
@@ -8,8 +7,5 @@ export const load: PageServerLoad = async ({ locals }) => {
 		throw error(401, 'Unauthorized');
 	}
 	requireAdmin(locals.user);
-
-	const { portManagerService } = createServices();
-	const { ports, summary } = await portManagerService.getPorts();
-	return { ports, summary };
+	return {};
 };

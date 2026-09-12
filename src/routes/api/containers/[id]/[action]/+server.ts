@@ -10,7 +10,11 @@ const actionNames: Record<string, string> = {
 	remove: 'eliminado'
 };
 
-export async function POST({ params, request }) {
+export async function POST({ params, request, locals }: any) {
+	if (locals?.user && locals.user.role !== 'admin') {
+		return apiError(403, 'Forbidden');
+	}
+
 	const { id, action } = params;
 	if (!actions.has(action)) {
 		return apiError(400, `Acción no soportada: "${action}".`);

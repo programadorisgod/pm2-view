@@ -19,3 +19,6 @@ export { default as DateTimePicker } from './date-time-picker.svelte';
 export { default as DeployAllModal } from './deploy-all-modal.svelte';
 export { default as RegisterProcessModal } from './register-process-modal.svelte';
 export { default as PortConfirmModal } from './port-confirm-modal.svelte';
+export { default as NginxEditorModal } from './nginx-editor-modal.svelte';
+export { default as NginxCreateModal } from './nginx-create-modal.svelte';
+export { default as NginxOutputModal } from './nginx-output-modal.svelte';

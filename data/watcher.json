@@ -1,0 +1,23 @@
+{
+  "enabled": true,
+  "intervalMs": 30000,
+  "lastRunAt": 1789229840012,
+  "lastAlertAt": 1789225122299,
+  "alertCount": 1,
+  "targets": [
+    {
+      "id": "4ea65caf6dfa7b91ac27f547a71bed3a7121be1f83dc77253719e24958bfc466",
+      "name": "eloquent_moser",
+      "lastKnownRunning": false,
+      "alertedAt": null,
+      "addedAt": 1789221485391
+    },
+    {
+      "id": "1f89d06cb7b0bd361556f1c173370458e06c9d3f968882a171c1a5e69d9064e7",
+      "name": "boring_faraday",
+      "lastKnownRunning": false,
+      "alertedAt": 1789225122298,
+      "addedAt": 1789225106952
+    }
+  ]
+}

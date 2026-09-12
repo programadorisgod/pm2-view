@@ -12,7 +12,11 @@
         "check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
         "db:generate": "drizzle-kit generate",
         "db:migrate": "drizzle-kit migrate",
-        "db:push": "drizzle-kit push"
+        "db:push": "drizzle-kit push",
+        "migration:set-default-roles": "npx tsx src/lib/server/migrations/set-default-roles.ts",
+        "migration:create-project-members": "npx tsx src/lib/server/migrations/create-project-members.ts",
+        "migration:run-all": "npm run db:migrate && npm run migration:set-default-roles && npm run migration:create-project-members",
+        "make-admin": "npx tsx src/lib/server/migrations/make-admin.ts"
     },
     "devDependencies": {
         "@sveltejs/adapter-auto": "7.0.1",
@@ -20,7 +24,8 @@
         "@sveltejs/kit": "2.57.0",
         "@sveltejs/vite-plugin-svelte": "7.0.0",
         "@testing-library/svelte": "5.3.1",
-        "@types/nodemailer": "8.0.1",
+        "@types/dockerode": "^4.0.1",
+        "@types/nodemailer": "^8.0.1",
         "autoprefixer": "10.5.0",
         "drizzle-kit": "0.31.10",
         "happy-dom": "20.9.0",
@@ -33,21 +38,23 @@
         "vitest": "4.1.5"
     },
     "dependencies": {
-        "@better-auth/drizzle-adapter": "1.7.4",
+        "@better-auth/drizzle-adapter": "1.6.9",
         "@fontsource-variable/roboto": "5.2.10",
         "@fontsource/poppins": "5.2.7",
         "@libsql/client": "0.17.3",
+        "@lucide/svelte": "^1.45.0",
         "@melt-ui/svelte": "0.86.6",
-        "@octokit/auth-app": "8.3.0",
+        "@octokit/auth-app": "^8.3.0",
         "@types/pg": "8.20.0",
-        "better-auth": "1.7.4",
+        "better-auth": "1.6.9",
         "clsx": "2.1.1",
+        "dockerode": "^5.0.1",
         "dotenv": "17.4.2",
         "drizzle-orm": "0.45.2",
-        "nodemailer": "9.0.4",
-        "octokit": "4.1.4",
+        "nodemailer": "^9.0.4",
+        "octokit": "^4.1.4",
         "pg": "8.20.0",
-        "pino": "10.3.1",
+        "pino": "^10.3.1",
         "tailwind-merge": "3.5.0",
         "zod": "4.3.6"
     }

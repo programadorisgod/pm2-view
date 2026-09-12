@@ -6,7 +6,8 @@
 		output = '',
 		success = true,
 		loading = false,
-		onClose
+		onClose,
+		onRetryWithSudo
 	}: {
 		open: boolean;
 		title?: string;
@@ -15,6 +16,7 @@
 		success?: boolean;
 		loading?: boolean;
 		onClose: () => void;
+		onRetryWithSudo?: () => void;
 	} = $props();
 
 	let dialogRef = $state<HTMLDialogElement | undefined>();
@@ -120,7 +122,16 @@
 			</div>
 
 			<!-- Footer -->
-			<div class="flex justify-end pt-md border-t" style="border-color: var(--border-color);">
+			<div class="flex items-center justify-end gap-sm pt-md border-t" style="border-color: var(--border-color);">
+				{#if !success && onRetryWithSudo}
+					<button
+						type="button"
+						class="btn-primary px-4 py-2 text-body-sm"
+						onclick={onRetryWithSudo}
+					>
+						Run with Sudo
+					</button>
+				{/if}
 				<button
 					type="button"
 					class="btn-secondary px-4 py-2 text-body-sm"

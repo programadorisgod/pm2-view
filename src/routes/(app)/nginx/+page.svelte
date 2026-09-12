@@ -120,9 +120,22 @@
 		}
 	}
 
-	async function runTestNginx() {
+	let testModalOpen = $state(false);
+	let testPassword = $state('');
+	let testing = $state(false);
+
+	function openTestPrompt() {
+		testPassword = reloadPassword || '';
+		testModalOpen = true;
+	}
+
+	async function executeTest(pwd?: string) {
+		const passwordToUse = pwd !== undefined ? pwd : testPassword;
+		testing = true;
+		testModalOpen = false;
+
 		outputModalTitle = 'Test Nginx Configuration';
-		outputModalCommand = 'sudo nginx -t';
+		outputModalCommand = passwordToUse ? 'sudo nginx -t' : 'nginx -t';
 		outputModalContent = 'Testing syntax...';
 		outputModalLoading = true;
 		outputModalOpen = true;
@@ -131,17 +144,23 @@
 			const res = await fetch(`${base}/api/nginx/test`, {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({})
+				body: JSON.stringify({ password: passwordToUse || undefined })
 			});
 
 			const resData = await res.json();
 			outputModalLoading = false;
 			outputModalSuccess = resData.success;
 			outputModalContent = resData.output || (resData.success ? 'Syntax is ok' : 'Test failed');
+
+			if (resData.success && passwordToUse) {
+				reloadPassword = passwordToUse;
+			}
 		} catch (err: any) {
 			outputModalLoading = false;
 			outputModalSuccess = false;
 			outputModalContent = err.message || 'Execution error';
+		} finally {
+			testing = false;
 		}
 	}
 
@@ -216,7 +235,7 @@
 		<div class="flex items-center gap-xs flex-wrap">
 			<button
 				class="btn-secondary px-3 py-1.5 text-body-sm inline-flex items-center gap-1.5"
-				onclick={runTestNginx}
+				onclick={() => { if (reloadPassword) executeTest(reloadPassword); else openTestPrompt(); }}
 				title="Run sudo nginx -t"
 			>
 				<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -623,7 +642,92 @@
 	success={outputModalSuccess}
 	loading={outputModalLoading}
 	onClose={() => (outputModalOpen = false)}
+	onRetryWithSudo={!outputModalSuccess ? () => { outputModalOpen = false; openTestPrompt(); } : undefined}
 />
+
+<!-- Test Nginx Confirmation Modal -->
+{#if testModalOpen}
+	<dialog
+		open
+		class="fixed inset-0 z-50 flex items-center justify-center p-4"
+		style="background: transparent; border: none;"
+		onclose={() => (testModalOpen = false)}
+	>
+		<!-- Backdrop -->
+		<button
+			type="button"
+			class="fixed inset-0"
+			style="background: rgba(0,0,0,0.6); border: none; cursor: pointer;"
+			onclick={() => { if (!testing) testModalOpen = false; }}
+			aria-label="Close modal"
+		></button>
+
+		<div
+			class="relative w-full max-w-md rounded-xl p-lg shadow-2xl"
+			style="background: var(--bg-surface); border: 1px solid var(--border-color);"
+		>
+			<h3 class="text-h3 font-semibold mb-xs" style="color: var(--text-primary);">
+				Test Nginx Configuration
+			</h3>
+			<p class="text-body-sm mb-lg" style="color: var(--text-secondary);">
+				Runs <code class="font-mono text-caption">sudo nginx -t</code> to validate syntax and verify SSL certificate paths.
+			</p>
+
+			<div class="mb-lg">
+				<label for="test-sudo-pwd" class="block text-caption font-medium mb-1.5" style="color: var(--text-secondary);">
+					Sudo password (recommended):
+				</label>
+				<input
+					id="test-sudo-pwd"
+					type="password"
+					bind:value={testPassword}
+					onkeydown={(e) => { if (e.key === 'Enter') executeTest(testPassword); }}
+					placeholder="Enter sudo password or leave blank"
+					class="w-full px-3 py-2 rounded-xl text-body-sm outline-none transition-all focus:ring-2 focus:ring-accent"
+					style="background: var(--bg-base); color: var(--text-primary); border: 1px solid var(--border-color);"
+				/>
+			</div>
+
+			<div class="flex items-center justify-between gap-sm">
+				<button
+					type="button"
+					class="text-caption hover:underline cursor-pointer"
+					style="color: var(--text-muted);"
+					onclick={() => executeTest('')}
+				>
+					Run without sudo
+				</button>
+
+				<div class="flex items-center gap-sm">
+					<button
+						type="button"
+						class="btn-secondary px-4 py-2 text-body-sm"
+						onclick={() => (testModalOpen = false)}
+						disabled={testing}
+					>
+						Cancel
+					</button>
+					<button
+						type="button"
+						class="btn-primary px-4 py-2 text-body-sm inline-flex items-center gap-1.5"
+						onclick={() => executeTest(testPassword)}
+						disabled={testing}
+					>
+						{#if testing}
+							<svg class="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24">
+								<circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+								<path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path>
+							</svg>
+							Testing...
+						{:else}
+							Run Test
+						{/if}
+					</button>
+				</div>
+			</div>
+		</div>
+	</dialog>
+{/if}
 
 <!-- Reload Sudo Confirmation Modal -->
 {#if reloadModalOpen}

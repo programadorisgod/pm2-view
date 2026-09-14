@@ -159,13 +159,6 @@
 					Sign in with Google
 				{/if}
 			</button>
-
-			<div class="text-center mt-lg">
-				<p class="text-caption" style="color: var(--text-muted);">
-					Don't have an account?
-					<a href="{base}/register" class="font-medium" style="color: #0070F3;">Sign Up</a>
-				</p>
-			</div>
 		</div>
 	</div>
 </div>

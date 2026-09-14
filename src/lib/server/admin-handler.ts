@@ -18,10 +18,16 @@ export function adminHandler(handler: AdminHandlerFn): RequestHandler {
 			requireAdmin(user);
 
 			return await handler(event, user);
-		} catch (err) {
-			// If it's already a SvelteKit error (has status), re-throw
-			if (err && typeof err === 'object' && 'status' in err) {
+		} catch (err: any) {
+			// If it's already a SvelteKit error (has numeric status), re-throw
+			if (err && typeof err === 'object' && 'status' in err && typeof err.status === 'number') {
 				throw err;
+			}
+			// If it's a Better Auth APIError or similar (has statusCode), re-throw as SvelteKit error
+			if (err && typeof err === 'object' && 'statusCode' in err && typeof err.statusCode === 'number') {
+				const status = err.statusCode >= 400 && err.statusCode < 600 ? err.statusCode : 400;
+				const message = err.body?.message || err.message || 'Request failed';
+				throw error(status, message);
 			}
 			// Log the actual error before throwing generic 500
 			const errorDetails = err instanceof Error

@@ -13,6 +13,10 @@ export const load: LayoutServerLoad = async (event) => {
 		throw redirect(302, `${base}/login`);
 	}
 
+	if (session.user && (session.user as any).banned) {
+		throw redirect(302, `${base}/login?error=banned`);
+	}
+
 	const env = getEnv();
 
 	return {

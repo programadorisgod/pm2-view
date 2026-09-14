@@ -11,7 +11,10 @@ const actionNames: Record<string, string> = {
 };
 
 export async function POST({ params, request, locals }: any) {
-	if (locals?.user && locals.user.role !== 'admin') {
+	if (!locals?.user) {
+		return apiError(401, 'Unauthorized');
+	}
+	if (locals.user.role !== 'admin') {
 		return apiError(403, 'Forbidden');
 	}
 

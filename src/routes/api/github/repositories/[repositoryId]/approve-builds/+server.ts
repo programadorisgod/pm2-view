@@ -27,6 +27,10 @@ export const POST: RequestHandler = async ({ params, request, getClientAddress }
 	if (!session?.user) {
 		return json({ error: 'Unauthorized' }, { status: 401 });
 	}
+	const user = session.user as any;
+	if (user.banned) {
+		return json({ error: 'Account is banned' }, { status: 403 });
+	}
 
 	const repositoryId = Number(params.repositoryId);
 	if (isNaN(repositoryId) || repositoryId <= 0) {

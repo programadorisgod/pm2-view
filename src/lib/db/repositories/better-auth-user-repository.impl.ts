@@ -1,7 +1,21 @@
+import { error } from '@sveltejs/kit';
 import { auth } from '$lib/auth';
 import { db } from '$lib/db';
-import { users, sessions } from '../schema';
-import { eq, count } from 'drizzle-orm';
+import {
+	users,
+	sessions,
+	accounts,
+	projectMembers,
+	teamMembers,
+	projectFavorites,
+	githubInstallations,
+	githubUserInstallations,
+	projects,
+	deployCommands,
+	deployments,
+	envVars
+} from '../schema';
+import { eq, count, or } from 'drizzle-orm';
 import type { IAuthRepository, User, Session } from '../../auth/auth.types';
 
 /**
@@ -59,42 +73,52 @@ export class BetterAuthUserRepository implements IAuthRepository {
 		return this.mapToAuthUser(user);
 	}
 
-	async createUser(user: Omit<User, 'id' | 'createdAt'>): Promise<User> {
-		// Better Auth createUser expects password in the body
-		const result = await (auth.api as any).createUser({
-			body: {
-				email: user.email,
-				name: user.name ?? undefined,
-				role: user.role ?? 'user',
-				password: 'temp-password-' + crypto.randomUUID() // Better Auth requires password
-			}
-		});
-
-		if (!result || !result.data?.user) {
-			throw new Error('Failed to create user via Better Auth API');
+	async createUser(user: Omit<User, 'id' | 'createdAt'> & { password?: string }): Promise<User> {
+		const existing = await this.getUserByEmail(user.email);
+		if (existing) {
+			throw error(409, 'A user with this email already exists');
 		}
 
-		return this.mapBetterAuthUser(result.data.user);
+		try {
+			// Better Auth createUser expects password in the body
+			const result = await (auth.api as any).createUser({
+				body: {
+					email: user.email,
+					name: user.name ?? undefined,
+					role: user.role ?? 'user',
+					password: user.password || ('temp-' + crypto.randomUUID()) // Better Auth requires password
+				}
+			});
+
+			const createdUser = result?.user || result?.data?.user || (result?.id ? result : null);
+
+			if (!createdUser) {
+				const errorMsg = result?.error?.message || result?.message || 'Failed to create user via Better Auth API';
+				throw error(400, errorMsg);
+			}
+
+			return this.mapBetterAuthUser(createdUser);
+		} catch (err: any) {
+			if (err && typeof err === 'object' && 'status' in err && typeof err.status === 'number') {
+				throw err;
+			}
+			const statusCode = err?.statusCode || (typeof err?.status === 'number' ? err.status : 400);
+			const message = err?.body?.message || err?.message || 'Failed to create user';
+			throw error(statusCode >= 400 && statusCode < 600 ? statusCode : 400, message);
+		}
 	}
 
 	async listUsers(options: { limit: number; offset: number; role?: string }): Promise<{ users: User[]; total: number }> {
-		// Build base query
-		let baseQuery = db.select().from(users);
-		if (options.role) {
-			baseQuery = baseQuery.where(eq(users.role, options.role));
-		}
+		const whereClause = options.role ? eq(users.role, options.role) : undefined;
 
-		const allUsers = await baseQuery;
-		const mappedUsers = allUsers.map(u => this.mapToAuthUser(u));
+		const query = db.select().from(users);
+		const userRecords = whereClause ? await query.where(whereClause) : await query;
+		const mappedUsers = userRecords.map(u => this.mapToAuthUser(u));
 
-		// Get total count
-		let countQuery = db.select({ count: count() }).from(users);
-		if (options.role) {
-			countQuery = countQuery.where(eq(users.role, options.role));
-		}
-		const [{ count: total }] = await countQuery;
+		const countBase = db.select({ count: count() }).from(users);
+		const [{ count: total }] = whereClause ? await countBase.where(whereClause) : await countBase;
 
-		// Paginate in memory
+		// Paginate
 		const paginated = mappedUsers.slice(options.offset, options.offset + options.limit);
 
 		return {
@@ -131,7 +155,38 @@ export class BetterAuthUserRepository implements IAuthRepository {
 	}
 
 	async deleteUser(userId: string): Promise<void> {
-		await db.delete(users).where(eq(users.id, userId));
+		try {
+			// 1. Find all projects owned by this user and clean up their child records
+			const userProjects = await db
+				.select({ id: projects.id })
+				.from(projects)
+				.where(eq(projects.userId, userId));
+
+			if (Array.isArray(userProjects) && userProjects.length > 0) {
+				for (const p of userProjects) {
+					await db.delete(deployCommands).where(eq(deployCommands.projectId, p.id));
+					await db.delete(deployments).where(eq(deployments.projectId, p.id));
+					await db.delete(envVars).where(eq(envVars.projectId, p.id));
+					await db.delete(projectMembers).where(eq(projectMembers.projectId, p.id));
+				}
+				await db.delete(projects).where(eq(projects.userId, userId));
+			}
+
+			// 2. Clean up all user relations and junction records across all projects/teams
+			await db.delete(projectMembers).where(eq(projectMembers.userId, userId));
+			await db.delete(teamMembers).where(eq(teamMembers.userId, userId));
+			await db.delete(projectFavorites).where(eq(projectFavorites.userId, userId));
+			await db.delete(githubUserInstallations).where(eq(githubUserInstallations.userId, userId));
+			await db.delete(githubInstallations).where(eq(githubInstallations.userId, userId));
+			await db.delete(sessions).where(or(eq(sessions.userId, userId), eq(sessions.impersonatedBy, userId)));
+			await db.delete(accounts).where(eq(accounts.userId, userId));
+
+			// 3. Finally delete the user record
+			await db.delete(users).where(eq(users.id, userId));
+		} catch (err: any) {
+			console.error('Failed to delete user in repository:', err);
+			throw err;
+		}
 	}
 
 	private mapToAuthUser(user: typeof users.$inferSelect): User {

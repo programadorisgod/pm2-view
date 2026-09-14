@@ -9,7 +9,7 @@ export interface IAuthRepository {
   getSession(sessionId: string): Promise<Session | null>;
   deleteSession(sessionId: string): Promise<void>;
   getUserByEmail(email: string): Promise<User | null>;
-  createUser(user: Omit<User, 'id' | 'createdAt'>): Promise<User>;
+  createUser(user: Omit<User, 'id' | 'createdAt'> & { password?: string }): Promise<User>;
   listUsers(options: { limit: number; offset: number; role?: string }): Promise<{ users: User[]; total: number }>;
   getUserById(userId: string): Promise<User | null>;
   setRole(userId: string, role: string): Promise<void>;

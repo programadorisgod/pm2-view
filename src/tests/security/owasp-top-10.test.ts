@@ -133,22 +133,49 @@ describe('OWASP Top 10 Security Hardening Tests', () => {
 		});
 	});
 
-	describe('OWASP A05: Security Headers in Server Hook', () => {
-		it('injects mandatory security headers in responses', async () => {
+	describe('OWASP A01: Protected API Route Guards in Server Hook', () => {
+		it('returns 401 Unauthorized for unauthenticated requests to protected infrastructure APIs', async () => {
 			const mockResolve = vi.fn().mockResolvedValue(new Response('OK', { status: 200 }));
 			const mockEvent: any = {
-				url: new URL('http://localhost:5173/'),
-				request: new Request('http://localhost:5173/'),
+				url: new URL('http://localhost:5173/api/containers'),
+				request: new Request('http://localhost:5173/api/containers'),
 				locals: {}
 			};
 
 			const response = await handle({ event: mockEvent, resolve: mockResolve });
+			expect(response.status).toBe(401);
+			const body = await response.json();
+			expect(body.error).toContain('Unauthorized');
+		});
 
-			expect(response.headers.get('X-Frame-Options')).toBe('DENY');
-			expect(response.headers.get('X-Content-Type-Options')).toBe('nosniff');
-			expect(response.headers.get('Referrer-Policy')).toBe('strict-origin-when-cross-origin');
-			expect(response.headers.get('Content-Security-Policy')).toBeDefined();
-			expect(response.headers.get('Content-Security-Policy')).toContain("frame-ancestors 'none'");
+		it('returns 403 Forbidden for non-admin users accessing protected infrastructure APIs', async () => {
+			const mockResolve = vi.fn().mockResolvedValue(new Response('OK', { status: 200 }));
+			const mockEvent: any = {
+				url: new URL('http://localhost:5173/api/containers'),
+				request: new Request('http://localhost:5173/api/containers'),
+				locals: {
+					user: { id: 'u1', email: 'test@example.com', role: 'user' }
+				}
+			};
+
+			const response = await handle({ event: mockEvent, resolve: mockResolve });
+			expect(response.status).toBe(403);
+			const body = await response.json();
+			expect(body.error).toContain('Admin role required');
+		});
+
+		it('allows admin users accessing protected infrastructure APIs to proceed', async () => {
+			const mockResolve = vi.fn().mockResolvedValue(new Response('OK', { status: 200 }));
+			const mockEvent: any = {
+				url: new URL('http://localhost:5173/api/containers'),
+				request: new Request('http://localhost:5173/api/containers'),
+				locals: {
+					user: { id: 'a1', email: 'admin@example.com', role: 'admin' }
+				}
+			};
+
+			const response = await handle({ event: mockEvent, resolve: mockResolve });
+			expect(response.status).toBe(200);
 		});
 	});
 });

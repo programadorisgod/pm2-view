@@ -5,7 +5,10 @@ import { errorMessage } from '$lib/server/containers/api-helpers';
 
 export const GET: RequestHandler = async (event: any) => {
 	const locals = event?.locals;
-	if (locals?.user && locals.user.role !== 'admin') {
+	if (!locals?.user) {
+		return json({ error: 'Unauthorized' }, { status: 401 });
+	}
+	if (locals.user.role !== 'admin') {
 		return json({ error: 'Forbidden' }, { status: 403 });
 	}
 

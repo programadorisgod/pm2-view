@@ -21,6 +21,10 @@ export const GET: RequestHandler = async ({ request, getClientAddress }) => {
 	if (!session?.user) {
 		return json({ error: 'Unauthorized' }, { status: 401 });
 	}
+	const user = session.user as any;
+	if (user.banned) {
+		return json({ error: 'Account is banned' }, { status: 403 });
+	}
 
 	try {
 		const installationRepo = new GitHubInstallationRepository();

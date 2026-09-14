@@ -9,6 +9,8 @@ import {
 } from '$lib/github/github.types';
 import { rateLimiter } from '$lib/rate-limiter';
 import { logger } from '$lib/logger';
+import { resolve, sep } from 'path';
+import { getEnv } from '$lib/db/env';
 import { escapeShellArg } from '$lib/utils/shell';
 import { z } from 'zod';
 
@@ -45,6 +47,10 @@ export const POST: RequestHandler = async ({ params, request, getClientAddress }
 	if (!session?.user) {
 		return json({ error: 'Unauthorized' }, { status: 401 });
 	}
+	const user = session.user as any;
+	if (user.banned) {
+		return json({ error: 'Account is banned' }, { status: 403 });
+	}
 
 	const repositoryId = Number(params.repositoryId);
 	if (isNaN(repositoryId) || repositoryId <= 0) {
@@ -73,6 +79,21 @@ export const POST: RequestHandler = async ({ params, request, getClientAddress }
 			{ status: 400 }
 		);
 	}
+
+	// Non-admin path confinement: targetPath must be within REPOS_PATH
+	if (user.role !== 'admin') {
+		const env = getEnv();
+		const reposRoot = resolve(env.REPOS_PATH || '/opt/repos');
+		const resolvedTarget = resolve(targetPath);
+		if (resolvedTarget !== reposRoot && !resolvedTarget.startsWith(reposRoot + sep)) {
+			return json({ error: `Forbidden: Non-admin users can only clone into ${reposRoot}` }, { status: 403 });
+		}
+	}
+
+	// Only admins can supply ad-hoc raw install/build command strings
+	const isCustomCommandAllowed = user.role === 'admin';
+	const safeInstallCommand = isCustomCommandAllowed ? installCommand : undefined;
+	const safeBuildCommand = isCustomCommandAllowed ? buildCommand : undefined;
 
 	// Sanitize processName for shell safety
 	let sanitizedProcessName: string;
@@ -159,7 +180,7 @@ export const POST: RequestHandler = async ({ params, request, getClientAddress }
 						// Also log server-side for debugging
 						logger.info(`[github-import][${step}]`, { line, isError });
 					},
-					{ installCommand, buildCommand, skipInstall }
+					{ installCommand: safeInstallCommand, buildCommand: safeBuildCommand, skipInstall }
 				);
 
 			if (result.needsApproval) {

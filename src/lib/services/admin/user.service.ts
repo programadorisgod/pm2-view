@@ -68,6 +68,7 @@ export class UserService {
       email: input.email,
       name: input.name ?? null,
       role: input.role ?? 'user',
+      password: input.password,
       emailVerified: false,
       banned: false,
       banReason: null

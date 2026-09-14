@@ -97,6 +97,7 @@ export function getAuth() {
 			},
 			emailAndPassword: {
 				enabled: true,
+				disableSignUp: true,
 				sendResetPassword: async ({ user, url }) => {
 					const sent = await sendNotificationEmail({
 						from: env.SMTP_FROM_EMAIL,

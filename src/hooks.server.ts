@@ -36,15 +36,16 @@ export const handle: Handle = async ({ event, resolve }) => {
 			headers: event.request.headers
 		});
 		if (session) {
+			const u = session.user as any;
 			event.locals.user = {
-				id: session.user.id,
-				email: session.user.email,
-				name: session.user.name ?? null,
-				emailVerified: session.user.emailVerified ?? false,
-				createdAt: session.user.createdAt ?? new Date(),
-				role: session.user.role ?? 'user',
-				banned: session.user.banned ?? false,
-				banReason: session.user.banReason ?? null,
+				id: u.id,
+				email: u.email,
+				name: u.name ?? null,
+				emailVerified: u.emailVerified ?? false,
+				createdAt: u.createdAt ?? new Date(),
+				role: u.role ?? 'user',
+				banned: u.banned ?? false,
+				banReason: u.banReason ?? null,
 			};
 			event.locals.session = session.session;
 		}
@@ -52,22 +53,76 @@ export const handle: Handle = async ({ event, resolve }) => {
 		// No session or error — locals.user remains undefined
 	}
 
-	// Enforce authentication for container operational API endpoints
+	// 1. Strict defense-in-depth: Block public registration requests completely
 	const pathname = event.url.pathname;
-	const isProtectedApi =
+	if (pathname.startsWith('/api/auth/sign-up')) {
+		return new Response(
+			JSON.stringify({ error: 'Registration is disabled. Accounts can only be created by an administrator.' }),
+			{ status: 403, headers: { 'Content-Type': 'application/json' } }
+		);
+	}
+
+	// 2. Global Banned Account Lockout: banned users are rejected from all APIs and app pages
+	if (event.locals.user?.banned) {
+		if (pathname.startsWith('/api/') && !pathname.startsWith('/api/auth/sign-out')) {
+			return new Response(
+				JSON.stringify({
+					error: 'Forbidden: Account is banned',
+					banReason: event.locals.user.banReason ?? 'Banned by administrator'
+				}),
+				{ status: 403, headers: { 'Content-Type': 'application/json' } }
+			);
+		}
+		// If accessing web app pages (other than login / logout / auth endpoints)
+		if (!pathname.startsWith('/login') && !pathname.startsWith('/api/auth')) {
+			return new Response(null, {
+				status: 303,
+				headers: { Location: '/login?error=banned' }
+			});
+		}
+	}
+
+	// 3. Infrastructure & Admin endpoints protection
+	const isProtectedAdminRoute =
 		pathname.startsWith('/api/containers') ||
 		pathname.startsWith('/api/images') ||
 		pathname.startsWith('/api/networks') ||
 		pathname.startsWith('/api/volumes') ||
 		pathname.startsWith('/api/settings') ||
 		pathname.startsWith('/api/watcher') ||
-		pathname.startsWith('/api/status');
+		pathname.startsWith('/api/status') ||
+		pathname.startsWith('/api/nginx') ||
+		pathname.startsWith('/api/ports') ||
+		pathname.startsWith('/api/update') ||
+		pathname.startsWith('/api/pm2') ||
+		pathname.startsWith('/api/projects/register') ||
+		pathname.startsWith('/admin');
 
-	if (isProtectedApi && !event.locals.user) {
-		return new Response(JSON.stringify({ error: 'Unauthorized: Inicie sesión para acceder a estos recursos.' }), {
-			status: 401,
-			headers: { 'Content-Type': 'application/json' }
-		});
+	if (isProtectedAdminRoute) {
+		if (!event.locals.user) {
+			if (pathname.startsWith('/api/')) {
+				return new Response(JSON.stringify({ error: 'Unauthorized: Inicie sesión para acceder a estos recursos.' }), {
+					status: 401,
+					headers: { 'Content-Type': 'application/json' }
+				});
+			}
+			return new Response(null, {
+				status: 303,
+				headers: { Location: '/login' }
+			});
+		}
+		if (event.locals.user.role !== 'admin') {
+			if (pathname.startsWith('/api/')) {
+				return new Response(JSON.stringify({ error: 'Forbidden: Admin role required' }), {
+					status: 403,
+					headers: { 'Content-Type': 'application/json' }
+				});
+			}
+			return new Response(JSON.stringify({ error: 'Forbidden: Admin role required' }), {
+				status: 403,
+				headers: { 'Content-Type': 'application/json' }
+			});
+		}
 	}
 
 	return svelteKitHandler({ event, resolve, auth, building });

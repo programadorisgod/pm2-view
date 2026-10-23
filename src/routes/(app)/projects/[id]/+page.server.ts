@@ -7,11 +7,12 @@ import { db } from '$lib/db/db';
 import { eq } from 'drizzle-orm';
 import { projects } from '$lib/db/schema';
 import { error } from '@sveltejs/kit';
-import { existsSync, readFileSync } from 'fs';
-import { join, dirname, basename } from 'path';
-import type { PageServerLoad } from './$types';
+import { basename } from 'path';
+import { WorkspaceDetector } from '$lib/services/project-listing/workspace-detector';
+import type { PM2Process } from '$lib/pm2/pm2.types';
+import type { PageServerLoad, Actions } from './$types';
 
-export const load: PageServerLoad = async ({ params, request }) => {
+export const load: PageServerLoad = async ({ params, request, locals }) => {
 	const { pm2Service } = createServices();
 	const { id } = params;
 
@@ -23,7 +24,7 @@ export const load: PageServerLoad = async ({ params, request }) => {
 	if (!process) {
 		dbProjectFallback = await db.query.projects.findFirst({
 			where: eq(projects.id, id)
-		});
+		}).catch(() => null);
 		if (dbProjectFallback) {
 			process = await pm2Service.getProcessById(dbProjectFallback.pm2Name);
 		}
@@ -55,27 +56,25 @@ export const load: PageServerLoad = async ({ params, request }) => {
 	// Target process is guaranteed to be non-null here
 	const targetProcess = process!;
 
-	// Parallelize initial independent tasks: logs, session, and DB project lookup
-	const [logs, session, foundProject] = await Promise.all([
-		targetProcess.pm_id !== -1 ? pm2Service.getProcessLogs(id, 50).catch(() => []) : Promise.resolve([]),
-		auth.api.getSession({ headers: request.headers }).catch(() => null),
+	// Resolve user from locals (populated by hook) without hitting DB session endpoint again
+	const user = locals?.user ?? (request?.headers ? (await auth.api.getSession({ headers: request.headers }).catch(() => null))?.user : null);
+
+	// Parallelize DB project lookup and favorite status if user is present
+	const [foundProject, isFavorite] = await Promise.all([
 		dbProjectFallback ? Promise.resolve(dbProjectFallback) : db.query.projects.findFirst({
 			where: eq(projects.pm2Name, targetProcess.name),
 			columns: { id: true, name: true, autoDeployEnabled: true, githubRepo: true, deployBranch: true, targetPath: true, pm2Name: true, pm2Names: true }
-		}).catch(() => null)
+		}).catch(() => null),
+		user ? (async () => {
+			try {
+				const { ProjectFavoriteRepository } = await import('$lib/db/repositories/project-favorite-repository.impl');
+				const favRepo = new ProjectFavoriteRepository();
+				return await favRepo.isFavorite(user.id, targetProcess.name);
+			} catch {
+				return false;
+			}
+		})() : Promise.resolve(false)
 	]);
-
-	// Favorite status (parallel with project processing if possible)
-	let isFavorite = false;
-	if (session?.user) {
-		try {
-			const { ProjectFavoriteRepository } = await import('$lib/db/repositories/project-favorite-repository.impl');
-			const favRepo = new ProjectFavoriteRepository();
-			isFavorite = await favRepo.isFavorite(session.user.id, targetProcess.name);
-		} catch {
-			// Silent fail - favorite status is non-critical
-		}
-	}
 
 	let deployConfig: DeployConfig = { install: [], build: [], restart: [], start: [], postDeploy: [] };
 	let projectInternalId: string | null = null;
@@ -97,7 +96,7 @@ export const load: PageServerLoad = async ({ params, request }) => {
 		if (!project) {
 			const allProjects = await db.query.projects.findMany({
 				columns: { id: true, name: true, autoDeployEnabled: true, githubRepo: true, deployBranch: true, targetPath: true, pm2Name: true, pm2Names: true }
-			});
+			}).catch(() => []);
 			project = allProjects.find(p => {
 				if (!p.pm2Names) return false;
 				try {
@@ -107,38 +106,21 @@ export const load: PageServerLoad = async ({ params, request }) => {
 			}) ?? null;
 		}
 
-		// Detect workspace root for grouping
-		let workspaceRoot: string | null = null;
-		const WORKSPACE_INDICATORS = [
-			'pnpm-workspace.yaml', 'lerna.json', 'nx.json',
-			'turbo.json', 'rush.json', '.yarnrc.yml',
-		];
+		// Detect workspace root for grouping via bounded TTL cache
 		const cwd = (targetProcess.pm2_env?.pm_cwd ?? '').replace(/\/+$/, '');
-		if (cwd) {
-			let dir = cwd;
-			for (let i = 0; i < 3; i++) {
-				for (const file of WORKSPACE_INDICATORS) {
-					if (existsSync(join(dir, file))) { workspaceRoot = dir; break; }
-				}
-				if (!workspaceRoot) {
-					const pkgPath = join(dir, 'package.json');
-					if (existsSync(pkgPath)) {
-						try {
-							const pkg = JSON.parse(readFileSync(pkgPath, 'utf-8'));
-							if (pkg.workspaces) workspaceRoot = dir;
-						} catch { /* ignore */ }
-					}
-				}
-				if (workspaceRoot) break;
-				const parent = dirname(dir);
-				if (parent === dir) break;
-				dir = parent;
+		const workspaceRoot = cwd ? WorkspaceDetector.getWorkspaceRoot(cwd, 3) : null;
+
+		let cachedAllProcesses: PM2Process[] | null = null;
+		const getAllProcessesLazy = async () => {
+			if (!cachedAllProcesses) {
+				cachedAllProcesses = await pm2Service.getAllProcesses();
 			}
-		}
+			return cachedAllProcesses;
+		};
 
 		// Find group processes if workspace detected or project has pm2Names
 		if (workspaceRoot) {
-			const allProcesses = await pm2Service.getAllProcesses();
+			const allProcesses = await getAllProcessesLazy();
 			groupProcesses = allProcesses.filter(p => {
 				const pCwd = (p.pm2_env?.pm_cwd ?? '').replace(/\/+$/, '');
 				return pCwd.startsWith(workspaceRoot + '/') || pCwd === workspaceRoot;
@@ -161,7 +143,7 @@ export const load: PageServerLoad = async ({ params, request }) => {
 			};
 
 			if (autoDeploySettings.pm2Names.length > 0 && groupProcesses.length === 0) {
-				const allProcesses = await pm2Service.getAllProcesses();
+				const allProcesses = await getAllProcessesLazy();
 				groupProcesses = allProcesses.filter(p => autoDeploySettings.pm2Names.includes(p.name));
 			}
 
@@ -175,7 +157,7 @@ export const load: PageServerLoad = async ({ params, request }) => {
 
 	return {
 		process: targetProcess,
-		logs,
+		logs: [],
 		isFavorite,
 		deployConfig,
 		projectInternalId,
@@ -183,4 +165,16 @@ export const load: PageServerLoad = async ({ params, request }) => {
 		autoDeploySettings,
 		groupProcesses,
 	};
+};
+
+export const actions: Actions = {
+	saveEnv: async ({ request, locals, params }) => {
+		if (locals.memberRole === 'viewer') {
+			throw error(403, 'Forbidden');
+		}
+		const formData = await request.formData();
+		const envVars = JSON.parse(formData.get('envVars') as string);
+		const { envVarService } = createServices();
+		return await envVarService.saveAndRestart(params.id, envVars);
+	}
 };

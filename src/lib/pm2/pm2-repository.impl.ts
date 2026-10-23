@@ -1,8 +1,7 @@
 import { exec } from 'child_process';
 import { promisify } from 'util';
 import { existsSync } from 'fs';
-import { rm } from 'fs/promises';
-import { truncate } from 'fs/promises';
+import { rm, truncate, open, stat } from 'fs/promises';
 import type { IPM2Repository, PM2Process, PM2Log } from './pm2.types';
 import { normalizePagination, type PaginationParams, type PaginatedResult } from '$lib/pagination';
 import { escapeShellArg } from '$lib/utils/shell';
@@ -115,7 +114,7 @@ export class PM2Repository implements IPM2Repository {
 	private static readonly MAX_LOG_PATH_CACHE = 500;
 	private logPathCache = new Map<string, { out: string | null; err: string | null }>();
 	private listCache: { data: PM2Process[]; timestamp: number } | null = null;
-	private readonly CACHE_TTL_MS = 2500; // 2.5s TTL for snappy navigation between pages
+	private readonly CACHE_TTL_MS = 4000; // 4s TTL for snappy navigation between pages
 
 	private setLogPathCache(name: string, paths: { out: string | null; err: string | null }): void {
 		if (this.logPathCache.size >= PM2Repository.MAX_LOG_PATH_CACHE) {
@@ -260,13 +259,25 @@ export class PM2Repository implements IPM2Repository {
 		return result.sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
 	}
 
-	private async readLogFile(path: string, lines: number): Promise<string[]> {
+	private async readLogFile(filePath: string, lines: number): Promise<string[]> {
 		try {
-			const safePath = escapeShellArg(path);
-			const { stdout } = await execAsync(`tail -n ${lines} ${safePath}`);
-			return stdout.split('\n').filter(l => l.trim());
+			const fileStat = await stat(filePath).catch(() => null);
+			if (!fileStat || fileStat.size === 0) return [];
+
+			// PM2 log lines are typically 50-200 bytes. Read tail buffer (max 64KB or lines * 500 bytes)
+			const readSize = Math.min(fileStat.size, Math.max(64 * 1024, lines * 500));
+			const fd = await open(filePath, 'r');
+			try {
+				const buffer = Buffer.alloc(readSize);
+				await fd.read(buffer, 0, readSize, fileStat.size - readSize);
+				const content = buffer.toString('utf-8');
+				const allLines = content.split(/\r?\n/).filter(l => l.trim().length > 0);
+				return allLines.slice(-lines);
+			} finally {
+				await fd.close();
+			}
 		} catch (error) {
-			logger.warn('Failed to read log file', { path, error: error instanceof Error ? error.message : String(error) });
+			logger.warn('Failed to read log file', { path: filePath, error: error instanceof Error ? error.message : String(error) });
 			return [];
 		}
 	}

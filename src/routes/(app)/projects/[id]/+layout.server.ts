@@ -8,14 +8,16 @@ import { eq } from 'drizzle-orm';
 import type { LayoutServerLoad } from './$types';
 
 export const load: LayoutServerLoad = async (event) => {
-	const session = await auth.api.getSession({
-		headers: event.request.headers
-	});
+	const user = event.locals.user ?? (await auth.api.getSession({
+		headers: event.request?.headers
+	}).catch(() => null))?.user;
 
 	// Parent layout should have already checked authentication
-	if (!session?.user) {
+	if (!user) {
 		return { user: null, session: null };
 	}
+
+	const session = event.locals.session ?? null;
 
 	const { id: paramId } = event.params;
 
@@ -27,7 +29,7 @@ export const load: LayoutServerLoad = async (event) => {
 		const { pm2Service } = createServices();
 		const pm2Process = await pm2Service.getProcessById(paramId);
 		if (!pm2Process) {
-			return { user: session.user, session: session.session, projectId: paramId, memberRole: null };
+			return { user, session, projectId: paramId, memberRole: null };
 		}
 		let project = await db.query.projects.findFirst({
 			where: eq(projects.pm2Name, pm2Process.name),
@@ -47,18 +49,18 @@ export const load: LayoutServerLoad = async (event) => {
 			}) ?? null;
 		}
 		if (!project) {
-			return { user: session.user, session: session.session, projectId: paramId, memberRole: null };
+			return { user, session, projectId: paramId, memberRole: null };
 		}
 		projectId = project.id;
 	}
 
 	// Check project membership and get member record
 	// Admins have universal access, creators get 'owner' role
-	const member = await requireProjectAccess(projectId, session.user);
+	const member = await requireProjectAccess(projectId, user);
 
 	// Determine the effective role: from member record, or 'owner' for creator, or 'admin' for admins
 	let effectiveRole: string;
-	if (session.user.role === 'admin') {
+	if (user.role === 'admin') {
 		effectiveRole = 'admin';
 	} else if (member) {
 		effectiveRole = member.role;
@@ -68,8 +70,8 @@ export const load: LayoutServerLoad = async (event) => {
 	}
 
 	return {
-		user: session.user,
-		session: session.session,
+		user,
+		session,
 		projectId,
 		memberRole: effectiveRole
 	};

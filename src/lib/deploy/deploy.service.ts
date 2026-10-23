@@ -560,8 +560,15 @@ export class DeployService {
 		const projectEnv = loadProjectEnv(workingDir);
 		const managedEnv = options?.env ?? {};
 		const merged = { ...appEnv, ...projectEnv, ...managedEnv };
+		const existingNodeOptions = (merged.NODE_OPTIONS ?? process.env.NODE_OPTIONS ?? '').trim();
+		const nodeOptions = existingNodeOptions.includes('--no-deprecation')
+			? existingNodeOptions
+			: existingNodeOptions
+				? `${existingNodeOptions} --no-deprecation`
+				: '--no-deprecation';
+
 		return {
-			runEnv: { ...process.env, ...merged },
+			runEnv: { ...process.env, ...merged, NODE_OPTIONS: nodeOptions },
 			restartEnv: { PATH: process.env.PATH ?? '', HOME: process.env.HOME ?? '', ...merged },
 		};
 	}
@@ -615,7 +622,7 @@ export class DeployService {
 			case 'bun':
 				return runCommand(cwd, 'bun', ['install'], onLine, env);
 			case 'pnpm':
-				return runCommand(cwd, 'pnpm', ['install'], onLine, env);
+				return runCommand(cwd, 'pnpm', ['install', '--reporter=append-only'], onLine, env);
 			default:
 				return runCommand(cwd, 'npm', ['install'], onLine, env);
 		}

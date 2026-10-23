@@ -660,18 +660,19 @@
 						</p>
 					{:else}
 						{#each lines as log}
+							{@const isWarn = !log.line.includes('Failed') && (log.line.includes('Warning') || log.line.includes('WARN') || log.line.includes('DeprecationWarning') || log.line.includes('Skipped') || log.line.includes('restarting') || log.line.includes('Pending approval'))}
+							{@const isErr = log.isError && !isWarn}
 							<div
 								class="py-2xs"
 								style={cn(
 									'color: var(--text-secondary);',
-									log.isError ? 'color: #FF5B4F;' : '',
+									isErr ? 'color: #FF5B4F;' : '',
+									isWarn ? 'color: #FFD740;' : '',
 									log.line.includes('Starting') ? 'color: #0070F3; font-weight: 600;' : '',
 									log.line.includes('Completed') ? 'color: #00E676; font-weight: 600;' : '',
-									log.line.includes('Skipped') ? 'color: #FFD740; font-weight: 600;' : '',
-									log.line.includes('restarting') ? 'color: #FFD740; font-weight: 600;' : '',
 									log.line.includes('back online') ? 'color: #00E676; font-weight: 600;' : '',
 									log.line.includes('Failed') ? 'color: #FF5B4F; font-weight: 600;' : '',
-									log.line.includes('Pending approval') ? 'color: #FFD740; font-weight: 600;' : ''
+									(log.line.includes('Starting') || log.line.includes('Completed') || log.line.includes('back online') || log.line.includes('Failed') || isWarn) ? 'font-weight: 600;' : ''
 								)}
 							>
 								{log.line}

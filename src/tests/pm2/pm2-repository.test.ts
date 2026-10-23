@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { PM2Repository, parsePM2JList, isPM2Module } from '../../lib/pm2/pm2-repository.impl';
+import { PM2Repository, parsePM2JList, isPM2Module, classifyLogLevel } from '../../lib/pm2/pm2-repository.impl';
 import type { IPM2Repository } from '../../lib/pm2/pm2.types';
 
 describe('PM2 Repository', () => {
@@ -136,5 +136,34 @@ describe('isPM2Module', () => {
 		expect(isPM2Module({ name: 'cartera-dashboard', pm2_env: { status: 'stopped', pmx_module: false } })).toBe(false);
 		expect(isPM2Module(null)).toBe(false);
 		expect(isPM2Module(undefined)).toBe(false);
+	});
+});
+
+describe('classifyLogLevel Robustness', () => {
+	it('should classify Spanish [ALERTA] as warn even when emitted on stderr', () => {
+		const line = '2026-10-23 10:21:36 -05:00: [Flujo][ALERTA] Desbalance en SOAT: gap 80.89x (umbral: 1.4x).';
+		expect(classifyLogLevel(line, 'err')).toBe('warn');
+	});
+
+	it('should classify deadlock retries as warn even when emitted on stderr', () => {
+		const line = '2026-10-23 10:24:52 -05:00: [CarteraRepository] Deadlock detected, retry 1/3 after 1000ms';
+		expect(classifyLogLevel(line, 'err')).toBe('warn');
+	});
+
+	it('should classify warning emojis as warn', () => {
+		const line = '[Flujo] ⚠️ 3 balance alert(s) detected this run';
+		expect(classifyLogLevel(line, 'out')).toBe('warn');
+		expect(classifyLogLevel(line, 'err')).toBe('warn');
+	});
+
+	it('should classify true fatal/binding errors as error', () => {
+		const line = "ERROR: [Errno 98] error while attempting to bind on address ('127.0.0.1', 4001): address already in use";
+		expect(classifyLogLevel(line, 'err')).toBe('error');
+		expect(classifyLogLevel(line, 'out')).toBe('error');
+	});
+
+	it('should classify startup logs on stderr as info', () => {
+		const line = 'INFO: Started server process [3998246]';
+		expect(classifyLogLevel(line, 'err')).toBe('info');
 	});
 });

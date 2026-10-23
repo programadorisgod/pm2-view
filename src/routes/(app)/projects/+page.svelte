@@ -56,6 +56,7 @@
   let nonFavoriteProcesses = $derived(filteredProcesses.filter((p) => !p.isFavorite));
   let displayedNonFavorites = $derived(nonFavoriteProcesses);
   let togglingFavorite = $state<string | null>(null);
+  let actionLoadingKey = $state<string | null>(null);
 
   function getFavoriteKey(process: VisibleProject): string {
     if (process.dbProject?.pm2Name) return process.dbProject.pm2Name;
@@ -100,6 +101,9 @@
   }
 
   async function handleAction(pm_id: string, action: "restart" | "stop") {
+    const key = `${pm_id}:${action}`;
+    if (actionLoadingKey) return;
+    actionLoadingKey = key;
     feedback = null;
     try {
       const res = await fetch(`${base}/projects/api?action=${action}`, {
@@ -119,6 +123,8 @@
       }
     } catch {
       feedback = { type: "error", text: `Failed to ${action}` };
+    } finally {
+      actionLoadingKey = null;
     }
   }
 
@@ -474,26 +480,50 @@
 
                     {#if process.status === "online"}
                       <button
-                        class="btn-secondary px-3 py-1 text-caption"
+                        class="btn-secondary px-3 py-1 text-caption transition-all active:scale-95 duration-150 inline-flex items-center gap-1"
+                        disabled={actionLoadingKey !== null}
                         onclick={() =>
                           handleAction(process.pm_id.toString(), "restart")}
                       >
-                        Restart
+                        {#if actionLoadingKey === `${process.pm_id}:restart`}
+                          <svg class="w-3 h-3 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                          </svg>
+                          <span>Restarting...</span>
+                        {:else}
+                          <span>Restart</span>
+                        {/if}
                       </button>
                       <button
-                        class="btn-secondary px-3 py-1 text-caption"
+                        class="btn-secondary px-3 py-1 text-caption transition-all active:scale-95 duration-150 inline-flex items-center gap-1"
+                        disabled={actionLoadingKey !== null}
                         onclick={() =>
                           handleAction(process.pm_id.toString(), "stop")}
                       >
-                        Stop
+                        {#if actionLoadingKey === `${process.pm_id}:stop`}
+                          <svg class="w-3 h-3 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                          </svg>
+                          <span>Stopping...</span>
+                        {:else}
+                          <span>Stop</span>
+                        {/if}
                       </button>
                     {:else if process.status === "stopped"}
                       <button
-                        class="btn-secondary px-3 py-1 text-caption"
+                        class="btn-secondary px-3 py-1 text-caption transition-all active:scale-95 duration-150 inline-flex items-center gap-1"
+                        disabled={actionLoadingKey !== null}
                         onclick={() =>
                           handleAction(process.pm_id.toString(), "restart")}
                       >
-                        Start
+                        {#if actionLoadingKey === `${process.pm_id}:restart`}
+                          <svg class="w-3 h-3 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                          </svg>
+                          <span>Starting...</span>
+                        {:else}
+                          <span>Start</span>
+                        {/if}
                       </button>
                     {/if}
                   {/if}
@@ -623,26 +653,50 @@
 
                   {#if process.status === "online"}
                     <button
-                      class="btn-secondary px-3 py-1 text-caption"
+                      class="btn-secondary px-3 py-1 text-caption transition-all active:scale-95 duration-150 inline-flex items-center gap-1"
+                      disabled={actionLoadingKey !== null}
                       onclick={() =>
                         handleAction(process.pm_id.toString(), "restart")}
                     >
-                      Restart
+                      {#if actionLoadingKey === `${process.pm_id}:restart`}
+                        <svg class="w-3 h-3 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                        </svg>
+                        <span>Restarting...</span>
+                      {:else}
+                        <span>Restart</span>
+                      {/if}
                     </button>
                     <button
-                      class="btn-secondary px-3 py-1 text-caption"
+                      class="btn-secondary px-3 py-1 text-caption transition-all active:scale-95 duration-150 inline-flex items-center gap-1"
+                      disabled={actionLoadingKey !== null}
                       onclick={() =>
                         handleAction(process.pm_id.toString(), "stop")}
                     >
-                      Stop
+                      {#if actionLoadingKey === `${process.pm_id}:stop`}
+                        <svg class="w-3 h-3 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                        </svg>
+                        <span>Stopping...</span>
+                      {:else}
+                        <span>Stop</span>
+                      {/if}
                     </button>
                   {:else if process.status === "stopped"}
                     <button
-                      class="btn-secondary px-3 py-1 text-caption"
+                      class="btn-secondary px-3 py-1 text-caption transition-all active:scale-95 duration-150 inline-flex items-center gap-1"
+                      disabled={actionLoadingKey !== null}
                       onclick={() =>
                         handleAction(process.pm_id.toString(), "restart")}
                     >
-                      Start
+                      {#if actionLoadingKey === `${process.pm_id}:restart`}
+                        <svg class="w-3 h-3 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                        </svg>
+                        <span>Starting...</span>
+                      {:else}
+                        <span>Start</span>
+                      {/if}
                     </button>
                   {/if}
                 {/if}

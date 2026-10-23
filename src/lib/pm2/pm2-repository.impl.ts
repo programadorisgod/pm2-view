@@ -250,29 +250,29 @@ function parseTimestamp(line: string): Date | null {
 /**
  * Content-based log level classification.
  * PM2 routes stdout → out file, stderr → err file, but many apps write
- * informational startup messages to stderr. This function overrides the
+ * informational startup messages or warnings to stderr. This function overrides the
  * stream-based default when the content clearly indicates a different level.
  */
-function classifyLogLevel(line: string, streamType: 'out' | 'err'): 'info' | 'warn' | 'error' {
-	const lower = line.toLowerCase();
+export function classifyLogLevel(line: string, streamType: 'out' | 'err'): 'info' | 'warn' | 'error' {
+	// Explicit warning tags (brackets, tags, or emojis in Spanish & English)
+	const hasExplicitWarn =
+		/\[\s*(alerta|alert|warn|warning|advertencia|aviso|caution|atenci[oó]n)\s*\]/i.test(line) ||
+		/\b(alerta|alert|warn|warning|advertencia|aviso|caution)\b[:\s]/i.test(line) ||
+		/⚠️/u.test(line);
 
-	// False positives: stderr lines that are NOT errors
-	// Common in Node.js apps that write startup info to stderr
-	const isFalsePositive =
-		/\b(next|nuxt|vite|astro|sveltekit|react|vue|angular|nest|express)\b.*start/i.test(line) ||
-		/\b(pm2|node|npm|yarn|pnpm)\b.{0,40}(start|running|installed|version|listening|ready|init|exit|loaded|boot|compil)/i.test(line) ||
-		/\b(LISTENING|listening on|started on|ready)\b/i.test(line) ||
-		/\bcompil(e|ing|ed|er)\b/i.test(line) ||
-		/\b(build|building|built)\b/i.test(line) ||
-		/\b(hot[- ]?module|hmr|module reload)\b/i.test(line) ||
-		/\b(deploy|deploying|deployed)\b/i.test(line) ||
-		/\b(watching|watch)\b/i.test(line) ||
-		/\b(discount|discountinued)\b/i.test(line) ||
-		/\b(node_modules|\.next|\.nuxt)\b.*\b(start|running|loaded|ready)\b/i.test(line) ||
-		/^node:\s.*not found$/i.test(line) ||
-		/^\s*$/.test(line);
+	// Explicit error tags
+	const hasExplicitError =
+		/\[\s*(error|err|fatal|panic|crit|critical)\s*\]/i.test(line) ||
+		/\b(err(o[r]?)?|fatal|panic|critical)\b[:\s]/i.test(line) ||
+		/❌|🛑/u.test(line);
 
-	// True error patterns (override stream-based default when found in stdout)
+	// Explicit info tags
+	const hasExplicitInfo =
+		/\[\s*(info|information|debug|diagnostic|diag|trace)\s*\]/i.test(line) ||
+		/\b(info|debug|diagnostic)\b[:\s]/i.test(line) ||
+		/ℹ️/u.test(line);
+
+	// True fatal/hard error patterns (override stream-based default when found in stdout)
 	const hasErrorPattern =
 		/\b(FATAL|panic|uncaught exception|unhandled rejection)\b/i.test(line) ||
 		/\bsegmentation fault|core dumped\b/i.test(line) ||
@@ -286,26 +286,44 @@ function classifyLogLevel(line: string, streamType: 'out' | 'err'): 'info' | 'wa
 		/^Trace\s*\(/.test(line) || // Node.js stack trace start
 		/^\s+at\s+/.test(line); // Node.js stack trace frame
 
-	// True warning patterns
+	// True warning patterns (retries, business alerts, deadlocks, desbalances, deprecations)
 	const hasWarnPattern =
-		/\bwarn(ing)?\b/i.test(line) &&
-		!/\b(deprecat|deprecated)\b/i.test(line); // deprecation is warn
-	const hasDeprecation =
+		/\b(warn(ing)?|alerta|advertencia|aviso|caution)\b/i.test(line) ||
+		/\b(retry(ing)?|reintento|reintentando|attempt\s*\d+)\b/i.test(line) ||
+		/\bdeadlock.*retry\b/i.test(line) ||
+		/\bdesbalance\b/i.test(line) ||
+		/\bumbral\b/i.test(line) ||
 		/\bdeprecat(ed|ion)\b/i.test(line);
 
-	// Explicit level tags in the line
-	const hasExplicitError = /\bERR(O[R]?)?\b[:\s]/i.test(line) || /\berror[:\s]/i.test(line);
-	const hasExplicitWarn = /\bWARN(ING)?[:\s]/i.test(line);
-	const hasExplicitInfo = /\bINFO[:\s]/i.test(line);
+	// False positives: stderr lines that are NOT errors
+	// Common in Node.js / Python apps that write startup info to stderr
+	const isFalsePositive =
+		/\b(next|nuxt|vite|astro|sveltekit|react|vue|angular|nest|express|fastapi|uvicorn)\b.*start/i.test(line) ||
+		/\b(pm2|node|npm|yarn|pnpm|python)\b.{0,40}(start|running|installed|version|listening|ready|init|exit|loaded|boot|compil)/i.test(line) ||
+		/\b(LISTENING|listening on|started on|ready)\b/i.test(line) ||
+		/\bcompil(e|ing|ed|er)\b/i.test(line) ||
+		/\b(build|building|built)\b/i.test(line) ||
+		/\b(hot[- ]?module|hmr|module reload)\b/i.test(line) ||
+		/\b(deploy|deploying|deployed)\b/i.test(line) ||
+		/\b(watching|watch)\b/i.test(line) ||
+		/\b(discount|discountinued)\b/i.test(line) ||
+		/\b(node_modules|\.next|\.nuxt)\b.*\b(start|running|loaded|ready)\b/i.test(line) ||
+		/^node:\s.*not found$/i.test(line) ||
+		/^\s*$/.test(line);
 
-	// Resolve level: explicit tags > content patterns > stream default
-	if (hasExplicitError || hasErrorPattern) return 'error';
-	if (hasExplicitWarn || hasWarnPattern || hasDeprecation) return 'warn';
-	if (hasExplicitInfo) return 'info';
+	// Priority resolution:
+	// 1. Explicit tags:
+	if (hasExplicitWarn && !hasExplicitError) return 'warn';
+	if (hasExplicitError) return 'error';
+	if (hasExplicitInfo && !hasErrorPattern && !hasWarnPattern) return 'info';
 
-	// If it's stderr but looks like a false positive, demote to info
+	// 2. Strong content patterns:
+	if (hasWarnPattern && !hasErrorPattern) return 'warn';
+	if (hasErrorPattern) return 'error';
+
+	// 3. Demote known false-positives in stderr to info:
 	if (streamType === 'err' && isFalsePositive) return 'info';
 
-	// Default: match the stream
+	// 4. Default: match the stream
 	return streamType === 'err' ? 'error' : 'info';
 }

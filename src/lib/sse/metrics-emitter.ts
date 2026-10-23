@@ -9,6 +9,9 @@ export function startMetricsEmitter(intervalMs: number = 10000): void {
 
 	intervalId = setInterval(async () => {
 		try {
+			// Skip querying PM2 and emitting events if no client is listening
+			if (sseManager.getConnectionCount() === 0) return;
+
 			const { pm2Service } = createServices();
 			const processes = await pm2Service.getAllProcesses();
 

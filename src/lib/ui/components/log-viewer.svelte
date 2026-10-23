@@ -2,6 +2,8 @@
   import { Card } from '$lib/ui/components';
   import DateTimePicker from '$lib/ui/components/date-time-picker.svelte';
   import { base } from '$app/paths';
+  import { toLogEntries, type LogEntry, type RawLog } from './log-viewer/log-hasher';
+  import { filterLogsSinglePass } from './log-viewer/log-filter';
 
   let {
     processName,
@@ -19,57 +21,7 @@
     }>;
   } = $props();
 
-  type LogEntry = {
-    id: string;
-    type: 'out' | 'err';
-    data: string;
-    timestamp: Date;
-    hasTimestamp: boolean;
-    level: 'info' | 'warn' | 'error';
-    dismissed: boolean;
-  };
 
-  type RawLog = {
-    type: 'out' | 'err';
-    data: string;
-    timestamp: Date | string;
-    hasTimestamp?: boolean;
-    level: 'info' | 'warn' | 'error';
-  };
-
-  function logIdHash(ts: number, type: string, data: string): string {
-    let h = 5381;
-    const key = `${ts}:${type}:${data}`;
-    for (let i = 0; i < key.length; i++) {
-      h = ((h << 5) + h + key.charCodeAt(i)) | 0;
-    }
-    return `log-${h >>> 0}`;
-  }
-
-  // Duplicate log lines (same second, stream and content) produce identical
-  // hashes; keyed {#each} requires unique keys, so disambiguate by occurrence.
-  function toLogEntries(rawLogs: RawLog[]): LogEntry[] {
-    const seen = new Map<string, number>();
-    return rawLogs.map((raw) => {
-      const ts = raw.timestamp instanceof Date ? raw.timestamp : new Date(raw.timestamp);
-      const base = `${ts.getTime()}:${raw.type}:${raw.data}`;
-      const occurrence = seen.get(base) ?? 0;
-      seen.set(base, occurrence + 1);
-      const id =
-        occurrence === 0
-          ? logIdHash(ts.getTime(), raw.type, raw.data)
-          : `${logIdHash(ts.getTime(), raw.type, raw.data)}-${occurrence}`;
-      return {
-        id,
-        type: raw.type,
-        data: raw.data,
-        timestamp: ts,
-        hasTimestamp: raw.hasTimestamp ?? ts.getTime() > 0,
-        level: raw.level,
-        dismissed: false,
-      };
-    });
-  }
 
   let logs = $state<LogEntry[]>([]);
   let lineCount = $state(100);
@@ -152,77 +104,23 @@
     markErrorsSeen();
   }
 
-  let filteredLogs = $derived.by(() => {
-    let result = showDismissed ? logs : logs.filter((l) => !l.dismissed);
+  let filterResult = $derived(filterLogsSinglePass(logs, {
+    showDismissed,
+    filterLevel,
+    filterStream,
+    searchQuery,
+    dateFrom,
+    dateTo,
+    sortOrder,
+    errBaseline,
+  }));
 
-    if (filterLevel !== 'all') {
-      result = result.filter((l) => l.level === filterLevel);
-    }
-    if (filterStream !== 'all') {
-      result = result.filter((l) => l.type === filterStream);
-    }
-    if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase();
-      result = result.filter((l) => l.data.toLowerCase().includes(q));
-    }
-    if (dateFrom) {
-      const from = new Date(dateFrom);
-      if (!isNaN(from.getTime())) {
-        result = result.filter((l) => l.timestamp >= from);
-      }
-    }
-    if (dateTo) {
-      const to = new Date(dateTo);
-      if (!isNaN(to.getTime())) {
-        result = result.filter((l) => l.timestamp <= to);
-      }
-    }
-    result = sortOrder === 'newest'
-      ? [...result].sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime())
-      : result;
-    return result;
-  });
-
-  // Counts exclude level filter so tabs always show correct totals
-  let logsForCounts = $derived.by(() => {
-    let result = showDismissed ? logs : logs.filter((l) => !l.dismissed);
-    if (filterStream !== 'all') {
-      result = result.filter((l) => l.type === filterStream);
-    }
-    if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase();
-      result = result.filter((l) => l.data.toLowerCase().includes(q));
-    }
-    if (dateFrom) {
-      const from = new Date(dateFrom);
-      if (!isNaN(from.getTime())) {
-        result = result.filter((l) => l.timestamp >= from);
-      }
-    }
-    if (dateTo) {
-      const to = new Date(dateTo);
-      if (!isNaN(to.getTime())) {
-        result = result.filter((l) => l.timestamp <= to);
-      }
-    }
-    return result;
-  });
-
-  let filteredOutLogs = $derived(filteredLogs.filter((l) => l.type === 'out'));
-  let filteredErrLogs = $derived(filteredLogs.filter((l) => l.type === 'err'));
-  let newErrCount = $derived(
-    filteredLogs.filter((l) => l.level === 'error' && errBaseline !== null && l.timestamp.getTime() > errBaseline).length,
-  );
-
-  let levelCounts = $derived.by(() => {
-    const counts = { info: 0, warn: 0, error: 0 };
-    for (const l of logsForCounts) {
-      counts[l.level]++;
-    }
-    return counts;
-  });
-
-  let dismissedCount = $derived(logs.filter((l) => l.dismissed).length);
+  let filteredLogs = $derived(filterResult.filteredLogs);
+  let filteredOutLogs = $derived(filterResult.filteredOutLogs);
+  let filteredErrLogs = $derived(filterResult.filteredErrLogs);
+  let levelCounts = $derived(filterResult.levelCounts);
+  let newErrCount = $derived(filterResult.newErrCount);
+  let dismissedCount = $derived(filterResult.dismissedCount);
 
   function restoreAllErrors() {
     for (const log of logs) {

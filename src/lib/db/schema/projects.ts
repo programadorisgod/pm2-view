@@ -1,30 +1,38 @@
 // Note: Schema uses sqlite-core imports but is dialect-agnostic at the Drizzle driver level.
 // Drizzle handles translation between SQLite and PostgreSQL for common column types (text, integer, etc.).
 // No changes needed for multi-dialect support - the driver layer handles dialect translation.
-import { sqliteTable, text, integer } from 'drizzle-orm/sqlite-core';
+import { sqliteTable, text, integer, index } from 'drizzle-orm/sqlite-core';
 import { sql } from 'drizzle-orm';
 import { relations } from 'drizzle-orm';
 import { users } from './users';
 import { teams } from './teams';
 import { projectMembers } from './project-members';
 
-export const projects = sqliteTable('projects', {
-	id: text('id').primaryKey(),
-	userId: text('user_id').notNull().references(() => users.id),
-	teamId: text('team_id').references(() => teams.id),
-	name: text('name').notNull(),
-	pm2Name: text('pm2_name').notNull(),
-	/** JSON array of PM2 process names for multi-process projects (e.g. `["atlas-backend","atlas-frontend"]`). Falls back to `pm2Name` if empty. */
-	pm2Names: text('pm2_names'),
-	description: text('description'),
-	targetPath: text('target_path'),
-	githubRepo: text('github_repo'),
-	deployBranch: text('deploy_branch').notNull().default('main'),
-	autoDeployEnabled: integer('auto_deploy_enabled', { mode: 'boolean' }).notNull().default(false),
-	/** Email captured from the session that last saved deployment settings; receives deploy outcome emails along with the owner. */
-	notifyEmail: text('notify_email'),
-	createdAt: integer('created_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`)
-});
+export const projects = sqliteTable(
+	'projects',
+	{
+		id: text('id').primaryKey(),
+		userId: text('user_id').notNull().references(() => users.id),
+		teamId: text('team_id').references(() => teams.id),
+		name: text('name').notNull(),
+		pm2Name: text('pm2_name').notNull(),
+		/** JSON array of PM2 process names for multi-process projects (e.g. `["atlas-backend","atlas-frontend"]`). Falls back to `pm2Name` if empty. */
+		pm2Names: text('pm2_names'),
+		description: text('description'),
+		targetPath: text('target_path'),
+		githubRepo: text('github_repo'),
+		deployBranch: text('deploy_branch').notNull().default('main'),
+		autoDeployEnabled: integer('auto_deploy_enabled', { mode: 'boolean' }).notNull().default(false),
+		/** Email captured from the session that last saved deployment settings; receives deploy outcome emails along with the owner. */
+		notifyEmail: text('notify_email'),
+		createdAt: integer('created_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`)
+	},
+	(table) => [
+		index('projects_user_id_idx').on(table.userId),
+		index('projects_team_id_idx').on(table.teamId),
+		index('projects_pm2_name_idx').on(table.pm2Name)
+	]
+);
 
 export const projectsRelations = relations(projects, ({ one, many }) => ({
 	owner: one(users, { fields: [projects.userId], references: [users.id] }),

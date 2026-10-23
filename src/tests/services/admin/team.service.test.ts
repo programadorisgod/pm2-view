@@ -37,6 +37,7 @@ describe('TeamService', () => {
     
     teamRepo = {
       findById: vi.fn(),
+      findByName: vi.fn().mockResolvedValue(null),
       findAll: vi.fn().mockResolvedValue({ teams: [], total: 0 }),
       create: vi.fn(),
       update: vi.fn(),
@@ -100,6 +101,7 @@ describe('TeamService', () => {
         teams: [mockTeam],
         total: 1
       });
+      teamRepo.findByName.mockResolvedValue(mockTeam);
 
       await expect(
         teamService.createTeam({ name: 'Engineering' }, 'admin-1')

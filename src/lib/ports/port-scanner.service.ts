@@ -22,9 +22,17 @@ export class PortScannerService {
 	}
 
 	getSummary(ports: PortInfo[]): PortSummary {
-		const tcpCount = ports.filter((p) => p.protocol === 'tcp').length;
-		const udpCount = ports.filter((p) => p.protocol === 'udp').length;
-		const listeningCount = ports.filter((p) => p.state === 'LISTEN').length;
+		let tcpCount = 0;
+		let udpCount = 0;
+		let listeningCount = 0;
+
+		for (let i = 0; i < ports.length; i++) {
+			const p = ports[i];
+			if (p.protocol === 'tcp') tcpCount++;
+			if (p.protocol === 'udp') udpCount++;
+			if (p.state === 'LISTEN') listeningCount++;
+		}
+
 		return { total: ports.length, tcpCount, udpCount, listeningCount };
 	}
 

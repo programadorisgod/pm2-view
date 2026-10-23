@@ -1,7 +1,5 @@
-import { spawn } from 'child_process';
-import { existsSync, readFileSync } from 'fs';
+import { existsSync } from 'fs';
 import { dirname, join } from 'path';
-import dotenv from 'dotenv';
 import type { IPM2Repository } from '$lib/pm2/pm2.types';
 import type {
 	DeployLogCallback,
@@ -12,173 +10,32 @@ import type {
 	PackageManager,
 } from './deploy.types';
 import { tokenizeCommand, hasPackageDependencies } from './process-runner';
+import {
+	detectPackageManager,
+	readPackageScripts,
+	LOCK_FILES,
+} from './package-manager';
+import { loadProjectEnv } from './env-loader';
+import {
+	runCommand,
+	flushBuffer,
+	extractPendingPackages,
+	resolveProjectRoot,
+	type EnvMap,
+} from './command-runner';
 
-const LOCK_FILES: Record<string, PackageManager> = {
-	'pnpm-lock.yaml': 'pnpm',
-	'bun.lockb': 'bun',
-	'bun.lock': 'bun',
-} as const;
-
-const APPROVAL_INDICATORS = /requires approval|needs to be built|approve-builds/i;
-const PACKAGE_LINE = /^\s*-\s+(.+)$/;
-
-/** Environment map passed to spawned child processes (values may be undefined, like Node's process.env). */
-type EnvMap = Record<string, string | undefined>;
-
-export function detectPackageManager(dir: string): PackageManager {
-	const pkgPath = join(dir, 'package.json');
-	if (existsSync(pkgPath)) {
-		try {
-			const pkg = JSON.parse(readFileSync(pkgPath, 'utf-8'));
-			if (pkg.packageManager) {
-				const [pm] = pkg.packageManager.split('@');
-				if (pm === 'pnpm' || pm === 'bun') return pm;
-			}
-		} catch {
-			// ignore parse errors
-		}
-	}
-
-	for (const [file, pm] of Object.entries(LOCK_FILES)) {
-		if (existsSync(join(dir, file))) return pm;
-	}
-
-	throw new Error(
-		`No pnpm or bun lockfile found in ${dir}. Cannot determine package manager.`,
-	);
-}
+export {
+	detectPackageManager,
+	readPackageScripts,
+	loadProjectEnv,
+	LOCK_FILES,
+	runCommand,
+	extractPendingPackages,
+	resolveProjectRoot,
+};
 
 function isGitRepo(dir: string): boolean {
 	return existsSync(join(dir, '.git'));
-}
-
-export function readPackageScripts(dir: string): Record<string, string> | null {
-	const pkgPath = join(dir, 'package.json');
-	if (!existsSync(pkgPath)) return null;
-	try {
-		const pkg = JSON.parse(readFileSync(pkgPath, 'utf-8'));
-		return pkg.scripts ?? null;
-	} catch {
-		return null;
-	}
-}
-
-/**
- * Loads the project's `.env*` files from the working directory.
- * Order (later wins): .env → .env.local → .env.production → .env.production.local
- */
-export function loadProjectEnv(dir: string): Record<string, string> {
-	const files = ['.env', '.env.local', '.env.production', '.env.production.local'];
-	const env: Record<string, string> = {};
-
-	for (const file of files) {
-		const path = join(dir, file);
-		if (!existsSync(path)) continue;
-		try {
-			const parsed = dotenv.parse(readFileSync(path, 'utf-8'));
-			Object.assign(env, parsed);
-		} catch {
-			// Ignore unparsable env files
-		}
-	}
-
-	return env;
-}
-
-function resolveProjectRoot(execPath: string, maxUpward = 10): string | null {
-	let dir = dirname(execPath);
-	for (let i = 0; i < maxUpward; i++) {
-		if (existsSync(join(dir, 'package.json'))) return dir;
-		const parent = dirname(dir);
-		if (parent === dir) break;
-		dir = parent;
-	}
-	return null;
-}
-
-function extractPendingPackages(output: string[]): string[] {
-	const packages: string[] = [];
-	let inApprovalSection = false;
-
-	for (const line of output) {
-		if (APPROVAL_INDICATORS.test(line)) {
-			inApprovalSection = true;
-			continue;
-		}
-		if (inApprovalSection) {
-			const match = line.match(PACKAGE_LINE);
-			if (match) {
-				packages.push(match[1].trim());
-			} else if (line.trim() && !line.startsWith('-')) {
-				inApprovalSection = false;
-			}
-		}
-	}
-
-	return packages;
-}
-
-function runCommand(
-	cwd: string,
-	command: string,
-	args: string[],
-	onLine: (line: string, isError: boolean) => void,
-	env?: EnvMap,
-): Promise<number> {
-	return new Promise((resolve) => {
-		const proc = spawn(command, args, {
-			cwd,
-			// Use the shell so package-manager and PM2 shims (e.g. npm.cmd,
-			// pm2.cmd) resolve correctly on Windows. Commands come from the
-			// project's own deploy config (admin-controlled), not from payloads.
-			shell: true,
-			env: env ?? { ...process.env },
-		});
-
-		const bufferOut: string[] = [];
-		const bufferErr: string[] = [];
-
-		proc.stdout.on('data', (chunk: Buffer) => {
-			bufferOut.push(chunk.toString());
-			flushBuffer(bufferOut, (l) => onLine(l, false));
-		});
-
-		proc.stderr.on('data', (chunk: Buffer) => {
-			bufferErr.push(chunk.toString());
-			flushBuffer(bufferErr, (l) => onLine(l, true));
-		});
-
-		proc.on('close', (code) => {
-			flushBuffer(bufferOut, (l) => onLine(l, false), true);
-			flushBuffer(bufferErr, (l) => onLine(l, true), true);
-			resolve(code ?? 1);
-		});
-
-		proc.on('error', (err) => {
-			onLine(`Command failed to start: ${err.message}`, true);
-			resolve(1);
-		});
-	});
-}
-
-function flushBuffer(
-	buffer: string[],
-	onLine: (line: string) => void,
-	flushAll = false,
-): void {
-	const full = buffer.join('');
-	buffer.length = 0;
-	if (!full) return;
-
-	const lines = full.split('\n');
-	if (full.endsWith('\n')) {
-		lines.forEach((l) => l && onLine(l));
-	} else if (flushAll) {
-		lines.forEach((l) => l && onLine(l));
-	} else {
-		lines.slice(0, -1).forEach((l) => l && onLine(l));
-		buffer.push(lines[lines.length - 1]);
-	}
 }
 
 /**

@@ -124,13 +124,14 @@ export class NginxService {
 			return results;
 		}
 
+		const parsePromises: Promise<NginxConfigFile | null>[] = [];
+
 		// 1. Scan root conf files in baseDir
 		const rootEntries = await fs.promises.readdir(this.baseDir, { withFileTypes: true });
 		for (const entry of rootEntries) {
 			if (entry.isFile() && entry.name.endsWith('.conf')) {
 				const fullPath = path.join(this.baseDir, entry.name);
-				const parsed = await this.parseConfigFile(entry.name, entry.name, fullPath, false);
-				if (parsed) results.push(parsed);
+				parsePromises.push(this.parseConfigFile(entry.name, entry.name, fullPath, false));
 			}
 		}
 
@@ -142,10 +143,14 @@ export class NginxService {
 				if (entry.isFile() && entry.name.endsWith('.conf')) {
 					const fullPath = path.join(appsDir, entry.name);
 					const relativePath = `apps/${entry.name}`;
-					const parsed = await this.parseConfigFile(entry.name, relativePath, fullPath, true);
-					if (parsed) results.push(parsed);
+					parsePromises.push(this.parseConfigFile(entry.name, relativePath, fullPath, true));
 				}
 			}
+		}
+
+		const parsedFiles = await Promise.all(parsePromises);
+		for (const file of parsedFiles) {
+			if (file) results.push(file);
 		}
 
 		// Sort: main configs first, then apps alphabetically

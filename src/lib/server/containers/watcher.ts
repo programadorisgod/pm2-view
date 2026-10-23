@@ -17,6 +17,7 @@ const DEFAULT_STATE: WatchState = {
 export class WatcherService {
 	private readonly store = new JsonStore<WatchState>('watcher.json', DEFAULT_STATE);
 	private timer: NodeJS.Timeout | null = null;
+	private firstTimer: NodeJS.Timeout | null = null;
 	private pollInFlight = false;
 
 	constructor(
@@ -33,11 +34,18 @@ export class WatcherService {
 		if (!this.state.enabled) return;
 		this.timer = setInterval(() => void this.pollOnce(), this.state.intervalMs);
 		this.timer.unref();
-		const first = setTimeout(() => void this.pollOnce(), 500);
-		first.unref();
+		this.firstTimer = setTimeout(() => {
+			this.firstTimer = null;
+			void this.pollOnce();
+		}, 500);
+		this.firstTimer.unref();
 	}
 
 	stop(): void {
+		if (this.firstTimer) {
+			clearTimeout(this.firstTimer);
+			this.firstTimer = null;
+		}
 		if (this.timer) {
 			clearInterval(this.timer);
 			this.timer = null;

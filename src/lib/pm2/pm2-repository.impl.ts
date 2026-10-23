@@ -7,6 +7,9 @@ import type { IPM2Repository, PM2Process, PM2Log } from './pm2.types';
 import { normalizePagination, type PaginationParams, type PaginatedResult } from '$lib/pagination';
 import { escapeShellArg } from '$lib/utils/shell';
 import { logger } from '$lib/logger';
+import { parseTimestamp, classifyLogLevel } from './pm2-log-parser';
+
+export { parseTimestamp, classifyLogLevel };
 
 const execAsync = promisify(exec);
 
@@ -27,15 +30,60 @@ export function parsePM2JList(stdout: string): any[] {
 		// Output contains non-JSON noise (banners, warnings, etc.)
 	}
 
-	// Find the JSON array slice by searching candidate '[' and ']' pairs
+	// Linear scanner looking for candidate balanced JSON arrays
 	let start = trimmed.indexOf('[');
 	while (start !== -1) {
 		const tag = trimmed.slice(start, start + 5);
+		// Ignore banners like [PM2] and tags like [WARN]
+		if (tag !== '[PM2]' && !/^\[[A-Z0-9_-]+\]/i.test(trimmed.slice(start, start + 15))) {
+			let depth = 0;
+			let inString = false;
+			let escape = false;
+
+			for (let i = start; i < trimmed.length; i++) {
+				const char = trimmed[i];
+				if (escape) {
+					escape = false;
+					continue;
+				}
+				if (char === '\\') {
+					escape = true;
+					continue;
+				}
+				if (char === '"') {
+					inString = !inString;
+					continue;
+				}
+				if (!inString) {
+					if (char === '[') depth++;
+					else if (char === ']') {
+						depth--;
+						if (depth === 0) {
+							const candidate = trimmed.slice(start, i + 1);
+							try {
+								const parsed = JSON.parse(candidate);
+								if (Array.isArray(parsed)) return parsed;
+							} catch {
+								// continue outer search
+							}
+							break;
+						}
+					}
+				}
+			}
+		}
+		start = trimmed.indexOf('[', start + 1);
+	}
+
+	// Fallback to searching backwards from closing bracket
+	let fallbackStart = trimmed.indexOf('[');
+	while (fallbackStart !== -1) {
+		const tag = trimmed.slice(fallbackStart, fallbackStart + 5);
 		if (tag !== '[PM2]') {
 			let end = trimmed.lastIndexOf(']');
-			while (end !== -1 && end > start) {
+			while (end !== -1 && end > fallbackStart) {
 				try {
-					const candidate = trimmed.slice(start, end + 1);
+					const candidate = trimmed.slice(fallbackStart, end + 1);
 					const parsed = JSON.parse(candidate);
 					if (Array.isArray(parsed)) {
 						return parsed;
@@ -46,7 +94,7 @@ export function parsePM2JList(stdout: string): any[] {
 				end = trimmed.lastIndexOf(']', end - 1);
 			}
 		}
-		start = trimmed.indexOf('[', start + 1);
+		fallbackStart = trimmed.indexOf('[', fallbackStart + 1);
 	}
 
 	throw new Error(`Failed to parse PM2 jlist output: ${trimmed.slice(0, 150)}`);
@@ -64,9 +112,18 @@ export function isPM2Module(p: any): boolean {
 }
 
 export class PM2Repository implements IPM2Repository {
+	private static readonly MAX_LOG_PATH_CACHE = 500;
 	private logPathCache = new Map<string, { out: string | null; err: string | null }>();
 	private listCache: { data: PM2Process[]; timestamp: number } | null = null;
 	private readonly CACHE_TTL_MS = 2500; // 2.5s TTL for snappy navigation between pages
+
+	private setLogPathCache(name: string, paths: { out: string | null; err: string | null }): void {
+		if (this.logPathCache.size >= PM2Repository.MAX_LOG_PATH_CACHE) {
+			const firstKey = this.logPathCache.keys().next().value;
+			if (firstKey !== undefined) this.logPathCache.delete(firstKey);
+		}
+		this.logPathCache.set(name, paths);
+	}
 
 	private sanitizeProcess(p: any): PM2Process {
 		// Strip giant process.env dictionaries and keep only necessary fields for UI
@@ -135,19 +192,19 @@ export class PM2Repository implements IPM2Repository {
 		}
 	}
 
-  async restart(name: string): Promise<void> {
-    const safeName = escapeShellArg(name);
-    await execAsync(`pm2 restart ${safeName}`);
-    this.logPathCache.delete(name);
-    this.listCache = null;
-  }
+	async restart(name: string): Promise<void> {
+		const safeName = escapeShellArg(name);
+		await execAsync(`pm2 restart ${safeName}`);
+		this.logPathCache.delete(name);
+		this.listCache = null;
+	}
 
-  async start(name: string): Promise<void> {
-    const safeName = escapeShellArg(name);
-    await execAsync(`pm2 start ${safeName}`);
-    this.logPathCache.delete(name);
-    this.listCache = null;
-  }
+	async start(name: string): Promise<void> {
+		const safeName = escapeShellArg(name);
+		await execAsync(`pm2 start ${safeName}`);
+		this.logPathCache.delete(name);
+		this.listCache = null;
+	}
 
 	async stop(name: string): Promise<void> {
 		const safeName = escapeShellArg(name);
@@ -177,14 +234,15 @@ export class PM2Repository implements IPM2Repository {
 				out: proc.pm2_env.pm_out_log_path ?? null,
 				err: proc.pm2_env.pm_err_log_path ?? null,
 			};
-			this.logPathCache.set(name, paths);
+			this.setLogPathCache(name, paths);
 		}
 
 		const result: PM2Log[] = [];
 
 		if (paths.out && existsSync(paths.out)) {
 			const logLines = await this.readLogFile(paths.out, lines);
-			for (const line of logLines) {
+			for (let i = 0; i < logLines.length; i++) {
+				const line = logLines[i];
 				const ts = parseTimestamp(line);
 				result.push({ type: 'out', data: line, timestamp: ts ?? new Date(0), hasTimestamp: ts !== null, level: classifyLogLevel(line, 'out') });
 			}
@@ -192,7 +250,8 @@ export class PM2Repository implements IPM2Repository {
 
 		if (paths.err && existsSync(paths.err)) {
 			const logLines = await this.readLogFile(paths.err, lines);
-			for (const line of logLines) {
+			for (let i = 0; i < logLines.length; i++) {
+				const line = logLines[i];
 				const ts = parseTimestamp(line);
 				result.push({ type: 'err', data: line, timestamp: ts ?? new Date(0), hasTimestamp: ts !== null, level: classifyLogLevel(line, 'err') });
 			}
@@ -227,103 +286,4 @@ export class PM2Repository implements IPM2Repository {
 			throw error;
 		}
 	}
-}
-
-/**
- * Extracts timestamp from a PM2 log line.
- * PM2 format: "2026-04-28 15:02:14: message..." or "[out] 2026-04-28 15:02:14: ..."
- * Returns null if no timestamp is found (PM2 only prefixes timestamps when
- * the process is started with the `--time` option).
- */
-function parseTimestamp(line: string): Date | null {
-	// Match YYYY-MM-DD HH:MM:SS pattern (with optional leading prefix like "[out] ")
-	const match = line.match(/(\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2})/);
-	if (match) {
-		const parsed = new Date(match[1]);
-		if (!isNaN(parsed.getTime())) {
-			return parsed;
-		}
-	}
-	return null;
-}
-
-/**
- * Content-based log level classification.
- * PM2 routes stdout → out file, stderr → err file, but many apps write
- * informational startup messages or warnings to stderr. This function overrides the
- * stream-based default when the content clearly indicates a different level.
- */
-export function classifyLogLevel(line: string, streamType: 'out' | 'err'): 'info' | 'warn' | 'error' {
-	// Explicit warning tags (brackets, tags, or emojis in Spanish & English)
-	const hasExplicitWarn =
-		/\[\s*(alerta|alert|warn|warning|advertencia|aviso|caution|atenci[oó]n)\s*\]/i.test(line) ||
-		/\b(alerta|alert|warn|warning|advertencia|aviso|caution)\b[:\s]/i.test(line) ||
-		/⚠️/u.test(line);
-
-	// Explicit error tags
-	const hasExplicitError =
-		/\[\s*(error|err|fatal|panic|crit|critical)\s*\]/i.test(line) ||
-		/\b(err(o[r]?)?|fatal|panic|critical)\b[:\s]/i.test(line) ||
-		/❌|🛑/u.test(line);
-
-	// Explicit info tags
-	const hasExplicitInfo =
-		/\[\s*(info|information|debug|diagnostic|diag|trace)\s*\]/i.test(line) ||
-		/\b(info|debug|diagnostic)\b[:\s]/i.test(line) ||
-		/ℹ️/u.test(line);
-
-	// True fatal/hard error patterns (override stream-based default when found in stdout)
-	const hasErrorPattern =
-		/\b(FATAL|panic|uncaught exception|unhandled rejection)\b/i.test(line) ||
-		/\bsegmentation fault|core dumped\b/i.test(line) ||
-		/\bout of memory\b/i.test(line) ||
-		/\bcannot (read|find|open|access|connect|resolve)\b/i.test(line) ||
-		/\berrno\b.*\b(coded|=\s*\d+)\b/i.test(line) ||
-		/\bstack trace\b/i.test(line) ||
-		/\b(EADDRINUSE|EACCES|ENOTFOUND|ECONNREFUSED|ECONNRESET|ETIMEDOUT)\b/i.test(line) ||
-		/\baddress already in use\b/i.test(line) ||
-		/\bport\b.{0,20}\b(in use|already|conflict|error|fail)\b/i.test(line) ||
-		/^Trace\s*\(/.test(line) || // Node.js stack trace start
-		/^\s+at\s+/.test(line); // Node.js stack trace frame
-
-	// True warning patterns (retries, business alerts, deadlocks, desbalances, deprecations)
-	const hasWarnPattern =
-		/\b(warn(ing)?|alerta|advertencia|aviso|caution)\b/i.test(line) ||
-		/\b(retry(ing)?|reintento|reintentando|attempt\s*\d+)\b/i.test(line) ||
-		/\bdeadlock.*retry\b/i.test(line) ||
-		/\bdesbalance\b/i.test(line) ||
-		/\bumbral\b/i.test(line) ||
-		/\bdeprecat(ed|ion)\b/i.test(line);
-
-	// False positives: stderr lines that are NOT errors
-	// Common in Node.js / Python apps that write startup info to stderr
-	const isFalsePositive =
-		/\b(next|nuxt|vite|astro|sveltekit|react|vue|angular|nest|express|fastapi|uvicorn)\b.*start/i.test(line) ||
-		/\b(pm2|node|npm|yarn|pnpm|python)\b.{0,40}(start|running|installed|version|listening|ready|init|exit|loaded|boot|compil)/i.test(line) ||
-		/\b(LISTENING|listening on|started on|ready)\b/i.test(line) ||
-		/\bcompil(e|ing|ed|er)\b/i.test(line) ||
-		/\b(build|building|built)\b/i.test(line) ||
-		/\b(hot[- ]?module|hmr|module reload)\b/i.test(line) ||
-		/\b(deploy|deploying|deployed)\b/i.test(line) ||
-		/\b(watching|watch)\b/i.test(line) ||
-		/\b(discount|discountinued)\b/i.test(line) ||
-		/\b(node_modules|\.next|\.nuxt)\b.*\b(start|running|loaded|ready)\b/i.test(line) ||
-		/^node:\s.*not found$/i.test(line) ||
-		/^\s*$/.test(line);
-
-	// Priority resolution:
-	// 1. Explicit tags:
-	if (hasExplicitWarn && !hasExplicitError) return 'warn';
-	if (hasExplicitError) return 'error';
-	if (hasExplicitInfo && !hasErrorPattern && !hasWarnPattern) return 'info';
-
-	// 2. Strong content patterns:
-	if (hasWarnPattern && !hasErrorPattern) return 'warn';
-	if (hasErrorPattern) return 'error';
-
-	// 3. Demote known false-positives in stderr to info:
-	if (streamType === 'err' && isFalsePositive) return 'info';
-
-	// 4. Default: match the stream
-	return streamType === 'err' ? 'error' : 'info';
 }

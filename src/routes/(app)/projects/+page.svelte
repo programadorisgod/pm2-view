@@ -51,10 +51,28 @@
     return false;
   }
 
-  let filteredProcesses = $derived(processes.filter((p) => matchesSearch(p, searchQuery)));
-  let favoriteProcesses = $derived(filteredProcesses.filter((p) => p.isFavorite));
-  let nonFavoriteProcesses = $derived(filteredProcesses.filter((p) => !p.isFavorite));
+  let categorizedProcesses = $derived.by(() => {
+    const favorites: VisibleProject[] = [];
+    const nonFavorites: VisibleProject[] = [];
+
+    for (let i = 0; i < processes.length; i++) {
+      const p = processes[i];
+      if (matchesSearch(p, searchQuery)) {
+        if (p.isFavorite) {
+          favorites.push(p);
+        } else {
+          nonFavorites.push(p);
+        }
+      }
+    }
+
+    return { favorites, nonFavorites };
+  });
+
+  let favoriteProcesses = $derived(categorizedProcesses.favorites);
+  let nonFavoriteProcesses = $derived(categorizedProcesses.nonFavorites);
   let displayedNonFavorites = $derived(nonFavoriteProcesses);
+  let filteredProcesses = $derived([...favoriteProcesses, ...nonFavoriteProcesses]);
   let togglingFavorite = $state<string | null>(null);
   let actionLoadingKey = $state<string | null>(null);
 

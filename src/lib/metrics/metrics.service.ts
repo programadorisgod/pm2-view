@@ -31,15 +31,28 @@ export class MetricsService {
 				};
 			}
 
-			const totalCpu = processes.reduce((sum, p) => sum + (p.cpu || 0), 0);
-			const totalRam = processes.reduce((sum, p) => sum + (p.monit?.memory || 0), 0);
-			const running = processes.filter((p) => p.status === 'online').length;
+			// Single-pass O(N) accumulation
+			let totalCpu = 0;
+			let totalRam = 0;
+			let running = 0;
+			let totalUptimeMs = 0;
+			let uptimeCount = 0;
+			const now = Date.now();
 
-			const uptimes = processes
-				.filter((p) => p.pm2_env?.pm_uptime)
-				.map((p) => Date.now() - p.pm2_env.pm_uptime);
+			for (let i = 0; i < processes.length; i++) {
+				const p = processes[i];
+				totalCpu += p.cpu || 0;
+				totalRam += p.monit?.memory || 0;
+				if (p.status === 'online') {
+					running++;
+				}
+				if (p.pm2_env?.pm_uptime) {
+					totalUptimeMs += now - p.pm2_env.pm_uptime;
+					uptimeCount++;
+				}
+			}
 
-			const avgUptimeMs = uptimes.length > 0 ? uptimes.reduce((a, b) => a + b, 0) / uptimes.length : 0;
+			const avgUptimeMs = uptimeCount > 0 ? totalUptimeMs / uptimeCount : 0;
 
 			return {
 				totalCpu,

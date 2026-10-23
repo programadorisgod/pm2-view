@@ -10,6 +10,59 @@ import { logger } from '$lib/logger';
 
 const execAsync = promisify(exec);
 
+/**
+ * Safely parses the JSON output from `pm2 jlist`.
+ * PM2 CLI commands frequently output banners, module notices, or warnings
+ * before or after the JSON payload (e.g. "[PM2] ...", "[PM2][WARN] ...", "Module: ...").
+ */
+export function parsePM2JList(stdout: string): any[] {
+	const trimmed = stdout.trim();
+	if (!trimmed) return [];
+
+	// Fast path: clean JSON output
+	try {
+		const parsed = JSON.parse(trimmed);
+		if (Array.isArray(parsed)) return parsed;
+	} catch {
+		// Output contains non-JSON noise (banners, warnings, etc.)
+	}
+
+	// Find the JSON array slice by searching candidate '[' and ']' pairs
+	let start = trimmed.indexOf('[');
+	while (start !== -1) {
+		const tag = trimmed.slice(start, start + 5);
+		if (tag !== '[PM2]') {
+			let end = trimmed.lastIndexOf(']');
+			while (end !== -1 && end > start) {
+				try {
+					const candidate = trimmed.slice(start, end + 1);
+					const parsed = JSON.parse(candidate);
+					if (Array.isArray(parsed)) {
+						return parsed;
+					}
+				} catch {
+					// Try previous ']'
+				}
+				end = trimmed.lastIndexOf(']', end - 1);
+			}
+		}
+		start = trimmed.indexOf('[', start + 1);
+	}
+
+	throw new Error(`Failed to parse PM2 jlist output: ${trimmed.slice(0, 150)}`);
+}
+
+/**
+ * Checks if a PM2 process is an internal PM2 module (e.g. pm2-logrotate).
+ */
+export function isPM2Module(p: any): boolean {
+	return Boolean(
+		p?.pm2_env?.pmx_module === true ||
+		p?.pm2_env?.axm_options?.isModule === true ||
+		p?.pmx_module === true
+	);
+}
+
 export class PM2Repository implements IPM2Repository {
 	private logPathCache = new Map<string, { out: string | null; err: string | null }>();
 	private listCache: { data: PM2Process[]; timestamp: number } | null = null;
@@ -47,8 +100,10 @@ export class PM2Repository implements IPM2Repository {
 				processes = this.listCache.data;
 			} else {
 				const { stdout } = await execAsync('pm2 jlist');
-				const raw = JSON.parse(stdout) as any[];
-				processes = raw.map(p => this.sanitizeProcess(p));
+				const raw = parsePM2JList(stdout);
+				processes = raw
+					.filter(p => !isPM2Module(p))
+					.map(p => this.sanitizeProcess(p));
 				this.listCache = { data: processes, timestamp: now };
 			}
 
@@ -64,7 +119,7 @@ export class PM2Repository implements IPM2Repository {
 				hasMore: offset + paginated.length < processes.length
 			};
 		} catch (error) {
-			logger.error('Failed to list PM2 processes', { error: String(error) });
+			logger.error('Failed to list PM2 processes', { error: error instanceof Error ? error.message : String(error) });
 			return params ? { data: [], total: 0, limit: 50, offset: 0, hasMore: false } : [];
 		}
 	}
@@ -75,7 +130,7 @@ export class PM2Repository implements IPM2Repository {
 			const processes = Array.isArray(listResult) ? listResult : listResult.data;
 			return processes.find(p => p.pm_id.toString() === name || p.name === name) ?? null;
 		} catch (error) {
-			logger.error('Failed to describe PM2 process', { name, error: String(error) });
+			logger.error('Failed to describe PM2 process', { name, error: error instanceof Error ? error.message : String(error) });
 			return null;
 		}
 	}
@@ -152,7 +207,7 @@ export class PM2Repository implements IPM2Repository {
 			const { stdout } = await execAsync(`tail -n ${lines} ${safePath}`);
 			return stdout.split('\n').filter(l => l.trim());
 		} catch (error) {
-			logger.warn('Failed to read log file', { path, error: String(error) });
+			logger.warn('Failed to read log file', { path, error: error instanceof Error ? error.message : String(error) });
 			return [];
 		}
 	}
@@ -168,7 +223,7 @@ export class PM2Repository implements IPM2Repository {
 		try {
 			await truncate(logPath, 0);
 		} catch (error) {
-			logger.warn('Failed to clear log file', { path: logPath, error: String(error) });
+			logger.warn('Failed to clear log file', { path: logPath, error: error instanceof Error ? error.message : String(error) });
 			throw error;
 		}
 	}

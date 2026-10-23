@@ -54,6 +54,7 @@
   );
   let deleteModal = $state({ open: false });
   let deleteLoading = $state(false);
+  let actionLoading = $state<string | null>(null);
   let restartModal = $state({ open: false });
   let stopModal = $state({ open: false });
   let deployModal = $state({ open: false });
@@ -166,6 +167,8 @@
   }
 
   async function handleAction(action: "restart" | "stop" | "start") {
+    if (actionLoading) return;
+    actionLoading = action;
     feedback = null;
     try {
       const res = await fetch(`${base}/projects/api?action=${action}`, {
@@ -185,6 +188,8 @@
       }
     } catch {
       feedback = { type: "error", text: `Failed to ${action}` };
+    } finally {
+      actionLoading = null;
     }
   }
 
@@ -506,26 +511,66 @@
       </button>
       {#if process.status === "online"}
         <button
-          class="btn-secondary px-3 py-1.5 text-caption"
-          onclick={requestRestart}>Restart</button
+          class="btn-secondary px-3 py-1.5 text-caption transition-all active:scale-95 duration-150 inline-flex items-center gap-1.5"
+          disabled={actionLoading !== null}
+          onclick={requestRestart}
         >
+          {#if actionLoading === "restart"}
+            <svg class="w-3.5 h-3.5 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+            </svg>
+            <span>Restarting...</span>
+          {:else}
+            <span>Restart</span>
+          {/if}
+        </button>
         <button
-          class="btn-secondary px-3 py-1.5 text-caption"
-          onclick={requestStop}>Stop</button
+          class="btn-secondary px-3 py-1.5 text-caption transition-all active:scale-95 duration-150 inline-flex items-center gap-1.5"
+          disabled={actionLoading !== null}
+          onclick={requestStop}
         >
+          {#if actionLoading === "stop"}
+            <svg class="w-3.5 h-3.5 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+            </svg>
+            <span>Stopping...</span>
+          {:else}
+            <span>Stop</span>
+          {/if}
+        </button>
       {:else if process.status === "stopped"}
         <button
-          class="btn-success px-3 py-1.5 text-caption"
-          onclick={() => handleAction("start")}>Start</button
+          class="btn-success px-3 py-1.5 text-caption transition-all active:scale-95 duration-150 inline-flex items-center gap-1.5"
+          disabled={actionLoading !== null}
+          onclick={() => handleAction("start")}
         >
+          {#if actionLoading === "start"}
+            <svg class="w-3.5 h-3.5 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+            </svg>
+            <span>Starting...</span>
+          {:else}
+            <span>Start</span>
+          {/if}
+        </button>
       {:else if process.status === "error"}
         <button
-          class="btn-secondary px-3 py-1.5 text-caption"
-          onclick={requestRestart}>Restart</button
+          class="btn-secondary px-3 py-1.5 text-caption transition-all active:scale-95 duration-150 inline-flex items-center gap-1.5"
+          disabled={actionLoading !== null}
+          onclick={requestRestart}
         >
+          {#if actionLoading === "restart"}
+            <svg class="w-3.5 h-3.5 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+            </svg>
+            <span>Restarting...</span>
+          {:else}
+            <span>Restart</span>
+          {/if}
+        </button>
       {/if}
       <button
-        class="btn-danger px-3 py-1.5 text-caption"
+        class="btn-danger px-3 py-1.5 text-caption transition-all active:scale-95 duration-150"
         onclick={requestDelete}>Delete</button
       >
     </div>

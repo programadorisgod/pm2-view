@@ -22,12 +22,18 @@
 		sseClient = createSSEClient(`${base}/api/sse`);
 
 		sseClient.onMetrics((event: MetricsEvent) => {
-			// Update the specific process metrics in the list
-			processes = processes.map((p) =>
-				p.pm_id.toString() === event.processId
-					? { ...p, cpu: event.cpu, memoryMB: event.memoryMB, status: event.status as ProcessWithStatus['status'] }
-					: p
-			);
+			const idx = processes.findIndex((p) => p.pm_id.toString() === event.processId);
+			if (idx !== -1) {
+				const current = processes[idx];
+				if (current.cpu !== event.cpu || current.memoryMB !== event.memoryMB || current.status !== event.status) {
+					processes[idx] = {
+						...current,
+						cpu: event.cpu,
+						memoryMB: event.memoryMB,
+						status: event.status as ProcessWithStatus['status']
+					};
+				}
+			}
 		});
 
 		return () => {

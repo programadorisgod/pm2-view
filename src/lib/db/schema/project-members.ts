@@ -1,19 +1,26 @@
 // Note: Schema uses sqlite-core imports but is dialect-agnostic at the Drizzle driver level.
 // Drizzle handles translation between SQLite and PostgreSQL for common column types (text, integer, etc.).
 // No changes needed for multi-dialect support - the driver layer handles dialect translation.
-import { sqliteTable, text, integer } from 'drizzle-orm/sqlite-core';
+import { sqliteTable, text, integer, index } from 'drizzle-orm/sqlite-core';
 import { sql } from 'drizzle-orm';
 import { relations } from 'drizzle-orm';
 import { projects } from './projects';
 import { users } from './users';
 
-export const projectMembers = sqliteTable('project_members', {
-	id: text('id').primaryKey(),
-	projectId: text('project_id').notNull().references(() => projects.id),
-	userId: text('user_id').notNull().references(() => users.id),
-	role: text('role').notNull(), // 'owner', 'editor', 'viewer'
-	createdAt: integer('created_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`)
-});
+export const projectMembers = sqliteTable(
+	'project_members',
+	{
+		id: text('id').primaryKey(),
+		projectId: text('project_id').notNull().references(() => projects.id),
+		userId: text('user_id').notNull().references(() => users.id),
+		role: text('role').notNull(), // 'owner', 'editor', 'viewer'
+		createdAt: integer('created_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`)
+	},
+	(table) => [
+		index('project_members_project_id_idx').on(table.projectId),
+		index('project_members_user_id_idx').on(table.userId)
+	]
+);
 
 export const projectMembersRelations = relations(projectMembers, ({ one }) => ({
 	project: one(projects, { fields: [projectMembers.projectId], references: [projects.id] }),

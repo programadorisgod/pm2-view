@@ -7,13 +7,10 @@ import type { ITeamRepository } from '$lib/db/repositories/team-repository.inter
 import type { ProcessWithStatus, PM2Process } from '$lib/pm2/pm2.types';
 import { PM2Service } from '$lib/pm2/pm2.service';
 import { findEcosystemFiles } from '$lib/utils/ecosystem';
-import { existsSync, readFileSync } from 'fs';
-import { join, basename, dirname } from 'path';
-
-const WORKSPACE_INDICATORS = [
-	'pnpm-workspace.yaml', 'lerna.json', 'nx.json',
-	'turbo.json', 'rush.json', '.yarnrc.yml',
-];
+import { existsSync } from 'fs';
+import { basename } from 'path';
+import { WorkspaceDetector } from './project-listing/workspace-detector';
+import { ProjectGrouper } from './project-listing/project-grouper';
 
 export interface VisibleProject extends ProcessWithStatus {
 	accessType: 'personal' | 'team' | 'shared' | 'admin';
@@ -30,10 +27,8 @@ export interface VisibleProject extends ProcessWithStatus {
  * Shows DB projects (with targetPath) even when PM2 is not running them.
  */
 export class ProjectListingService {
-	private static workspaceCache = new Map<string, { root: string | null; timestamp: number }>();
 	private static ecosystemCache = new Map<string, { files: string[]; timestamp: number }>();
-	private static pm2NamesCache = new Map<string, string[]>();
-	private static readonly FS_CACHE_TTL = 30000; // 30s cache for directory structure
+	private static readonly FS_CACHE_TTL = 30000;
 	private static readonly MAX_CACHE_SIZE = 500;
 
 	private static setBoundedCache<T>(map: Map<string, T>, key: string, value: T): void {
@@ -50,39 +45,6 @@ export class ProjectListingService {
 		private teamRepo: ITeamRepository,
 		private favoriteRepo: ProjectFavoriteRepository
 	) {}
-
-	private getCachedWorkspaceRoot(startDir: string): string | null {
-		const dir = startDir.replace(/\/+$/, '');
-		const now = Date.now();
-		const cached = ProjectListingService.workspaceCache.get(dir);
-		if (cached && now - cached.timestamp < ProjectListingService.FS_CACHE_TTL) {
-			return cached.root;
-		}
-
-		let current = dir;
-		let wsRoot: string | null = null;
-		for (let i = 0; i < 3; i++) {
-			for (const file of WORKSPACE_INDICATORS) {
-				if (existsSync(join(current, file))) { wsRoot = current; break; }
-			}
-			if (!wsRoot) {
-				const pkgPath = join(current, 'package.json');
-				if (existsSync(pkgPath)) {
-					try {
-						const pkg = JSON.parse(readFileSync(pkgPath, 'utf-8'));
-						if (pkg.workspaces) wsRoot = current;
-					} catch { /* ignore */ }
-				}
-			}
-			if (wsRoot) break;
-			const parent = dirname(current);
-			if (parent === current) break;
-			current = parent;
-		}
-
-		ProjectListingService.setBoundedCache(ProjectListingService.workspaceCache, dir, { root: wsRoot, timestamp: now });
-		return wsRoot;
-	}
 
 	private async getCachedEcosystemFiles(targetPath: string): Promise<string[]> {
 		const now = Date.now();
@@ -103,15 +65,16 @@ export class ProjectListingService {
 	async getVisibleProjects(userId: string, userRole: string): Promise<VisibleProject[]> {
 		const isAdmin = userRole === 'admin';
 
-		// Parallelize initial database and PM2 queries
-		const [rawFavorites, userTeams, dbProjects, processes] = await Promise.all([
+		// 1. Parallelize initial queries without duplicating team queries
+		const [rawFavorites, userTeams, processes] = await Promise.all([
 			this.favoriteRepo.getUserFavorites(userId),
 			this.teamRepo.getUserTeams(userId),
-			userRole === 'admin'
-				? this.projectRepo.getAll()
-				: this.teamRepo.getUserTeams(userId).then(teams => this.projectRepo.findByAccess({ userId, teamIds: teams.map(t => t.id) })),
 			this.pm2Service.getAllProcesses()
 		]);
+
+		const dbProjects = isAdmin
+			? await this.projectRepo.getAll()
+			: await this.projectRepo.findByAccess({ userId, teamIds: userTeams.map(t => t.id) });
 
 		const favoriteNames = new Set(rawFavorites);
 		const teamNameMap = new Map(userTeams.map(t => [t.id, t.name]));
@@ -119,29 +82,35 @@ export class ProjectListingService {
 		// Build maps: primary name -> project, and secondary name -> project
 		const primaryProjectMap = new Map(dbProjects.map(p => [p.pm2Name, p]));
 		const secondaryProjectMap = new Map<string, Project>();
+
 		for (const p of dbProjects) {
-			if (p.pm2Names) {
-				try {
-					const names = JSON.parse(p.pm2Names) as string[];
-					for (const n of names) {
-						if (n !== p.pm2Name) {
-							secondaryProjectMap.set(n, p);
-						}
+			const names = ProjectGrouper.parsePm2Names(p);
+			if (names) {
+				for (const n of names) {
+					if (n !== p.pm2Name) {
+						secondaryProjectMap.set(n, p);
 					}
-				} catch { /* ignore */ }
+				}
 			}
+		}
+
+		// Pre-compute workspace roots for processes with targetPath or pm_cwd
+		const procCwdMap = new Map<string, string>();
+		for (const proc of processes) {
+			const cwd = (proc.pm2_env?.pm_cwd ?? '').replace(/[/\\]+$/, '');
+			if (cwd) procCwdMap.set(proc.name, cwd);
 		}
 
 		// Detect and group workspace projects in-memory without synchronous blocking DB writes on read
 		for (const p of dbProjects) {
 			if (p.pm2Names || !p.targetPath) continue;
-			const wsRoot = this.getCachedWorkspaceRoot(p.targetPath);
+			const wsRoot = WorkspaceDetector.getWorkspaceRoot(p.targetPath);
 			if (!wsRoot) continue;
 
 			// Find all processes in this workspace
 			const wsProcesses = processes.filter(proc => {
-				const pCwd = (proc.pm2_env?.pm_cwd ?? '').replace(/\/+$/, '');
-				return pCwd.startsWith(wsRoot + '/') || pCwd === wsRoot;
+				const pCwd = procCwdMap.get(proc.name) ?? '';
+				return pCwd.startsWith(wsRoot + '/') || pCwd.startsWith(wsRoot + '\\') || pCwd === wsRoot;
 			});
 			if (wsProcesses.length <= 1) continue;
 
@@ -162,42 +131,26 @@ export class ProjectListingService {
 			...Array.from(primaryProjectMap.keys()),
 			...Array.from(secondaryProjectMap.keys()),
 		]);
+
 		for (const proc of processes) {
 			if (registeredNames.has(proc.name)) continue;
-			const cwd = (proc.pm2_env?.pm_cwd ?? '').replace(/\/+$/, '');
+			const cwd = procCwdMap.get(proc.name);
 			if (!cwd) continue;
-			let dir = cwd;
-			let wsRoot: string | null = null;
-			for (let i = 0; i < 4; i++) {
-				for (const file of WORKSPACE_INDICATORS) {
-					if (existsSync(join(dir, file))) { wsRoot = dir; break; }
-				}
-				if (!wsRoot) {
-					const pkgPath = join(dir, 'package.json');
-					if (existsSync(pkgPath)) {
-						try {
-							const pkg = JSON.parse(readFileSync(pkgPath, 'utf-8'));
-							if (pkg.workspaces) wsRoot = dir;
-						} catch { /* ignore */ }
-					}
-				}
-				if (wsRoot) break;
-				const parent = dirname(dir);
-				if (parent === dir) break;
-				dir = parent;
-			}
+
+			const wsRoot = WorkspaceDetector.getWorkspaceRoot(cwd);
 			if (!wsRoot) continue;
+
 			// Find all unregistered processes in this workspace
 			const wsProcesses = processes.filter(p => {
 				if (registeredNames.has(p.name)) return false;
-				const pCwd = (p.pm2_env?.pm_cwd ?? '').replace(/\/+$/, '');
-				return pCwd.startsWith(wsRoot + '/') || pCwd === wsRoot;
+				const pCwd = procCwdMap.get(p.name) ?? '';
+				return pCwd.startsWith(wsRoot + '/') || pCwd.startsWith(wsRoot + '\\') || pCwd === wsRoot;
 			});
 			if (wsProcesses.length <= 1) continue;
+
 			// Create a synthetic project entry for this workspace group
 			const groupPm2Names = wsProcesses.map(p => p.name);
 			const wsName = basename(wsRoot);
-			const primary = wsProcesses[0];
 			const syntheticProject: Project = {
 				id: `ws:${wsRoot}`,
 				userId: '',
@@ -213,13 +166,13 @@ export class ProjectListingService {
 				createdAt: new Date(),
 				pm2Names: JSON.stringify(groupPm2Names),
 			};
+
 			// Add to maps so the main loop picks them up
 			for (const n of groupPm2Names) {
 				if (n !== syntheticProject.pm2Name) secondaryProjectMap.set(n, syntheticProject);
+				registeredNames.add(n);
 			}
 			primaryProjectMap.set(syntheticProject.pm2Name, syntheticProject);
-			// Mark as registered so they're not added again
-			for (const n of groupPm2Names) registeredNames.add(n);
 		}
 
 		// Group processes by their project ID
@@ -228,24 +181,21 @@ export class ProjectListingService {
 
 		for (const proc of processes) {
 			// Check group (secondary) first — groups take precedence over individual registrations
-			let dbProject = secondaryProjectMap.get(proc.name);
-			if (!dbProject) {
-				// Check primary (individual) match
-				dbProject = primaryProjectMap.get(proc.name);
-			}
+			const dbProject = secondaryProjectMap.get(proc.name) ?? primaryProjectMap.get(proc.name);
 
 			if (dbProject) {
 				const existing = projectProcessMap.get(dbProject.id);
+				const statusProc = ProjectGrouper.toProcessWithStatus(proc);
 				if (existing) {
-					existing.processes.push(this.toProcessWithStatus(proc));
+					existing.processes.push(statusProc);
 				} else {
 					projectProcessMap.set(dbProject.id, {
 						project: dbProject,
-						processes: [this.toProcessWithStatus(proc)]
+						processes: [statusProc]
 					});
 				}
 			} else {
-				unmatchedProcesses.push(this.toProcessWithStatus(proc));
+				unmatchedProcesses.push(ProjectGrouper.toProcessWithStatus(proc));
 			}
 		}
 
@@ -253,19 +203,20 @@ export class ProjectListingService {
 		const results: VisibleProject[] = [];
 
 		for (const [_, { project: dbProject, processes: groupProcesses }] of projectProcessMap) {
-			const accessType = this.determineAccessType(dbProject, userId);
+			const accessType = ProjectGrouper.determineAccessType(dbProject, userId);
 			const teamName = dbProject.teamId ? teamNameMap.get(dbProject.teamId) : undefined;
-
-			// Use the first process (primary) as the main entry
 			const primary = groupProcesses[0];
-			const worstStatus = this.getWorstStatus(groupProcesses);
+			const worstStatus = ProjectGrouper.getWorstStatus(groupProcesses);
 
-			// Aggregate CPU and memory
-			const totalCpu = groupProcesses.reduce((sum, p) => sum + p.cpu, 0);
-			const totalMemory = groupProcesses.reduce((sum, p) => sum + p.memoryMB, 0);
+			// Single pass over groupProcesses for metrics
+			let totalCpu = 0;
+			let totalMemory = 0;
+			for (let i = 0; i < groupProcesses.length; i++) {
+				totalCpu += groupProcesses[i].cpu;
+				totalMemory += groupProcesses[i].memoryMB;
+			}
 
-			// Parse pm2Names from dbProject
-			const pm2Names = this.parsePm2Names(dbProject);
+			const pm2Names = ProjectGrouper.parsePm2Names(dbProject);
 
 			results.push({
 				...primary,
@@ -283,34 +234,12 @@ export class ProjectListingService {
 		}
 
 		// Group unmatched PM2 processes by workspace root (monorepo detection)
-
-		function findWorkspaceRoot(startDir: string): string | null {
-			let dir = startDir.replace(/\/+$/, '');
-			for (let i = 0; i < 4; i++) {
-				for (const file of WORKSPACE_INDICATORS) {
-					if (existsSync(join(dir, file))) return dir;
-				}
-				const pkgPath = join(dir, 'package.json');
-				if (existsSync(pkgPath)) {
-					try {
-						const pkg = JSON.parse(readFileSync(pkgPath, 'utf-8'));
-						if (pkg.workspaces) return dir;
-					} catch { /* ignore */ }
-				}
-				const parent = dirname(dir);
-				if (parent === dir) break;
-				dir = parent;
-			}
-			return null;
-		}
-
-		// Detect monorepo groups among unmatched processes
 		const workspaceGroups = new Map<string, ProcessWithStatus[]>();
 		const stillUnmatched: ProcessWithStatus[] = [];
 
 		for (const proc of unmatchedProcesses) {
-			const cwd = proc.pm2_env?.pm_cwd ?? '';
-			const root = cwd ? findWorkspaceRoot(cwd) : null;
+			const cwd = proc.pm2_env?.pm_cwd;
+			const root = cwd ? WorkspaceDetector.getWorkspaceRoot(cwd) : null;
 			if (root) {
 				const list = workspaceGroups.get(root) ?? [];
 				list.push(proc);
@@ -325,9 +254,13 @@ export class ProjectListingService {
 			for (const [root, groupProcesses] of workspaceGroups) {
 				if (groupProcesses.length > 1) {
 					const primary = groupProcesses[0];
-					const worstStatus = this.getWorstStatus(groupProcesses);
-					const totalCpu = groupProcesses.reduce((sum, p) => sum + p.cpu, 0);
-					const totalMemory = groupProcesses.reduce((sum, p) => sum + p.memoryMB, 0);
+					const worstStatus = ProjectGrouper.getWorstStatus(groupProcesses);
+					let totalCpu = 0;
+					let totalMemory = 0;
+					for (let i = 0; i < groupProcesses.length; i++) {
+						totalCpu += groupProcesses[i].cpu;
+						totalMemory += groupProcesses[i].memoryMB;
+					}
 					const groupPm2Names = groupProcesses.map(p => p.name);
 
 					results.push({
@@ -345,10 +278,8 @@ export class ProjectListingService {
 					stillUnmatched.push(groupProcesses[0]);
 				}
 			}
-		}
 
-		// Add remaining unmatched processes as individual entries (admin only)
-		if (isAdmin) {
+			// Add remaining unmatched processes as individual entries (admin only)
 			for (const proc of stillUnmatched) {
 				results.push({
 					...proc,
@@ -359,14 +290,11 @@ export class ProjectListingService {
 		}
 
 		// Add DB projects with targetPath that are NOT in PM2
-		// A project is "offline" if none of its pm2Names appear in running PM2 processes
 		const registeredPm2Names = new Set(processes.map(p => p.name));
 		const offlineProjects = dbProjects
 			.filter(dbProject => {
-				// Skip projects already represented in projectProcessMap
 				if (projectProcessMap.has(dbProject.id)) return false;
-				// Check if any process name in the group is running
-				const allNames = this.parsePm2Names(dbProject) ?? [dbProject.pm2Name];
+				const allNames = ProjectGrouper.parsePm2Names(dbProject) ?? [dbProject.pm2Name];
 				const hasRunningProcess = allNames.some(n => registeredPm2Names.has(n));
 				return !hasRunningProcess && dbProject.targetPath;
 			})
@@ -383,9 +311,9 @@ export class ProjectListingService {
 		for (const { dbProject, ecosystemFiles } of ecosystemResults) {
 			if (ecosystemFiles.length === 0) continue;
 
-			const accessType = this.determineAccessType(dbProject, userId);
+			const accessType = ProjectGrouper.determineAccessType(dbProject, userId);
 			const teamName = dbProject.teamId ? teamNameMap.get(dbProject.teamId) : undefined;
-			const pm2Names = this.parsePm2Names(dbProject);
+			const pm2Names = ProjectGrouper.parsePm2Names(dbProject);
 
 			// Create synthetic ProcessWithStatus for offline project
 			results.push({
@@ -412,82 +340,6 @@ export class ProjectListingService {
 		}
 
 		return results;
-	}
-
-	private parsePm2Names(dbProject: Project): string[] | undefined {
-		if (!dbProject.pm2Names) return undefined;
-		const cached = ProjectListingService.pm2NamesCache.get(dbProject.pm2Names);
-		if (cached) return cached;
-
-		try {
-			const parsed = JSON.parse(dbProject.pm2Names) as unknown;
-			if (Array.isArray(parsed) && parsed.length > 0) {
-				const names = parsed as string[];
-				ProjectListingService.setBoundedCache(ProjectListingService.pm2NamesCache, dbProject.pm2Names, names);
-				return names;
-			}
-		} catch { /* ignore */ }
-		return undefined;
-	}
-
-	private toProcessWithStatus(proc: PM2Process): ProcessWithStatus {
-		return {
-			...proc,
-			status: this.mapStatus(proc.pm2_env?.status, proc.pm2_env?.exit_code, proc.pm2_env?.autorestart),
-			cpu: proc.monit?.cpu ?? 0,
-			memoryMB: Math.round((proc.monit?.memory ?? 0) / 1024 / 1024),
-			uptimeFormatted: this.formatUptime(proc.pm2_env?.pm_uptime),
-		};
-	}
-
-	private mapStatus(pm2Status: string | undefined, exitCode?: number, autorestart?: boolean): ProcessWithStatus['status'] {
-		if (!pm2Status) return 'offline';
-		switch (pm2Status) {
-			case 'online':
-			case 'launching':
-				return 'online';
-			case 'stopped':
-			case 'stopping':
-			case 'one-launch-only':
-			case 'waiting restart':
-				return 'stopped';
-			case 'errored':
-			case 'error':
-				if (exitCode === 0 || autorestart === false) {
-					return 'stopped';
-				}
-				return 'error';
-			default:
-				return 'offline';
-		}
-	}
-
-	private getWorstStatus(processes: ProcessWithStatus[]): 'online' | 'stopped' | 'error' | 'offline' {
-		if (processes.some(p => p.status === 'error')) return 'error';
-		if (processes.some(p => p.status === 'stopped')) return 'stopped';
-		if (processes.every(p => p.status === 'online')) return 'online';
-		return 'offline';
-	}
-
-	private formatUptime(uptimeMs?: number): string {
-		if (!uptimeMs) return 'Unknown';
-		const seconds = Math.floor((Date.now() - uptimeMs) / 1000);
-		const days = Math.floor(seconds / 86400);
-		const hours = Math.floor((seconds % 86400) / 3600);
-		const minutes = Math.floor((seconds % 3600) / 60);
-		if (days > 0) return `${days}d ${hours}h`;
-		if (hours > 0) return `${hours}h ${minutes}m`;
-		return `${minutes}m`;
-	}
-
-	private determineAccessType(
-		dbProject: Project | undefined,
-		userId: string
-	): 'personal' | 'team' | 'shared' {
-		if (!dbProject) return 'personal';
-		if (dbProject.teamId) return 'team';
-		if (dbProject.userId === userId) return 'personal';
-		return 'shared';
 	}
 }
 

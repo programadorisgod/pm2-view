@@ -2,6 +2,8 @@
   import { Card } from '$lib/ui/components';
   import DateTimePicker from '$lib/ui/components/date-time-picker.svelte';
   import { base } from '$app/paths';
+  import { toLogEntries, type LogEntry, type RawLog } from './log-viewer/log-hasher';
+  import { filterLogsSinglePass } from './log-viewer/log-filter';
 
   let {
     processName,
@@ -19,57 +21,7 @@
     }>;
   } = $props();
 
-  type LogEntry = {
-    id: string;
-    type: 'out' | 'err';
-    data: string;
-    timestamp: Date;
-    hasTimestamp: boolean;
-    level: 'info' | 'warn' | 'error';
-    dismissed: boolean;
-  };
 
-  type RawLog = {
-    type: 'out' | 'err';
-    data: string;
-    timestamp: Date | string;
-    hasTimestamp?: boolean;
-    level: 'info' | 'warn' | 'error';
-  };
-
-  function logIdHash(ts: number, type: string, data: string): string {
-    let h = 5381;
-    const key = `${ts}:${type}:${data}`;
-    for (let i = 0; i < key.length; i++) {
-      h = ((h << 5) + h + key.charCodeAt(i)) | 0;
-    }
-    return `log-${h >>> 0}`;
-  }
-
-  // Duplicate log lines (same second, stream and content) produce identical
-  // hashes; keyed {#each} requires unique keys, so disambiguate by occurrence.
-  function toLogEntries(rawLogs: RawLog[]): LogEntry[] {
-    const seen = new Map<string, number>();
-    return rawLogs.map((raw) => {
-      const ts = raw.timestamp instanceof Date ? raw.timestamp : new Date(raw.timestamp);
-      const base = `${ts.getTime()}:${raw.type}:${raw.data}`;
-      const occurrence = seen.get(base) ?? 0;
-      seen.set(base, occurrence + 1);
-      const id =
-        occurrence === 0
-          ? logIdHash(ts.getTime(), raw.type, raw.data)
-          : `${logIdHash(ts.getTime(), raw.type, raw.data)}-${occurrence}`;
-      return {
-        id,
-        type: raw.type,
-        data: raw.data,
-        timestamp: ts,
-        hasTimestamp: raw.hasTimestamp ?? ts.getTime() > 0,
-        level: raw.level,
-        dismissed: false,
-      };
-    });
-  }
 
   let logs = $state<LogEntry[]>([]);
   let lineCount = $state(100);
@@ -105,7 +57,7 @@
 
   function ensureErrBaseline() {
     if (errBaseline !== null) return;
-    const errEntries = logs.filter((l) => l.type === 'err');
+    const errEntries = logs.filter((l) => l.level === 'error');
     const maxTs = errEntries.length > 0
       ? errEntries.reduce((max, l) => Math.max(max, l.timestamp.getTime()), 0)
       : 0;
@@ -127,7 +79,7 @@
   }
 
   function markErrorsSeen() {
-    const errEntries = logs.filter((l) => l.type === 'err');
+    const errEntries = logs.filter((l) => l.level === 'error');
     const maxTs = errEntries.reduce((max, l) => Math.max(max, l.timestamp.getTime()), 0);
     errBaseline = maxTs;
     try {
@@ -146,83 +98,29 @@
 
   function dismissAllErrors() {
     for (const log of logs) {
-      if (log.type === 'err') log.dismissed = true;
+      if (log.level === 'error' || log.level === 'warn') log.dismissed = true;
     }
     logs = [...logs];
     markErrorsSeen();
   }
 
-  let filteredLogs = $derived.by(() => {
-    let result = showDismissed ? logs : logs.filter((l) => !l.dismissed);
+  let filterResult = $derived(filterLogsSinglePass(logs, {
+    showDismissed,
+    filterLevel,
+    filterStream,
+    searchQuery,
+    dateFrom,
+    dateTo,
+    sortOrder,
+    errBaseline,
+  }));
 
-    if (filterLevel !== 'all') {
-      result = result.filter((l) => l.level === filterLevel);
-    }
-    if (filterStream !== 'all') {
-      result = result.filter((l) => l.type === filterStream);
-    }
-    if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase();
-      result = result.filter((l) => l.data.toLowerCase().includes(q));
-    }
-    if (dateFrom) {
-      const from = new Date(dateFrom);
-      if (!isNaN(from.getTime())) {
-        result = result.filter((l) => l.timestamp >= from);
-      }
-    }
-    if (dateTo) {
-      const to = new Date(dateTo);
-      if (!isNaN(to.getTime())) {
-        result = result.filter((l) => l.timestamp <= to);
-      }
-    }
-    result = sortOrder === 'newest'
-      ? [...result].sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime())
-      : result;
-    return result;
-  });
-
-  // Counts exclude level filter so tabs always show correct totals
-  let logsForCounts = $derived.by(() => {
-    let result = showDismissed ? logs : logs.filter((l) => !l.dismissed);
-    if (filterStream !== 'all') {
-      result = result.filter((l) => l.type === filterStream);
-    }
-    if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase();
-      result = result.filter((l) => l.data.toLowerCase().includes(q));
-    }
-    if (dateFrom) {
-      const from = new Date(dateFrom);
-      if (!isNaN(from.getTime())) {
-        result = result.filter((l) => l.timestamp >= from);
-      }
-    }
-    if (dateTo) {
-      const to = new Date(dateTo);
-      if (!isNaN(to.getTime())) {
-        result = result.filter((l) => l.timestamp <= to);
-      }
-    }
-    return result;
-  });
-
-  let filteredOutLogs = $derived(filteredLogs.filter((l) => l.type === 'out'));
-  let filteredErrLogs = $derived(filteredLogs.filter((l) => l.type === 'err'));
-  let newErrCount = $derived(
-    filteredErrLogs.filter((l) => errBaseline !== null && l.timestamp.getTime() > errBaseline).length,
-  );
-
-  let levelCounts = $derived.by(() => {
-    const counts = { info: 0, warn: 0, error: 0 };
-    for (const l of logsForCounts) {
-      counts[l.level]++;
-    }
-    return counts;
-  });
-
-  let dismissedCount = $derived(logs.filter((l) => l.dismissed).length);
+  let filteredLogs = $derived(filterResult.filteredLogs);
+  let filteredOutLogs = $derived(filterResult.filteredOutLogs);
+  let filteredErrLogs = $derived(filterResult.filteredErrLogs);
+  let levelCounts = $derived(filterResult.levelCounts);
+  let newErrCount = $derived(filterResult.newErrCount);
+  let dismissedCount = $derived(filterResult.dismissedCount);
 
   function restoreAllErrors() {
     for (const log of logs) {
@@ -427,7 +325,7 @@
     <!-- Level filter badges -->
     <div class="flex items-center gap-1.5">
       <button
-        class="px-3 py-1.5 text-sm font-medium rounded-md transition-colors"
+        class="px-3 py-1.5 text-sm font-medium rounded-md transition-all active:scale-95 duration-150"
         style="
           background: {filterLevel === 'all' ? 'var(--bg-surface)' : 'transparent'};
           color: {filterLevel === 'all' ? 'var(--text-primary)' : 'var(--text-muted)'};
@@ -439,7 +337,7 @@
       </button>
       {#each (['info', 'warn', 'error'] as const) as level}
         <button
-          class="px-3 py-1.5 text-sm font-medium rounded-md transition-colors"
+          class="px-3 py-1.5 text-sm font-medium rounded-md transition-all active:scale-95 duration-150"
           style="
             background: {filterLevel === level ? levelBg(level) : 'transparent'};
             color: {filterLevel === level ? levelColor(level) : 'var(--text-muted)'};
@@ -468,14 +366,14 @@
     <!-- View mode toggle -->
     <div class="flex rounded-md border overflow-hidden" style="border-color: var(--border-color);">
       <button
-        class="px-3 py-1.5 text-sm"
+        class="px-3 py-1.5 text-sm transition-all active:scale-95 duration-150"
         style="background: {viewMode === 'unified' ? 'var(--bg-surface)' : 'var(--bg-base)'}; color: {viewMode === 'unified' ? 'var(--text-primary)' : 'var(--text-muted)'};"
         onclick={() => (viewMode = 'unified')}
       >
         Unified
       </button>
       <button
-        class="px-3 py-1.5 text-sm"
+        class="px-3 py-1.5 text-sm transition-all active:scale-95 duration-150"
         style="background: {viewMode === 'split' ? 'var(--bg-surface)' : 'var(--bg-base)'}; color: {viewMode === 'split' ? 'var(--text-primary)' : 'var(--text-muted)'};"
         onclick={() => (viewMode = 'split')}
       >
@@ -485,7 +383,7 @@
 
     <!-- Sort order toggle -->
     <button
-      class="flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-md border transition-colors"
+      class="flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-md border transition-all active:scale-95 duration-150"
       style="border-color: var(--border-color); background: var(--bg-base); color: var(--text-muted);"
       onclick={() => (sortOrder = sortOrder === 'newest' ? 'oldest' : 'newest')}
       title={sortOrder === 'newest' ? 'Newest first — click to show oldest first' : 'Oldest first — click to show newest first'}
@@ -550,7 +448,7 @@
         </button>
       {/if}
       <button
-        class="btn-secondary px-3 py-2 text-sm h-[38px]"
+        class="btn-secondary px-3 py-2 text-sm h-[38px] transition-all active:scale-95 duration-150"
         onclick={dismissAllErrors}
       >
         Dismiss all
@@ -608,22 +506,32 @@
           style="background: var(--bg-base); border: 1px solid var(--border-color); font-size: 13px; line-height: 1.6;"
         >
           {#each filteredLogs as log (log.id)}
-            {@const isNewErr = log.type === 'err' && errBaseline !== null && log.timestamp.getTime() > errBaseline}
+            {@const isNewErr = log.level === 'error' && errBaseline !== null && log.timestamp.getTime() > errBaseline}
+            {@const isNewWarn = log.level === 'warn' && errBaseline !== null && log.timestamp.getTime() > errBaseline}
+            {@const isWarn = log.level === 'warn'}
+            {@const isError = log.level === 'error'}
             <div
-              class="flex items-start gap-0 px-4 py-1.5 border-b group"
+              class="flex items-start gap-0 px-4 py-1.5 border-b group transition-colors duration-150"
               style="
-                background: {isNewErr ? 'rgba(255, 91, 79, 0.08)' : 'transparent'};
+                background: {isNewErr ? 'rgba(255, 91, 79, 0.08)' : isError ? 'rgba(255, 91, 79, 0.03)' : isNewWarn ? 'rgba(255, 183, 77, 0.08)' : isWarn ? 'rgba(255, 183, 77, 0.03)' : 'transparent'};
                 border-color: var(--border-color);
-                {isNewErr ? 'border-left: 3px solid #FF5B4F; padding-left: 13px;' : 'border-left: 3px solid transparent;'}
+                {isNewErr ? 'border-left: 3px solid #FF5B4F; padding-left: 13px;' : isError ? 'border-left: 3px solid rgba(255, 91, 79, 0.5); padding-left: 13px;' : isNewWarn ? 'border-left: 3px solid #FFB74D; padding-left: 13px;' : isWarn ? 'border-left: 3px solid rgba(255, 183, 77, 0.4); padding-left: 13px;' : 'border-left: 3px solid transparent;'}
                 {log.dismissed ? 'opacity: 0.4;' : ''}
               "
             >
               {#if isNewErr}
                 <span
                   class="shrink-0 text-[10px] font-bold uppercase mr-2 mt-0.5 px-1.5 py-0.5 rounded"
-                  style="background: rgba(255, 215, 64, 0.15); color: #FFD740;"
+                  style="background: rgba(255, 91, 79, 0.2); color: #FF5B4F;"
                 >
-                  NEW
+                  NEW ERR
+                </span>
+              {:else if isNewWarn}
+                <span
+                  class="shrink-0 text-[10px] font-bold uppercase mr-2 mt-0.5 px-1.5 py-0.5 rounded"
+                  style="background: rgba(255, 183, 77, 0.2); color: #FFB74D;"
+                >
+                  NEW WARN
                 </span>
               {/if}
               <span
@@ -644,13 +552,13 @@
               <span class="flex-1 min-w-0 ml-3 whitespace-pre-wrap break-all" style="color: var(--text-primary);">
                 {stripTimestamp(log.data)}
               </span>
-              {#if log.type === 'err'}
+              {#if log.level === 'error' || log.level === 'warn'}
                 {#if log.dismissed && showDismissed}
                   <button
-                    class="shrink-0 ml-2 opacity-0 group-hover:opacity-100 transition-opacity text-xs px-1.5 py-0.5 rounded"
+                    class="shrink-0 ml-2 opacity-0 group-hover:opacity-100 transition-all active:scale-90 text-xs px-1.5 py-0.5 rounded"
                     style="color: #0070F3;"
                     onclick={() => { log.dismissed = false; logs = [...logs]; }}
-                    title="Restore this error"
+                    title="Restore this log"
                   >
                     <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6"/>
@@ -658,10 +566,10 @@
                   </button>
                 {:else}
                   <button
-                    class="shrink-0 ml-2 opacity-0 group-hover:opacity-100 transition-opacity text-xs px-1.5 py-0.5 rounded"
+                    class="shrink-0 ml-2 opacity-0 group-hover:opacity-100 transition-all active:scale-90 text-xs px-1.5 py-0.5 rounded hover:text-red-400"
                     style="color: var(--text-muted);"
                     onclick={() => dismissError(log.timestamp.getTime(), log.data)}
-                    title="Dismiss this error"
+                    title="Dismiss this log"
                   >
                     <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
@@ -757,12 +665,14 @@
             style="background: var(--bg-base); border: 1px solid var(--border-color); font-size: 13px; line-height: 1.6;"
           >
             {#each filteredErrLogs as log (log.id)}
-              {@const isNew = errBaseline !== null && log.timestamp.getTime() > errBaseline}
+              {@const isNew = log.level === 'error' && errBaseline !== null && log.timestamp.getTime() > errBaseline}
+              {@const isWarn = log.level === 'warn'}
               <div
-                class="py-1 group flex items-start"
+                class="py-1 group flex items-start transition-colors duration-150"
                 style="
                   color: {levelColor(log.level)};
-                  {isNew ? 'background: rgba(255, 91, 79, 0.12); border-left: 3px solid #FF5B4F; padding-left: 13px;' : 'background: transparent;'}
+                  background: {isNew ? 'rgba(255, 91, 79, 0.12)' : isWarn ? 'rgba(255, 183, 77, 0.04)' : 'transparent'};
+                  {isNew ? 'border-left: 3px solid #FF5B4F; padding-left: 13px;' : isWarn ? 'border-left: 3px solid rgba(255, 183, 77, 0.4); padding-left: 13px;' : ''}
                   {log.dismissed ? 'opacity: 0.4;' : ''}
                 "
               >

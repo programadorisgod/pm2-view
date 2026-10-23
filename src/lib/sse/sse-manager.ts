@@ -11,6 +11,9 @@ interface SSEConnection {
 	writable: SSEWriter;
 }
 
+// Single module-level encoder to prevent memory churn on frequent broadcasts
+const textEncoder = new TextEncoder();
+
 class SSEManager {
 	private connections = new Map<string, SSEConnection>();
 	private heartbeatInterval: ReturnType<typeof setInterval> | null = null;
@@ -44,6 +47,9 @@ class SSEManager {
 			} catch {
 				// Ignore errors when releasing lock
 			}
+			if (this.connections.size === 0) {
+				this.stopHeartbeat();
+			}
 		}
 	}
 
@@ -60,8 +66,7 @@ class SSEManager {
 	private broadcast(message: string, _type: SSEEventType): void {
 		if (this.connections.size === 0) return;
 
-		const encoder = new TextEncoder();
-		const chunk = encoder.encode(message);
+		const chunk = textEncoder.encode(message);
 
 		for (const [id, conn] of this.connections) {
 			conn.writable.write(chunk).catch(() => {
@@ -76,6 +81,7 @@ class SSEManager {
 	}
 
 	_clearAllConnections(): void {
+		this.stopHeartbeat();
 		this.connections.clear();
 	}
 }

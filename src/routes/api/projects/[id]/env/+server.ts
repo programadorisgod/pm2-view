@@ -78,9 +78,21 @@ export const GET: RequestHandler = async ({ params, request }) => {
 		const envPath = join(cwd, '.env');
 		let envVars: Record<string, string> = {};
 
+		const hasEditorAccess = await checkProjectPermission(user.id, user.role, id, process.name, 'editor');
+
 		if (existsSync(envPath)) {
 			const content = readFileSync(envPath, 'utf-8');
 			envVars = parseEnv(content);
+		}
+
+		// Mask sensitive variables if user is only a viewer (read-only access)
+		if (!hasEditorAccess) {
+			const SECRET_KEY_REGEX = /secret|password|passwd|pwd|token|api_key|apikey|private|auth|credential/i;
+			const masked: Record<string, string> = {};
+			for (const [key, value] of Object.entries(envVars)) {
+				masked[key] = SECRET_KEY_REGEX.test(key) ? '********' : value;
+			}
+			envVars = masked;
 		}
 
 		return json({

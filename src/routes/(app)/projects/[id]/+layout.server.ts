@@ -8,7 +8,7 @@ import { eq } from 'drizzle-orm';
 import type { LayoutServerLoad } from './$types';
 
 export const load: LayoutServerLoad = async (event) => {
-	const user = event.locals.user ?? (await auth.api.getSession({
+	const user = event.locals?.user ?? (await auth.api.getSession({
 		headers: event.request?.headers
 	}).catch(() => null))?.user;
 
@@ -17,7 +17,7 @@ export const load: LayoutServerLoad = async (event) => {
 		return { user: null, session: null };
 	}
 
-	const session = event.locals.session ?? null;
+	const session = event.locals?.session ?? null;
 
 	const { id: paramId } = event.params;
 

@@ -491,6 +491,7 @@
                   {:else}
                     <a
                       href="{base}/projects/{process.pm_id}"
+                      data-sveltekit-preload-data="hover"
                       class="btn-secondary px-3 py-1 text-caption flex-1 text-center"
                     >
                       Details
@@ -664,6 +665,7 @@
                 {:else}
                   <a
                     href="{base}/projects/{process.pm_id}"
+                    data-sveltekit-preload-data="hover"
                     class="btn-secondary px-3 py-1 text-caption flex-1 text-center"
                   >
                     Details

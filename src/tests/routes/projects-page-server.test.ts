@@ -26,13 +26,25 @@ vi.mock('$lib/services/factory', () => ({
 	createServices: () => ({
 		pm2Service: {
 			getProcessById: (...args: unknown[]) => mockGetProcessById(...args),
-			getProcessLogs: (...args: unknown[]) => mockGetProcessLogs(...args)
+			getProcessLogs: (...args: unknown[]) => mockGetProcessLogs(...args),
+			getAllProcesses: vi.fn().mockResolvedValue([])
 		},
 		envVarService: {
 			getEnvVars: (...args: unknown[]) => mockGetEnvVars(...args),
 			saveAndRestart: (...args: unknown[]) => mockSaveAndRestart(...args)
 		}
 	})
+}));
+
+vi.mock('$lib/db/db', () => ({
+	db: {
+		query: {
+			projects: {
+				findFirst: vi.fn().mockResolvedValue(null),
+				findMany: vi.fn().mockResolvedValue([])
+			}
+		}
+	}
 }));
 
 // Import after mocking

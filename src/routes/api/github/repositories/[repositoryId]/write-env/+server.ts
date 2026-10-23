@@ -5,6 +5,9 @@ import { logger } from '$lib/logger';
 import { stringifyEnv } from '$lib/utils/env-parser';
 import { existsSync, writeFileSync } from 'fs';
 import { join, resolve, sep } from 'path';
+import { getEnv } from '$lib/db/env';
+import { GitHubInstallationRepository } from '$lib/db/repositories/github-installation-repository.impl';
+import { GitHubAppClient } from '$lib/github/infrastructure/github-app-client';
 import { z } from 'zod';
 
 const writeEnvSchema = z.object({
@@ -59,6 +62,41 @@ export const POST: RequestHandler = async ({ params, request, getClientAddress }
 			{ error: 'Target path must be an absolute path' },
 			{ status: 400 }
 		);
+	}
+
+	// Non-admin path confinement: targetPath must be within REPOS_PATH
+	if (user.role !== 'admin') {
+		const env = getEnv();
+		const reposRoot = resolve(env.REPOS_PATH || '/opt/repos');
+		const resolvedTarget = resolve(targetPath);
+		if (resolvedTarget !== reposRoot && !resolvedTarget.startsWith(reposRoot + sep)) {
+			return json({ error: `Forbidden: Non-admin users can only write inside ${reposRoot}` }, { status: 403 });
+		}
+	}
+
+	// Verify user's installation owns the repository
+	try {
+		const installationRepo = new GitHubInstallationRepository();
+		const appClient = new GitHubAppClient();
+
+		const installation = await installationRepo.getByUserId(session.user.id);
+		if (!installation) {
+			return json({ error: 'GitHub not connected' }, { status: 404 });
+		}
+
+		const repos = await appClient.listInstallationRepositories(installation.installationId);
+		const repo = repos.repositories.find((r) => r.id === repositoryId);
+		if (!repo) {
+			return json({ error: 'Repository not accessible' }, { status: 403 });
+		}
+	} catch (err: any) {
+		const errorMessage = err?.message || String(err) || 'Unknown error';
+		logger.error('Failed to verify GitHub repository access before writing env', {
+			userId: session.user.id,
+			repositoryId,
+			errorMessage
+		});
+		return json({ error: `Verification failed: ${errorMessage}` }, { status: 500 });
 	}
 
 	// Validate directory exists

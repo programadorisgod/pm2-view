@@ -61,6 +61,16 @@ export function flushBuffer(
 	}
 }
 
+export const STDERR_NON_FATAL_REGEX =
+	/^\(node:\d+\)\s+\[DEP\d+\]|\b(deprecat(ed|ion)|experimentalwarning)\b|^\(Use `node --trace-deprecation/i;
+
+export function isStderrFatal(line: string): boolean {
+	if (STDERR_NON_FATAL_REGEX.test(line.trim())) {
+		return false;
+	}
+	return true;
+}
+
 export function runCommand(
 	cwd: string,
 	command: string,
@@ -72,6 +82,7 @@ export function runCommand(
 		const proc = spawn(command, args, {
 			cwd,
 			shell: true,
+			stdio: ['ignore', 'pipe', 'pipe'],
 			env: env ?? { ...process.env },
 		});
 
@@ -85,12 +96,12 @@ export function runCommand(
 
 		proc.stderr.on('data', (chunk: Buffer) => {
 			bufferErr.push(chunk.toString());
-			flushBuffer(bufferErr, (l) => onLine(l, true));
+			flushBuffer(bufferErr, (l) => onLine(l, isStderrFatal(l)));
 		});
 
 		proc.on('close', (code) => {
 			flushBuffer(bufferOut, (l) => onLine(l, false), true);
-			flushBuffer(bufferErr, (l) => onLine(l, true), true);
+			flushBuffer(bufferErr, (l) => onLine(l, isStderrFatal(l)), true);
 			resolve(code ?? 1);
 		});
 

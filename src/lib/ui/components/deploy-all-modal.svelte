@@ -431,14 +431,16 @@
 									style="background: var(--bg-surface); border-top: 1px solid var(--border-color);"
 								>
 									{#each logs as log}
+										{@const isWarn = !log.line.includes('Failed') && (log.line.includes('Warning') || log.line.includes('WARN') || log.line.includes('DeprecationWarning') || log.line.includes('Skipped'))}
+										{@const isErr = log.isError && !isWarn}
 										<div
 											class="py-2xs text-xs"
 											style={cn(
 												'color: var(--text-secondary);',
-												log.isError ? 'color: #FF5B4F;' : '',
+												isErr ? 'color: #FF5B4F;' : '',
+												isWarn ? 'color: #FFD740;' : '',
 												log.line.includes('Starting') ? 'color: #0070F3; font-weight: 600;' : '',
 												log.line.includes('Completed') ? 'color: #00E676; font-weight: 600;' : '',
-												log.line.includes('Skipped') ? 'color: #FFD740; font-weight: 600;' : '',
 												log.line.includes('Failed') ? 'color: #FF5B4F; font-weight: 600;' : ''
 											)}
 										>

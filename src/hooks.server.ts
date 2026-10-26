@@ -29,6 +29,26 @@ if (!building) {
 }
 
 export const handle: Handle = async ({ event, resolve }) => {
+	// Isolate public GitHub webhook route from Better Auth session queries and enforce POST
+	const normalizedPath = event.url.pathname.replace(/\/+$/, '') || '/';
+	const isGithubWebhookRoute =
+		event.route?.id === '/api/webhooks/github' ||
+		normalizedPath === '/api/webhooks/github' ||
+		normalizedPath === '/pm2/api/webhooks/github';
+
+	if (isGithubWebhookRoute) {
+		if (event.request.method !== 'POST') {
+			return new Response(JSON.stringify({ error: 'Method Not Allowed' }), {
+				status: 405,
+				headers: {
+					Allow: 'POST',
+					'Content-Type': 'application/json'
+				}
+			});
+		}
+		return resolve(event);
+	}
+
 	// Populate locals.user from session before svelteKitHandler processes
 	// This makes user available to all +layout.server.ts and +page.server.ts via event.locals
 	try {

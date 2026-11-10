@@ -1,4 +1,7 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'fs';
+import { tmpdir } from 'os';
+import { join } from 'path';
 import { PM2Service } from '../../lib/pm2/pm2.service';
 import type { IPM2Repository, PM2Process } from '../../lib/pm2/pm2.types';
 
@@ -261,6 +264,151 @@ describe('PM2Service', () => {
 					expect(processes[0].uptimeFormatted).toBe(expected);
 				}
 			}
+		});
+	});
+
+	describe('resolveProjectDir', () => {
+		const tempDirs: string[] = [];
+
+		function createTempDir(prefix: string): string {
+			const dir = mkdtempSync(join(tmpdir(), prefix));
+			tempDirs.push(dir);
+			return dir;
+		}
+
+		function makeProcess(pm2Env: Partial<PM2Process['pm2_env']>): PM2Process {
+			return {
+				...mockProcess,
+				pm2_env: {
+					...mockProcess.pm2_env,
+					...pm2Env
+				}
+			};
+		}
+
+		afterEach(() => {
+			while (tempDirs.length > 0) {
+				const dir = tempDirs.pop();
+				if (dir) rmSync(dir, { recursive: true, force: true });
+			}
+		});
+
+		it('should return pm_cwd when executed via pnpm global binary', () => {
+			const proc = makeProcess({
+				pm_cwd: '/home/rpatic/Documentos/projects/cartera-dashboard',
+				pm_exec_path: '/home/rpatic/.local/share/pnpm/bin/pnpm'
+			});
+
+			expect(service.resolveProjectDir(proc)).toBe(
+				'/home/rpatic/Documentos/projects/cartera-dashboard'
+			);
+		});
+
+		it('should return pm_cwd for global runners and runtimes', () => {
+			const cwd = '/home/rpatic/Documentos/projects/my-app';
+			const runners = [
+				'pnpm',
+				'npm',
+				'yarn',
+				'bun',
+				'npx',
+				'/home/rpatic/.nvm/versions/node/v24.13.1/bin/node',
+				'/usr/bin/xvfb-run',
+				'C:\\Program Files\\nodejs\\node.exe'
+			];
+
+			for (const runner of runners) {
+				const proc = makeProcess({ pm_cwd: cwd, pm_exec_path: runner });
+				expect(service.resolveProjectDir(proc)).toBe(cwd);
+			}
+		});
+
+		it('should return empty string for global runner when pm_cwd is missing', () => {
+			const proc = makeProcess({
+				pm_cwd: '',
+				pm_exec_path: '/usr/bin/xvfb-run'
+			});
+
+			expect(service.resolveProjectDir(proc)).toBe('');
+		});
+
+		it('should strip trailing separators when script is inside pm_cwd (POSIX and Windows)', () => {
+			const posixProc = makeProcess({
+				pm_cwd: '/apps/api/',
+				pm_exec_path: '/apps/api/dist/index.js'
+			});
+			expect(service.resolveProjectDir(posixProc)).toBe('/apps/api');
+
+			const winProc = makeProcess({
+				pm_cwd: 'C:\\apps\\api\\',
+				pm_exec_path: 'C:\\apps\\api\\dist\\index.js'
+			});
+			expect(service.resolveProjectDir(winProc)).toBe('C:\\apps\\api');
+		});
+
+		it('should walk up from build subfolder script to project root when started from wrong pm_cwd', () => {
+			const root = createTempDir('pm2-view-root-');
+			const wrongCwd = join(root, 'wrong-cwd');
+			const projectDir = join(root, 'mi-api');
+			const scriptDir = join(projectDir, 'dist', 'src');
+
+			mkdirSync(wrongCwd, { recursive: true });
+			mkdirSync(scriptDir, { recursive: true });
+			writeFileSync(join(projectDir, 'package.json'), '{"name":"mi-api"}\n', 'utf-8');
+			writeFileSync(join(scriptDir, 'index.js'), 'console.log("ok");\n', 'utf-8');
+
+			const proc = makeProcess({
+				pm_cwd: wrongCwd,
+				pm_exec_path: join(scriptDir, 'index.js')
+			});
+
+			expect(service.resolveProjectDir(proc)).toBe(projectDir);
+		});
+
+		it('should resolve project root for local node_modules/.bin runner when started from wrong pm_cwd', () => {
+			const root = createTempDir('pm2-view-local-bin-');
+			const wrongCwd = join(root, 'wrong-cwd');
+			const projectDir = join(root, 'estudios-errados');
+			const binDir = join(projectDir, 'node_modules', '.bin');
+
+			mkdirSync(wrongCwd, { recursive: true });
+			mkdirSync(binDir, { recursive: true });
+			writeFileSync(join(projectDir, '.env'), 'PORT=3000\n', 'utf-8');
+			writeFileSync(join(binDir, 'tsx'), '#!/usr/bin/env node\n', 'utf-8');
+
+			const proc = makeProcess({
+				pm_cwd: wrongCwd,
+				pm_exec_path: join(binDir, 'tsx')
+			});
+
+			expect(service.resolveProjectDir(proc)).toBe(projectDir);
+		});
+
+		it('should return pm_cwd when pm_cwd itself has project markers even for sibling script', () => {
+			const root = createTempDir('pm2-view-marker-cwd-');
+			const workspaceDir = join(root, 'workspace');
+			const siblingScriptDir = join(root, 'shared-scripts');
+
+			mkdirSync(workspaceDir, { recursive: true });
+			mkdirSync(siblingScriptDir, { recursive: true });
+			writeFileSync(join(workspaceDir, '.env'), 'NODE_ENV=production\n', 'utf-8');
+			writeFileSync(join(siblingScriptDir, 'run.js'), '', 'utf-8');
+
+			const proc = makeProcess({
+				pm_cwd: workspaceDir,
+				pm_exec_path: join(siblingScriptDir, 'run.js')
+			});
+
+			expect(service.resolveProjectDir(proc)).toBe(workspaceDir);
+		});
+
+		it('should fall back to dirname(scriptPath) when script is outside pm_cwd and has no markers', () => {
+			const proc = makeProcess({
+				pm_cwd: '/non-existent-wrong-cwd',
+				pm_exec_path: '/non-existent-other-place/app.js'
+			});
+
+			expect(service.resolveProjectDir(proc)).toBe('/non-existent-other-place');
 		});
 	});
 });

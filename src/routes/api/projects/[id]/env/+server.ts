@@ -4,6 +4,8 @@ import { getProjectRole } from '$lib/server/project-access';
 import { ProjectRepository } from '$lib/db/repositories/project-repository.impl';
 import { logger } from '$lib/logger';
 import { parseEnv, stringifyEnv } from '$lib/utils/env-parser';
+import { loadProjectEnv } from '$lib/deploy/env-loader';
+import { resolveEffectiveProjectDir } from '$lib/server/project-env-dir';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
 import { dirname, join, resolve, sep } from 'path';
 import { spawn } from 'child_process';
@@ -70,7 +72,7 @@ export const GET: RequestHandler = async ({ params, request }) => {
 			return json({ error: 'Access denied: project permission required' }, { status: 403 });
 		}
 
-		const cwd = pm2Service.resolveProjectDir(process);
+		const cwd = await resolveEffectiveProjectDir(pm2Service, process, id);
 		if (!cwd) {
 			return json({ error: 'Process working directory not found' }, { status: 400 });
 		}
@@ -156,7 +158,7 @@ export const PUT: RequestHandler = async ({ params, request }) => {
 			return json({ error: 'Access denied: editor or owner permission required' }, { status: 403 });
 		}
 
-		const cwd = pm2Service.resolveProjectDir(process);
+		const cwd = await resolveEffectiveProjectDir(pm2Service, process, id);
 		if (!cwd) {
 			return json({ error: 'Process working directory not found' }, { status: 400 });
 		}
@@ -180,7 +182,15 @@ export const PUT: RequestHandler = async ({ params, request }) => {
 			const isRunning = process.status === 'online';
 
 			if (isRunning) {
-				await runPm2Restart(name);
+				const projectEnv = loadProjectEnv(cwd);
+				const exitCode = await runPm2Restart(name, projectEnv);
+				if (exitCode !== 0) {
+					logger.error('PM2 restart failed after saving env', { processName: name, exitCode });
+					return json(
+						{ error: `Saved .env but failed to restart process (exit code ${exitCode})` },
+						{ status: 500 }
+					);
+				}
 				restarted = true;
 				logger.info('PM2 process restarted with new env', { processName: name });
 			} else {
@@ -253,7 +263,7 @@ export const POST: RequestHandler = async ({ params, request }) => {
 			return json({ error: 'Access denied: editor or owner permission required' }, { status: 403 });
 		}
 
-		const cwd = pm2Service.resolveProjectDir(process);
+		const cwd = await resolveEffectiveProjectDir(pm2Service, process, id);
 		if (!cwd) {
 			return json({ error: 'Process working directory not found' }, { status: 400 });
 		}
@@ -297,11 +307,16 @@ export const POST: RequestHandler = async ({ params, request }) => {
 	}
 };
 
-function runPm2Restart(name: string): Promise<number> {
+function runPm2Restart(name: string, projectEnv: Record<string, string> = {}): Promise<number> {
 	return new Promise((resolve) => {
 		const proc = spawn('pm2', ['restart', name, '--update-env'], {
 			shell: false,
-			env: { PATH: process.env.PATH ?? '', HOME: process.env.HOME ?? '' },
+			env: {
+				PATH: process.env.PATH ?? '',
+				HOME: process.env.HOME ?? '',
+				...(process.env.PM2_HOME ? { PM2_HOME: process.env.PM2_HOME } : {}),
+				...projectEnv,
+			},
 		});
 
 		proc.on('close', (code) => resolve(code ?? 1));

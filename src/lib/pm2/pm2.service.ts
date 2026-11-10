@@ -2,9 +2,119 @@ import type { IPM2Repository, PM2Process, PM2Log, ProcessWithStatus } from './pm
 import { logger } from '$lib/logger';
 import { exec } from 'child_process';
 import { promisify } from 'util';
-import { dirname } from 'path';
+import { existsSync } from 'fs';
+import { dirname, join } from 'path';
 
 const execAsync = promisify(exec);
+
+const GLOBAL_RUNNER_NAMES = new Set([
+	'pnpm',
+	'npm',
+	'yarn',
+	'bun',
+	'npx',
+	'pnpx',
+	'tsx',
+	'ts-node',
+	'node',
+	'nodejs',
+	'python',
+	'python3',
+	'xvfb-run',
+	'sh',
+	'bash',
+	'pm2'
+]);
+
+const GLOBAL_TOOLCHAIN_PREFIXES = [
+	'/usr/bin/',
+	'/usr/local/bin/',
+	'/bin/',
+	'/sbin/',
+	'/.nvm/',
+	'/.local/share/pnpm/',
+	'/.bun/',
+	'/opt/homebrew/',
+	'/opt/node',
+	'/program files/nodejs/',
+	'/appdata/roaming/npm/',
+	'/appdata/local/pnpm/',
+	'/appdata/local/yarn/'
+];
+
+const PROJECT_MARKERS = ['.env', 'package.json', 'pyproject.toml'] as const;
+const MAX_PROJECT_ROOT_DEPTH = 6;
+
+function stripTrailingSeparators(p: string): string {
+	if (!p) return '';
+	if (/^[\\/]+$/.test(p)) return p[0];
+	if (/^[A-Za-z]:[\\/]+$/.test(p)) return p.slice(0, 3);
+	return p.replace(/[\\/]+$/, '');
+}
+
+function normalizePathForCompare(p: string): string {
+	const unified = p.replace(/\\/g, '/');
+	if (!unified) return '';
+	if (/^\/+$/.test(unified)) return '/';
+	if (/^[A-Za-z]:\/+$/.test(unified)) return unified.slice(0, 3);
+	return unified.replace(/\/+$/, '');
+}
+
+function isPathInside(parentDir: string, targetPath: string): boolean {
+	const normParent = normalizePathForCompare(parentDir);
+	const normTarget = normalizePathForCompare(targetPath);
+	if (!normParent || !normTarget) return false;
+	if (normTarget === normParent) return true;
+	const prefix = normParent.endsWith('/') ? normParent : `${normParent}/`;
+	return normTarget.startsWith(prefix);
+}
+
+function isGlobalRunnerPath(scriptPath: string): boolean {
+	const normalized = normalizePathForCompare(scriptPath);
+	if (!normalized) return false;
+
+	const lower = normalized.toLowerCase();
+	// Local binaries inside node_modules belong to a project, not a global toolchain
+	if (lower.includes('/node_modules/')) {
+		return false;
+	}
+
+	const lastSegment = normalized.split('/').pop() ?? '';
+	const base = lastSegment.toLowerCase().replace(/\.(exe|cmd|bat|ps1)$/i, '');
+	if (GLOBAL_RUNNER_NAMES.has(base) || /^python\d+(\.\d+)*$/.test(base)) {
+		return true;
+	}
+
+	return GLOBAL_TOOLCHAIN_PREFIXES.some(
+		(prefix) => lower.startsWith(prefix) || lower.includes(prefix)
+	);
+}
+
+function hasProjectMarker(dir: string): boolean {
+	if (!dir) return false;
+	return PROJECT_MARKERS.some((marker) => existsSync(join(dir, marker)));
+}
+
+function findProjectRootFromScript(scriptPath: string, stopDir?: string): string | null {
+	const normalizedStop = stopDir ? normalizePathForCompare(stopDir) : '';
+	let current = stripTrailingSeparators(dirname(scriptPath));
+
+	for (let depth = 0; depth < MAX_PROJECT_ROOT_DEPTH && current; depth++) {
+		if (normalizedStop && normalizePathForCompare(current) === normalizedStop) {
+			break;
+		}
+		if (hasProjectMarker(current)) {
+			return current;
+		}
+		const parent = stripTrailingSeparators(dirname(current));
+		if (!parent || parent === current) {
+			break;
+		}
+		current = parent;
+	}
+
+	return null;
+}
 
 export type ProcessStatus = 'online' | 'stopped' | 'error' | 'offline';
 
@@ -258,18 +368,32 @@ export class PM2Service {
 
 	/**
 	 * Resolves the directory where the process's .env lives.
-	 * Trusts pm_cwd only when it contains the executed script; otherwise falls
-	 * back to the script's directory (fixes processes started from a wrong folder).
+	 * Trusts pm_cwd when it contains the executed script or when PM2 executes a global
+	 * runner/runtime (pnpm, npm, node, xvfb-run, etc.); otherwise searches upwards from
+	 * the script for project root markers before falling back to dirname(scriptPath).
 	 */
 	resolveProjectDir(process: PM2Process): string {
-		const cwd = process.pm2_env?.pm_cwd || (process.pm2_env as { cwd?: string } | undefined)?.cwd || '';
+		const rawCwd =
+			process.pm2_env?.pm_cwd || (process.pm2_env as { cwd?: string } | undefined)?.cwd || '';
+		const cwd = stripTrailingSeparators(rawCwd);
 		const scriptPath = process.pm2_env?.pm_exec_path || '';
-		if (cwd && scriptPath && scriptPath.startsWith(`${cwd}/`)) {
+
+		if (cwd && scriptPath && isPathInside(cwd, scriptPath)) {
 			return cwd;
 		}
-		if (scriptPath) {
-			return dirname(scriptPath);
+
+		if (scriptPath && isGlobalRunnerPath(scriptPath)) {
+			return cwd;
 		}
+
+		if (cwd && hasProjectMarker(cwd)) {
+			return cwd;
+		}
+
+		if (scriptPath) {
+			return findProjectRootFromScript(scriptPath, cwd) ?? stripTrailingSeparators(dirname(scriptPath));
+		}
+
 		return cwd;
 	}
 

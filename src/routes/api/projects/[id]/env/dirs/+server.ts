@@ -3,6 +3,7 @@ import { auth } from '$lib/auth';
 import { getProjectRole } from '$lib/server/project-access';
 import { ProjectRepository } from '$lib/db/repositories/project-repository.impl';
 import { logger } from '$lib/logger';
+import { resolveEffectiveProjectDir } from '$lib/server/project-env-dir';
 import { existsSync, readdirSync } from 'fs';
 import { join, relative, resolve, sep } from 'path';
 
@@ -93,7 +94,7 @@ export const GET: RequestHandler = async ({ params, request }) => {
 			}
 		}
 
-		const cwd = pm2Service.resolveProjectDir(process);
+		const cwd = await resolveEffectiveProjectDir(pm2Service, process, id);
 		if (!cwd) {
 			return json({ error: 'Process working directory not found' }, { status: 400 });
 		}

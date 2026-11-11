@@ -15,6 +15,13 @@
   import type { PageData } from "./$types";
   import { goto, invalidateAll } from "$app/navigation";
   import { parseEnv } from "$lib/utils/env-parser";
+  import {
+    CLOSED_DELETE_ENV_MODAL,
+    executeEnvRowDelete,
+    getEnvRemovalAction,
+    type DeleteEnvModalState,
+    type EnvRow,
+  } from "$lib/utils/env-row-delete";
 
   let { data }: { data: PageData } = $props();
 
@@ -85,11 +92,6 @@
     }
   }
 
-  interface EnvRow {
-    key: string;
-    value: string;
-  }
-
   let envRows = $state<EnvRow[]>([]);
   let envVars = $state<Record<string, string>>({});
   let envLoaded = $state(false);
@@ -102,6 +104,7 @@
   let envFileInput = $state<HTMLInputElement | null>(null);
   // Indices of rows whose values are revealed (when focused/clicked)
   let revealedEnvRows = $state<Record<number, boolean>>({});
+  let deleteEnvModal = $state<DeleteEnvModalState>({ ...CLOSED_DELETE_ENV_MODAL });
   let importPreview = $state<{
     fileName: string;
     content: string;
@@ -237,14 +240,44 @@
     envDirty = true;
   }
 
-  async function removeEnvRow(index: number) {
-    const removed = envRows[index];
-    envRows = envRows.filter((_, i) => i !== index);
-    envDirty = true;
-    // Immediately save to .env file
-    if (removed && removed.key.trim()) {
-      await saveEnvVars(false);
+  function requestRemoveEnvRow(index: number) {
+    const action = getEnvRemovalAction(envRows, index);
+    if (action.kind === "noop") return;
+
+    if (action.kind === "remove-blank") {
+      envRows = action.nextRows;
+      revealedEnvRows = {};
+      return;
     }
+
+    deleteEnvModal = action.modal;
+  }
+
+  function closeDeleteEnvModal() {
+    if (envSaving) return;
+    deleteEnvModal = { ...CLOSED_DELETE_ENV_MODAL };
+  }
+
+  async function confirmRemoveEnvRow() {
+    if (envSaving) return;
+
+    const result = await executeEnvRowDelete(
+      envRows,
+      deleteEnvModal.index,
+      envDirty,
+      async (nextRows) => {
+        envRows = nextRows;
+        envDirty = true;
+        return saveEnvVars(false);
+      },
+    );
+
+    envRows = result.rows;
+    envDirty = result.dirty;
+    if (result.deleted) {
+      revealedEnvRows = {};
+    }
+    deleteEnvModal = { ...CLOSED_DELETE_ENV_MODAL };
   }
 
   function updateEnvRow(index: number, field: "key" | "value", value: string) {
@@ -254,11 +287,11 @@
     envDirty = true;
   }
 
-  async function saveEnvVars(restart = false) {
+  async function saveEnvVars(restart = false): Promise<boolean> {
     const invalid = envRows.find((row) => !row.key.trim());
     if (invalid) {
       envFeedback = { type: "error", text: "Every variable needs a key" };
-      return;
+      return false;
     }
 
     envSaving = true;
@@ -296,14 +329,17 @@
             text: `Environment variables saved. Process is not running, no restart needed.`,
           };
         }
+        return true;
       } else {
         envFeedback = { type: "error", text: result.error || "Failed to save" };
+        return false;
       }
     } catch {
       envFeedback = {
         type: "error",
         text: "Failed to save environment variables",
       };
+      return false;
     } finally {
       envSaving = false;
     }
@@ -888,9 +924,11 @@
                     </button>
                   </div>
                   <button
+                    type="button"
                     class="shrink-0 p-1.5 rounded"
                     style="color: #FF5B4F;"
-                    onclick={() => removeEnvRow(i)}
+                    onclick={() => requestRemoveEnvRow(i)}
+                    disabled={envSaving}
                     title="Remove variable"
                     aria-label="Remove variable"
                   >
@@ -1042,6 +1080,63 @@
       <div class="flex gap-sm justify-end">
         <button type="button" class="btn-secondary px-4 py-2 text-body-sm" onclick={() => { stopModal.open = false; }}>Cancel</button>
         <button type="button" class="btn-danger px-4 py-2 text-body-sm" onclick={() => { stopModal.open = false; handleAction("stop"); }}>Stop</button>
+      </div>
+    </div>
+  </dialog>
+{/if}
+
+<svelte:window onkeydown={(e) => { if (e.key === 'Escape' && deleteEnvModal.open) closeDeleteEnvModal(); }} />
+
+<!-- Delete Env Variable Confirmation Modal -->
+{#if deleteEnvModal.open}
+  <dialog
+    open
+    class="fixed inset-0 z-50 flex items-center justify-center p-4"
+    style="background: transparent; border: none;"
+    onclose={closeDeleteEnvModal}
+  >
+    <button
+      type="button"
+      class="fixed inset-0"
+      style="background: rgba(0,0,0,0.6); border: none; cursor: pointer;"
+      onclick={closeDeleteEnvModal}
+      aria-label="Close modal"
+    ></button>
+    <div
+      class="relative w-full max-w-md rounded-xl shadow-2xl p-lg"
+      style="background: var(--bg-surface); border: 1px solid var(--border-color);"
+    >
+      <div class="flex items-center gap-md mb-lg">
+        <div class="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0" style="background: rgba(255, 91, 79, 0.15);">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="color: #FF5B4F;">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z"/>
+          </svg>
+        </div>
+        <div>
+          <h3 class="text-h3 font-semibold" style="color: var(--text-primary);">Delete Environment Variable</h3>
+          <p class="text-caption" style="color: var(--text-muted);">This action will update the .env file</p>
+        </div>
+      </div>
+      <p class="text-body-sm mb-lg" style="color: var(--text-secondary);">
+        Are you sure you want to delete <strong class="font-mono" style="color: var(--text-primary);">{deleteEnvModal.keyName}</strong>? It will be removed from the <code class="font-mono">.env</code> file immediately.
+      </p>
+      <div class="flex gap-sm justify-end">
+        <button
+          type="button"
+          class="btn-secondary px-4 py-2 text-body-sm"
+          onclick={closeDeleteEnvModal}
+          disabled={envSaving}
+        >
+          Cancel
+        </button>
+        <button
+          type="button"
+          class="btn-danger px-4 py-2 text-body-sm"
+          onclick={confirmRemoveEnvRow}
+          disabled={envSaving}
+        >
+          {envSaving ? "Deleting..." : "Delete"}
+        </button>
       </div>
     </div>
   </dialog>
